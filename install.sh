@@ -388,6 +388,9 @@ if [ -n "$VERSION_PIN" ]; then
 else
   BASE_URL="${GCS_BASE}/latest"
   VERSION=$(curl -fsSL "${BASE_URL}/VERSION" 2>/dev/null || echo "unknown")
+  if printf '%s' "$VERSION" | grep -Eq '^[0-9a-f]{40}$'; then
+    BASE_URL="${GCS_BASE}/${VERSION}"
+  fi
   SHORT_VERSION=$(printf '%.8s' "$VERSION")
   step "Version: latest (${SHORT_VERSION})"
 fi

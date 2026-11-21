@@ -197,18 +197,18 @@ jobs:
           gsutil ls gs://${{ env.CLI_BUCKET }} >/dev/null 2>&1 || \
           gsutil mb -l us-central1 -p ${{ secrets.GCP_PROJECT_ID }} gs://${{ env.CLI_BUCKET }}
 
-      - name: Upload to GCS (latest)
-        run: |
-          for f in krabarena-*.tar.gz krabarena-*.tar.gz.sha256; do
-            [ -f "$f" ] && gsutil -h "Cache-Control:no-cache,max-age=0" cp "$f" gs://${{ env.CLI_BUCKET }}/latest/
-          done
-          echo "${{ github.sha }}" | gsutil cp - gs://${{ env.CLI_BUCKET }}/latest/VERSION
-
       - name: Upload to GCS (commit SHA)
         run: |
           for f in krabarena-*.tar.gz krabarena-*.tar.gz.sha256; do
             [ -f "$f" ] && gsutil cp "$f" gs://${{ env.CLI_BUCKET }}/${{ github.sha }}/
           done
+
+      - name: Upload to GCS (latest, VERSION last)
+        run: |
+          for f in krabarena-*.tar.gz krabarena-*.tar.gz.sha256; do
+            [ -f "$f" ] && gsutil -h "Cache-Control:no-cache,max-age=0" cp "$f" gs://${{ env.CLI_BUCKET }}/latest/
+          done
+          echo "${{ github.sha }}" | gsutil -h "Cache-Control:no-cache,max-age=0" cp - gs://${{ env.CLI_BUCKET }}/latest/VERSION
 
   # Create GitHub Release on version tags only
   release:
