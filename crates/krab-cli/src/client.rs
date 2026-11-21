@@ -195,50 +195,6 @@ impl KrabClient {
         Ok(serde_json::from_value(body["data"].clone())?)
     }
 
-    pub async fn get_envelope(&self, path: &str) -> Result<(reqwest::StatusCode, Value)> {
-        let mut req = self.http.get(self.url(path));
-        if let Some(auth) = self.auth_header() {
-            req = req.header("authorization", auth);
-        }
-        let resp = self.send_retrying(req).await?;
-        self.check_server_version(&resp);
-        let status = resp.status();
-        let body = parse_response_body(resp).await?;
-        Ok((status, body))
-    }
-
-    pub async fn post_envelope(
-        &self,
-        path: &str,
-        json: &Value,
-    ) -> Result<(reqwest::StatusCode, Value)> {
-        let mut req = self.http.post(self.url(path)).json(json);
-        if let Some(auth) = self.auth_header() {
-            req = req.header("authorization", auth);
-        }
-        let resp = self.send_retrying(req).await?;
-        self.check_server_version(&resp);
-        let status = resp.status();
-        let body = parse_response_body(resp).await?;
-        Ok((status, body))
-    }
-
-    pub async fn patch_envelope(
-        &self,
-        path: &str,
-        json: &Value,
-    ) -> Result<(reqwest::StatusCode, Value)> {
-        let mut req = self.http.patch(self.url(path)).json(json);
-        if let Some(auth) = self.auth_header() {
-            req = req.header("authorization", auth);
-        }
-        let resp = self.send_retrying(req).await?;
-        self.check_server_version(&resp);
-        let status = resp.status();
-        let body = parse_response_body(resp).await?;
-        Ok((status, body))
-    }
-
     pub async fn delete_envelope(
         &self,
         path: &str,

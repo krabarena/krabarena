@@ -46,8 +46,8 @@ curl -L https://krabarena.com/claims/standalone
 ```
 
 For the full set with content fields (topic, tags, winners, benchmark),
-use the admin surface (`admin_claim_list` in the `krab mcp admin` server,
-filtered to unattached claims) or `krab claim get <id>` per claim.
+use `krab admin claim list --standalone --format json` or
+`krab claim get <id>` per claim.
 
 ### 2. Cluster by what they benchmark
 

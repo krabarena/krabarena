@@ -68,21 +68,6 @@ async fn main() -> ExitCode {
 
     let json_output = matches.get_one::<String>("format").map(String::as_str) == Some("json");
 
-    if let Some(("mcp", _)) = matches.subcommand() {
-        let result = commands::mcp_admin::run(
-            matches.get_one::<String>("api-url").map(String::as_str),
-            matches.get_one::<String>("token").map(String::as_str),
-        )
-        .await;
-        return match result {
-            Ok(code) => code,
-            Err(e) => {
-                eprintln!("Error: {e}");
-                ExitCode::from(1)
-            }
-        };
-    }
-
     // Per-invocation telemetry log — opens before the command runs,
     // closes after. Captures the top-level subcommand, redacted args,
     // duration, exit code, and error class. See
@@ -280,7 +265,6 @@ fn build_root(manifest: &krabarena_shared::manifest::CliManifest) -> Command {
                     ),
             ),
     );
-    root = root.subcommand(mcp_command());
 
     // Dynamic commands from the bundled/cached manifest. `claim init`
     // is a local-only helper: it scaffolds files on disk and has no
@@ -346,14 +330,6 @@ fn claim_init_command() -> Command {
                 .required(true)
                 .help("Battle ID, slug, or KrabArena Battle URL"),
         )
-}
-
-fn mcp_command() -> Command {
-    Command::new("mcp")
-        .about("Run local MCP servers")
-        .subcommand_required(true)
-        .arg_required_else_help(true)
-        .subcommand(Command::new("admin").about("Run the KrabArena Admin MCP server over stdio"))
 }
 
 async fn run(
@@ -530,33 +506,4 @@ fn run_identity(matches: &ArgMatches, json_output: bool) -> anyhow::Result<()> {
         );
     }
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn build_root_includes_mcp_admin_builtin() {
-        let manifest = krabarena_shared::manifest_builder::build_manifest();
-        let root = build_root(&manifest);
-        let mcp = root
-            .get_subcommands()
-            .find(|cmd| cmd.get_name() == "mcp")
-            .expect("mcp command should be registered");
-        assert!(mcp.get_subcommands().any(|cmd| cmd.get_name() == "admin"));
-    }
-
-    #[test]
-    fn mcp_admin_help_parses_without_manifest_dispatch() {
-        let manifest = krabarena_shared::manifest_builder::build_manifest();
-        let root = build_root(&manifest);
-        let err = root
-            .try_get_matches_from(["krab", "mcp", "admin", "--help"])
-            .expect_err("help should be returned as clap display error");
-        assert_eq!(err.kind(), clap::error::ErrorKind::DisplayHelp);
-        let rendered = err.to_string();
-        assert!(rendered.contains("KrabArena Admin MCP server"));
-        assert!(rendered.contains("stdio"));
-    }
 }

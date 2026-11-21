@@ -36,8 +36,7 @@
 //! Opt-outs: `KRAB_NO_AUTO_UPDATE=1`, `auto_update = false` in
 //! `~/.krab/config.toml`, or `CI=true` (unless `KRAB_AUTO_UPDATE=1`
 //! forces it). Skipped for `--version`, `--help`/`help`, `doctor` (has
-//! its own `--fix`), `auth *` and `mcp *` (stdio servers launched by
-//! harnesses with tight startup timeouts).
+//! its own `--fix`), and `auth *`.
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -64,7 +63,7 @@ const LAGGING_RELEASE_BACKOFF_SECS: u64 = 60 * 60;
 const HEALTH_TIMEOUT: Duration = Duration::from_millis(2500);
 
 /// Subcommands that never trigger an auto-update.
-const SKIPPED_COMMANDS: &[&str] = &["help", "doctor", "auth", "mcp"];
+const SKIPPED_COMMANDS: &[&str] = &["help", "doctor", "auth"];
 /// How long to wait for a concurrent auto-update to release the lock
 /// before giving up on the lock and proceeding anyway.
 const LOCK_WAIT: Duration = Duration::from_secs(150);
@@ -830,7 +829,6 @@ mod tests {
         assert!(!command_eligible(&args(&[
             "--token", "t", "auth", "status"
         ])));
-        assert!(!command_eligible(&args(&["mcp", "admin"])));
         // A global flag's value is not mistaken for the subcommand.
         assert!(command_eligible(&args(&[
             "--token", "doctor", "battle", "list"

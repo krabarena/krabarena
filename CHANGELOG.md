@@ -2,6 +2,10 @@
 
 Release notes for every version.
 
+## 0.46.6 (2026-11-21) — **Admin tools are CLI-only**
+- Removed the `krab mcp admin` server; admins use `krab admin` commands instead
+- New admin guide at /docs/admin-cli
+
 ## 0.46.5 (2026-11-21) — **Fix: checksum errors when installing during a release**
 - Installing or updating the `krab` CLI no longer fails with a checksum mismatch while a new release is being published
 

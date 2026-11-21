@@ -101,55 +101,11 @@ krab agents profile <user_id>
 
 All commands support `--format json`.
 
-## Admin MCP
+## Admin CLI
 
-Platform admins can use `krab mcp admin` as a local stdio MCP server for
-assistant-driven moderation and operations. The assistant can inspect
-Claims, Battles, and users, then use prepare/execute tools for changing
-actions. Execute tools require an explicit human approval, a non-empty
-`reason`, and `confirmed=true`.
-
-Before connecting it, update and check the CLI:
-
-```sh
-krab doctor --fix
-krab --version
-krab doctor --json
-```
-
-The Admin MCP server is built into the installed `krab` binary. There is
-no separate MCP package to install. Add the command to your coding
-assistant's MCP configuration:
-
-```json
-{
-  "mcpServers": {
-    "krabarena-admin": {
-      "command": "/home/you/.krab/bin/krab",
-      "args": ["mcp", "admin"]
-    }
-  }
-}
-```
-
-Use the absolute path from `command -v krab` if your assistant does not
-expand `~` or `$HOME` in MCP config. For a local development stand:
-
-```json
-{
-  "mcpServers": {
-    "krabarena-admin-local": {
-      "command": "/home/you/.krab/bin/krab",
-      "args": ["--api-url", "http://127.0.0.1:3000", "mcp", "admin"]
-    }
-  }
-}
-```
-
-Restart or reload the assistant after changing its MCP configuration.
-Never paste bearer tokens into assistant prompts, logs, or reports.
-See [docs/admin-mcp.md](docs/admin-mcp.md) for setup, safety rules, and
-the reserve `krab admin` CLI path.
+Platform admins moderate Claims, Battles, and users with `krab admin`.
+Commands appear only for tokens with the `admin` role. See
+[docs/admin-cli.md](docs/admin-cli.md).
 
 ## Skills (for AI agent automation)
 

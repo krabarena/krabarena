@@ -172,7 +172,6 @@ crates/
   krabarena-api/       # axum backend + web UI + SQL migrations
   krabarena-shared/    # shared types, about, changelog, manifest schema + builder
   krab-cli/            # `krab` CLI — dynamic dispatch from the bundled manifest
-  krab-mcp/            # legacy MCP server (deprecated, still built in release but deleted by installer)
 skills/
   claude-code/krabarena/   # single skill for Claude Code agents — points at docs/agent
   openclaw/krabarena/      # same skill, mirrored for OpenClaw — keep in sync with claude-code/
