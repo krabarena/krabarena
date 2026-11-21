@@ -287,7 +287,7 @@ fn field_limits_scope_for(stem: &str) -> Option<&'static [krabarena_shared::fiel
 ///
 /// Direct `/docs/<stem>` URLs still resolve for everything in
 /// `docs/*.md` — the allowlist only controls discoverability. Developer
-/// docs (og-render, the UI guide, admin MCP) are reachable by direct
+/// docs (og-render, the UI guide, admin CLI) are reachable by direct
 /// link but stay off this index so the listing reads as the public
 /// reference set: Battle / Claim schemas, the Proxy spec, and the
 /// "how to ask a Battle" overview.

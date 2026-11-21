@@ -68,7 +68,7 @@ async fn docs_index_browser_returns_html_with_public_docs() {
             "missing public doc link /docs/{stem}"
         );
     }
-    for stem in ["og-render", "ui", "admin-mcp"] {
+    for stem in ["og-render", "ui", "admin-cli"] {
         assert!(
             !body.contains(&format!("/docs/{stem}")),
             "internal doc /docs/{stem} leaked into /docs index"

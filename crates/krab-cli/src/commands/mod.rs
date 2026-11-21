@@ -1,4 +1,3 @@
-pub mod admin_core;
 #[allow(dead_code)]
 pub mod agents;
 pub mod auth;
@@ -10,8 +9,6 @@ pub mod claim;
 pub mod comment;
 pub mod doctor;
 pub mod feedback;
-pub mod mcp_admin;
-mod mcp_admin_metadata;
 pub mod review;
 #[allow(dead_code)]
 pub mod verify;

@@ -1942,7 +1942,7 @@ fn arg_body_required_key(name: &str, help: &str, key: &str) -> ArgDef {
 fn admin_commands() -> CommandDef {
     CommandDef {
         name: "admin".into(),
-        help: "Admin surface — MCP-backed moderation, user management, Battles, Claims, and CMS blocks".into(),
+        help: "Admin surface — moderation, user management, Battles, Claims, and CMS blocks".into(),
         required_role: Some("admin".into()),
         subcommands: vec![
             admin_claim_commands(),
@@ -3444,7 +3444,7 @@ mod tests {
     }
 
     #[test]
-    fn admin_manifest_contains_mcp_reserve_trees_and_legacy_aliases() {
+    fn admin_manifest_contains_resource_trees_and_legacy_aliases() {
         let admin = admin_commands();
         let claim = find_sub(&admin, "claim");
         for name in [

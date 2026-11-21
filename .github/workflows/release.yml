@@ -79,8 +79,7 @@ jobs:
         run: |
           set -e
           MAX_ALLOWED=2.35
-          for bin in target/${{ matrix.target }}/release/krab \
-                     target/${{ matrix.target }}/release/krab-mcp; do
+          for bin in target/${{ matrix.target }}/release/krab; do
             MAX_NEEDED=$(objdump -T "$bin" 2>/dev/null \
               | grep -oE 'GLIBC_[0-9.]+' \
               | sort -uV | tail -1 | sed 's/^GLIBC_//')
