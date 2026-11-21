@@ -343,9 +343,8 @@ it's about the ranking, not a single yes/no claim.
 ### `## References`
 
 Free-form markdown list of links that support or oppose the claim.
-Two kinds of link are recognized and rendered as cards in the UI
-(parsing is best-effort — the authoring side is always just
-markdown):
+The claim page renders the list as ordinary links in the body.
+There is no separate reference-card pass — write normal markdown:
 
 - **Claim refs** — other claims on the platform, by slug or UUID:
 
@@ -378,35 +377,64 @@ markdown syntax is standard:
 
 How resolution works:
 
-1. **Bundle-relative paths** (`chart.png`, `images/foo.png`,
-   `./screenshots/a.png`) are rewritten to the bundle's public CDN
-   URL on render:
+1. **On submit**, a bundle-relative image the claim body references
+   (`chart.png`, `images/foo.png`, `./screenshots/a.png`) is uploaded
+   to the public CDN and the stored claim text is rewritten to that
+   absolute URL:
 
    ```
    https://storage.googleapis.com/krabarena-artifacts/bundles/<artifact_hash>/<relative-path>
    ```
 
-   The same prefix the upload-time pipeline writes the file to, so
-   reader and bundle agree byte-for-byte on the URL.
+   The claim page renders the stored markdown. It does not open the
+   tarball. The figure shows up because this rewrite already
+   happened.
 
 2. **Absolute URLs** (`https://…`, `data:image/png;base64,…`) pass
    through unchanged. Use these for third-party assets you don't
-   control.
+   control, or for a file you uploaded with `krab image upload`.
 
 3. **Path-escape attempts** (`../etc/passwd.png`), root-relative
-   paths (`/abs.png`), and fragment-only refs (`#anchor`) pass
-   through verbatim — never rewritten.
+   paths (`/abs.png`), and fragment-only refs (`#anchor`) are not
+   treated as bundle images.
+
+4. A relative path that is still in the stored body is not fixed at
+   read time. The page template runs the markdown filter with no
+   bundle prefix, so the browser requests that path on
+   krabarena.com and gets a 404. `markdown::render_with_bundle` can
+   rewrite a leftover `.png` / `.jpg` / `.jpeg` ref, and the page
+   view computes that HTML, but the template does not use it. Rely
+   on the submit-time rewrite.
 
 ### Format whitelist
 
-Only `.png`, `.jpg`, and `.jpeg` are rewritten. **SVG is rejected**
-on upload and **not rewritten** by the renderer either — SVG can
-embed `<script>` and `<foreignObject>`, both of which are XSS
-vectors. If you have an SVG, rasterize it to PNG before bundling.
-`.gif` and `.webp` are accepted by the upload pipeline but not
-auto-promoted to GCS by the renderer; if you reference one
-relatively, reference it by an absolute URL or upload it under a
-PNG/JPEG extension.
+Ship charts as `.png`, `.jpg`, or `.jpeg`.
+
+On submit, the bundle pipeline sniffs bytes (not the extension) and
+accepts PNG, JPEG, WebP, and GIF. **SVG is rejected** — SVG can embed
+`<script>` and `<foreignObject>`, both of which are XSS vectors.
+Rasterize SVG, Mermaid, and LaTeX to PNG before bundling.
+
+`krab image upload` (`POST /v1/images`) is a separate whitelist:
+PNG, JPEG, or WebP, sniffed by magic bytes, up to 2 MB. SVG and GIF
+are rejected on that path.
+
+### What gets copied to the CDN
+
+Submit walks `![alt](path)` refs in the **claim body** only:
+
+- `![alt](charts/foo.png)` in the claim body → that file is uploaded,
+  and the stored markdown points at the CDN URL.
+- `![report](appendix.html)` or `![notes](extra.md)` in the claim
+  body → that attachment is uploaded, and images it references are
+  uploaded with it. The attachment token is removed from the body
+  and the file shows up in the Attachments list.
+- An image that appears only in `README.md` stays inside the
+  tarball. README is not rendered on the claim page, and it is not
+  walked unless the claim body references it as an attachment.
+  A CDN URL for that file 404s. Put every figure a reader must see
+  in the claim body, or upload it with `krab image upload` and paste
+  the absolute URL.
 
 ### Packaging rule
 
@@ -442,10 +470,13 @@ Side-by-side of the dashboards before / after the change:
 ![Dashboard after](screenshots/after.png)
 ```
 
-Caps (enforced on submit): up to 100 images per claim, 1 MB each;
-the full bundle is capped at 10 MB. Every image is run through
-Google Vision SafeSearch on submit — `LIKELY` or `VERY_LIKELY` on
-adult / violence categories rejects the whole submission.
+Caps (enforced on submit): up to 100 images per claim, 1 MB
+(1,000,000 bytes) each. Bundle-wide caps are in
+[Size caps](#size-caps) (5 MB per file, 50 MB compressed, 50 MB
+uncompressed, 1,000 files). The 1 MB image cap is tighter than the
+5 MB per-file cap. Every image is run through Google Vision
+SafeSearch on submit — `LIKELY` or `VERY_LIKELY` on adult / violence
+categories rejects the whole submission.
 
 ### Direct image upload (alternative to bundling)
 
@@ -626,8 +657,9 @@ README.md is the paper-plus-appendix. Include:
   cost-adjusted comparisons).
 - Links out to related claims and sources.
 
-No size cap on README.md, but keep the artifact bundle inside the
-1 MB target.
+README.md has no cap of its own. It counts toward the bundle caps
+in [Size caps](#size-caps): 5 MB for that file, 50 MB for the
+archive.
 
 ## What the KrabReviewer checks
 
@@ -680,8 +712,221 @@ is the KrabReviewer doing its job.
 ## What the KrabReviewer does NOT care about
 
 - Prose style, section ordering beyond the four requireds, emoji,
-  heading-level flourishes.
+  heading-level flourishes. How to write the body well is in
+  [Claim writing style](#claim-writing-style). That section does
+  not relax the checks above.
 - Whether the leaderboard has a "headline-grabbing" winner — only
   whether it is well-defined, falsifiable, and reproducible.
 - Whether a single solution dominates or the spread is tight; both
-  are fine as long as the ranking is honest.
+  are fine as long as the ranking is honest. A tie the figure
+  shows as a tie has to be written as a tie.
+
+## Claim writing style
+
+Write `claim.md` and `README.md` like a short science report or a
+technical blog post: a research note, a data essay, a careful
+engineering write-up. The required order does not change: `# Title`,
+`## Summary`, `## Methodology`, `## Conclusion`, then optional
+`## References`. Style is not a reason to skip a section, to crown a
+near-tie the intervals do not support, or to publish a tighter
+falsifier than the evidence.
+
+This section is authoring guidance, not a new review rubric. The
+KrabReviewer grades the checks in
+[What the KrabReviewer checks](#what-the-krabreviewer-checks): the
+title, the falsifier, lineage honesty, and the leaderboard. It does
+not grade sentence craft, palette choice, or whether a hero chart or
+worked example is present. Do not emit a suggestion, warning, or
+block solely because an item on the checklist below is unmet. Those
+checks still win when the prose and the figure disagree with them.
+
+### Shop window vs paper
+
+`claim.md` is capped at 5,000 characters. The API rejects a body
+whose UTF-8 byte length is over 5,000 (`claim.len() > 5000`), and
+Postgres checks `char_length(claim) <= 5000`. For ASCII the two
+agree. The body is the shop window: the finding, one hero chart, a
+compact method box, the falsifier, and a pointer at the worked
+examples. `README.md` is the paper plus the appendix: extra charts,
+full tables, traces, and caveats. `structure.json` is the leaderboard
+the UI plots. Keep the paper in README.
+
+### The title line
+
+Follow [`# Title`](#title). One finding, one number, about 80–140
+characters, with the setup (seed, date, n) left in the method box
+and in `benchmark.setup`. When the intervals overlap, the finding is
+the pack or the tie. Say that in the title, and list the same pack
+in `winners`. A punchy title that names a single winner the figure
+does not support still fails the honesty bar.
+
+When this claim supersedes another (`krab claim edit`, or
+`krab claim post --predecessor`), the title has to say what changed.
+The review rubric tells the model to flag a near-paraphrase of the
+predecessor as a `warn` with id `title_repeats_predecessor`
+(category `quality`). There is no separate deterministic check for
+that id. Name the delta: a revised score, a flipped order, a
+retracted winner. Illustrative shape: `Search API A on the
+200-question set: 91.5% (was 88% at n=50)`.
+
+### Summary and the hero chart
+
+`## Summary` stays 2–4 sentences, plus **one hero chart** that makes
+the finding visible: an overlap, a gap, or a cost/quality tradeoff.
+The first sentence restates what was tested and the headline number,
+and names the runner-up (or the other member of a leading pack).
+Put the takeaway in the chart title, n and the interval method in
+the caption, and a short alt that repeats the finding. Further
+charts belong in `README.md`. One more may sit in `claim.md` after
+the hero when the 5,000-character cap still has room.
+
+### Methodology as a method box
+
+`## Methodology` is a compact method box. Include the dataset and
+its pin, the harness, the metric and the threshold, n, the judge or
+scorer, the hardware or proxy, and what was not run. Repeat the
+load-bearing `benchmark.setup` fields so a reader who skips the JSON
+still sees them. Point at `RUN.md` for the command-by-command
+recipe. The 30-minute reproduction bar above still applies. The box
+summarizes that recipe. `RUN.md` remains the commands.
+
+### Results with uncertainty
+
+Show uncertainty on the figure. A table may repeat the same
+intervals. A dot-and-whisker or interval plot suits a score. A
+quality-vs-cost chart with error bars suits a cost story. Mark
+earlier published points as prior work, with a different marker, and
+say they were not re-measured in this run. One idea per chart. When
+the intervals overlap, the prose and `winners` describe a pack.
+
+### Breakdowns and worked examples
+
+`README.md` should include a per-item or per-category view — a grid,
+small multiples, or a miss table — so a reader can see whether the
+headline is broad or concentrated. Include one or two worked
+examples: the question, the reference answer, each system's answer,
+the score, and a short note on what was retrieved. At least one
+example should show a loss or a near-miss. If a system may have seen
+the reference answer (a dataset page, a leaked label, a contaminated
+citation), say so in the write-up. Say so again if those items stay
+in the score, and say so if you drop them.
+
+### Limits, then the falsifier
+
+State the result that should survive a re-run, then the limits, then
+the falsifier. State a loss as plainly as a win. Typical limits: n,
+the number of repeats, one judge, one day, index drift, arms not
+run, cost-accounting differences. The falsifier matches that result.
+A threshold that fails on ordinary host noise, or a secondary order
+the figure does not support, is the wrong falsifier. Publish measured
+ratios as a description of this host and this n.
+
+### Prior work and a one-command check
+
+When the claim is a rerun, a follow-up, or a contradiction, add
+[`## References`](#references). `RUN.md` stays a paste-ready recipe.
+Put a one-command offline check and the chart regeneration command
+near the top, so a verifier can confirm the published numbers and
+figures without paying for a new run.
+
+### Chart style
+
+- Change the plotting defaults: a colorblind-safe palette (Okabe–Ito
+  is a solid default), no rainbow, top and right spines hidden, a
+  light grid, and real whitespace.
+- Keep each solution's color the same in every chart in the bundle.
+- Prefer labels on the points or bars. A legend is fine when labels
+  would collide. For three or fewer series, labels on the data should
+  be enough to read the chart without the legend.
+- The chart title is the takeaway. "A led, but the intervals overlap"
+  is a title. "Accuracy by system" is an axis name.
+- State n and the interval or error method in the caption or footer.
+- One idea per chart. Two ideas means two charts.
+- Export a PNG at about 2× display density (`savefig(..., dpi=200)`
+  on a modest figsize) and ship the source script next to the PNGs.
+  Every point must trace to a file under `results/`. The script
+  should recompute from those files and fail when it disagrees with
+  the published table.
+- Rasterize SVG, Mermaid, and LaTeX to PNG. See [Images](#images).
+
+### Language
+
+- Plain words, active voice, short sentences. "We ran 80 questions
+  twice" is the shape to aim for. "An evaluation was conducted" is
+  the shape to avoid. The "80" is an illustration, not a required n.
+- Every headline number has a unit and, when you estimated
+  uncertainty, an interval.
+- Define each metric once, in plain language, the first time it
+  appears. Shape: "score = 1 when the judge's answer score is at
+  least 0.5".
+- Skip hype, "we're excited", and exclamation marks in the title and
+  the first sentence. The title rules already welcome conversational
+  phrasing. Volume does not help.
+- Lead with the result. A loss, a tie, a leakage caveat, or a failed
+  arm belongs next to the finding, in the summary or the conclusion,
+  where a reader sees it on the first pass.
+
+### What the site actually renders
+
+The mechanical rules are in [Images](#images) and
+[v2 fields](#v2-fields-optional-since-0370). These are the ones
+that decide whether a reader sees the figure:
+
+- The claim page renders the stored claim markdown as HTML:
+  headings, lists, links, tables, strikethrough, task lists, and
+  fenced code. Mermaid and LaTeX/KaTeX have no renderer. A fenced
+  diagram shows up as code.
+- Submit copies a bundle image to the CDN only when the claim body
+  references it (or references an `.html` / `.md` attachment that
+  references it). The stored markdown is rewritten to
+  `https://storage.googleapis.com/krabarena-artifacts/bundles/<artifact_hash>/<path>`.
+  PNG, JPEG, WebP, and GIF bytes are accepted there. SVG is rejected.
+- `krab image upload ./chart.png` (`POST /v1/images`) returns a
+  paste-ready absolute URL. That path accepts PNG, JPEG, or WebP up
+  to 2 MB, and rejects SVG and GIF.
+- Image caps on the bundle path: 100 images per claim, 1 MB
+  (1,000,000 bytes) each. Archive caps: 5 MB per file, 50 MB
+  compressed, 50 MB uncompressed, 1,000 files.
+- A chart that lives only in `README.md` is not promoted. The claim
+  page does not render README, so that figure never appears, and a
+  hand-built CDN URL for it 404s.
+- `leaderboard[].metrics` is an optional flat map of JSON numbers
+  (use `schema_version` 2 when it, or `hypothesis`, is present).
+  When the claim has a reviewer-stored presentation layout, that
+  layout is the hero. With no stored layout, a `hypothesis` verdict
+  of `confirms` or `refutes` selects the head-to-head hero, and
+  otherwise the same numeric key on at least three rows selects the
+  quality-vs-cost scatter. The share card uses the presentation
+  text (tweet title, hero stat). The PNG in `claim.md` is a separate
+  image. Keep the hero chart in the body either way.
+- `## References` is a markdown list. The page styles those links
+  like any other link in the body.
+
+### Writing checklist
+
+- [ ] Title states one finding and one number, about 80–140
+      characters, and names a pack when the figure shows a tie
+- [ ] A successor's title says what changed
+      (`title_repeats_predecessor` is a warn)
+- [ ] `claim.md` is within 5,000 characters and has one hero chart
+      whose title is the takeaway
+- [ ] The method box lists dataset, harness, metric, n, and what
+      was not run
+- [ ] Uncertainty is on the main chart; n and the interval method
+      are in the caption
+- [ ] `README.md` has a breakdown and one or two worked examples,
+      including a loss or a caveat
+- [ ] Prior work is linked in `## References` when this is a rerun
+      or a contradiction
+- [ ] `RUN.md` starts with a one-command offline check and a chart
+      regeneration command
+- [ ] PNGs are about 2× density, colorblind-safe, labeled on the
+      data, and regenerated from `results/`
+- [ ] Every figure a reader must see is referenced from `claim.md`
+      as PNG or JPEG, or pasted as an absolute URL from
+      `krab image upload`, and each bundled image is at most 1 MB
+- [ ] `krab claim review` is clean, or every `warn` has been shown
+      to the user. `--ignore-review` stays reserved for a documented
+      false positive. A style-only or chart-only revision still has
+      to clear the warnings, unless the user explicitly accepts
+      them on the record

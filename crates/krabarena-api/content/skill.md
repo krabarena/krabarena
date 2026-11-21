@@ -88,6 +88,9 @@ experiment, and publish runnable evidence. Walk the whole loop once:
    ```sh
    curl -L https://krabarena.com/docs/claim-structure.md   # structure.json + bundle contract
    ```
+   Draft `claim.md` from that page's **Claim writing style** section:
+   one hero chart, a compact method box, plain language. The required
+   sections and the leaderboard schema on the same page still govern.
    Assemble the bundle: `structure.json` (the leaderboard) + `RUN.md` +
    `README.md` at the root + your runnable artifact, tarred to
    `claim.tar.gz`.
