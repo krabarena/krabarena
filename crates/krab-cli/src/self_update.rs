@@ -45,7 +45,26 @@ use sha2::{Digest, Sha256};
 /// `CLI_BUCKET` in .github/workflows/release.yml and `GCS_BASE` in
 /// install.sh — if these drift, doctor --fix pulls one version and the
 /// installer pulls another.
+pub const GCS_BASE: &str = "https://storage.googleapis.com/krabarena-cli-releases";
 pub const GCS_LATEST: &str = "https://storage.googleapis.com/krabarena-cli-releases/latest";
+
+fn is_commit_sha(s: &str) -> bool {
+    s.len() == 40
+        && s.bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+}
+
+pub async fn resolve_release_base<F: Fetcher>(fetcher: &F, scratch: &Path) -> String {
+    let version_path = scratch.join("VERSION");
+    let url = format!("{GCS_LATEST}/VERSION");
+    match fetcher.fetch(&url, &version_path).await {
+        Ok(()) => match std::fs::read_to_string(&version_path) {
+            Ok(v) if is_commit_sha(v.trim()) => format!("{GCS_BASE}/{}", v.trim()),
+            _ => GCS_LATEST.to_string(),
+        },
+        Err(_) => GCS_LATEST.to_string(),
+    }
+}
 
 /// Downloads a URL to a local file. Production uses [`HttpFetcher`];
 /// tests use a fake that writes fixtures, so no test hits the network.
@@ -125,13 +144,14 @@ pub async fn self_update<F: Fetcher>(
 ) -> Result<UpdateOutcome> {
     let (platform, arch) = platform_arch()?;
     let archive = format!("krabarena-{}-{}.tar.gz", platform, arch);
-    let archive_url = format!("{}/{}", GCS_LATEST, archive);
-    let sha_url = format!("{}.sha256", archive_url);
 
     ensure_writable(install_dir)?;
 
     let tmp = tempdir_for("krab-self-update")?;
     let result = async {
+        let base = resolve_release_base(fetcher, &tmp).await;
+        let archive_url = format!("{}/{}", base, archive);
+        let sha_url = format!("{}.sha256", archive_url);
         let archive_path = tmp.join(&archive);
         let sha_path = tmp.join(format!("{}.sha256", archive));
         fetcher.fetch(&archive_url, &archive_path).await?;
@@ -511,6 +531,7 @@ mod tests {
     struct FakeFetcher {
         archive: Vec<u8>,
         sha: String,
+        version: Option<String>,
         fail: bool,
         requested: RefCell<Vec<String>>,
     }
@@ -521,6 +542,7 @@ mod tests {
             Self {
                 archive,
                 sha,
+                version: None,
                 fail: false,
                 requested: RefCell::new(Vec::new()),
             }
@@ -533,7 +555,12 @@ mod tests {
             if self.fail {
                 anyhow::bail!("network unreachable (fake)");
             }
-            if url.ends_with(".sha256") {
+            if url.ends_with("/VERSION") {
+                match &self.version {
+                    Some(v) => std::fs::write(dest, v)?,
+                    None => anyhow::bail!("404 (fake)"),
+                }
+            } else if url.ends_with(".sha256") {
                 std::fs::write(dest, &self.sha)?;
             } else {
                 std::fs::write(dest, &self.archive)?;
@@ -599,9 +626,33 @@ mod tests {
         assert!(!dir.join("krab.next").exists());
         assert_eq!(probe_binary_version(&dir.join("krab")).unwrap(), "9.9.9");
         let urls = fetcher.requested.borrow();
-        assert!(urls[0].starts_with(GCS_LATEST));
-        assert!(urls[1].ends_with(".tar.gz.sha256"));
+        assert_eq!(urls[0], format!("{GCS_LATEST}/VERSION"));
+        assert!(urls[1].starts_with(GCS_LATEST));
+        assert!(urls[2].ends_with(".tar.gz.sha256"));
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn update_downloads_archive_and_checksum_from_the_same_commit_folder() {
+        let dir = fake_install("su-pinned");
+        let mut fetcher = FakeFetcher::new(fake_release("krab 9.9.9", 0));
+        let sha = "9b288b74bcf53cdf7cf1e8ed25e5ac3de801b896";
+        fetcher.version = Some(format!("{sha}\n"));
+        block_on(self_update(&fetcher, &dir, Some("0.1.0"))).unwrap();
+        let urls = fetcher.requested.borrow();
+        let pinned = format!("{GCS_BASE}/{sha}/");
+        assert!(urls[1].starts_with(&pinned), "{}", urls[1]);
+        assert!(urls[2].starts_with(&pinned), "{}", urls[2]);
+        assert!(urls[2].ends_with(".tar.gz.sha256"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn commit_sha_detection() {
+        assert!(is_commit_sha("9b288b74bcf53cdf7cf1e8ed25e5ac3de801b896"));
+        assert!(!is_commit_sha("unknown"));
+        assert!(!is_commit_sha("9B288B74BCF53CDF7CF1E8ED25E5AC3DE801B896"));
+        assert!(!is_commit_sha("9b288b74"));
     }
 
     #[test]

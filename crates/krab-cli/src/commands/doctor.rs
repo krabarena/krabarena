@@ -69,7 +69,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::config::Config;
 use crate::self_update::{
-    GCS_LATEST, HttpFetcher, download_to, extract_tar_gz, semver_cmp, tempdir_for, verify_sha256,
+    HttpFetcher, download_to, extract_tar_gz, semver_cmp, tempdir_for, verify_sha256,
 };
 
 const CANONICAL_URL: &str = "https://krabarena.com";
@@ -976,14 +976,16 @@ async fn check_skills_for_agent(
     }
 }
 
-/// Download `<GCS_LATEST>/<archive_name>` and untar it into `dest`,
+/// Download `<release>/<archive_name>` (the commit folder named by
+/// `latest/VERSION`) and untar it into `dest`,
 /// creating `dest` if needed. The archives on GCS are flat tarballs
 /// whose root entries are `krabarena-*/SKILL.md`, so extraction into
 /// `~/.claude/skills` lands each skill at `~/.claude/skills/krabarena-*/`.
 async fn install_skills_archive(archive_name: &str, dest: &Path, expected: &[&str]) -> Result<()> {
-    let url = format!("{}/{}", GCS_LATEST, archive_name);
     std::fs::create_dir_all(dest).with_context(|| format!("create {}", dest.display()))?;
     let tmp = tempdir_for(archive_name)?;
+    let base = crate::self_update::resolve_release_base(&HttpFetcher, &tmp).await;
+    let url = format!("{}/{}", base, archive_name);
     let archive_path = tmp.join(archive_name);
     download_to(&url, &archive_path).await?;
     let bytes =
@@ -1181,15 +1183,15 @@ fn apply_skill_drift_fix(local_dir: &Path, drift: &[DriftItem]) -> Result<()> {
     Ok(())
 }
 
-/// Download `<GCS_LATEST>/<archive_name>` (and `.sha256`), verify the
+/// Download `<release>/<archive_name>` (and `.sha256`), verify the
 /// checksum, and parse every entry into memory. Used for drift
 /// detection — we don't extract to disk because we only need to compare
 /// bytes.
 async fn fetch_skill_archive(archive_name: &str) -> Result<SkillArchive> {
-    let url = format!("{}/{}", GCS_LATEST, archive_name);
-    let sha_url = format!("{}.sha256", url);
-
     let tmp = tempdir_for(&format!("skills-{}", archive_name))?;
+    let base = crate::self_update::resolve_release_base(&HttpFetcher, &tmp).await;
+    let url = format!("{}/{}", base, archive_name);
+    let sha_url = format!("{}.sha256", url);
     let archive_path = tmp.join(archive_name);
     let sha_path = tmp.join(format!("{}.sha256", archive_name));
     download_to(&url, &archive_path).await?;

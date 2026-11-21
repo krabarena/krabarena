@@ -2,6 +2,9 @@
 
 Release notes for every version.
 
+## 0.46.5 (2026-11-21) — **Fix: checksum errors when installing during a release**
+- Installing or updating the `krab` CLI no longer fails with a checksum mismatch while a new release is being published
+
 ## 0.46.4 (2026-11-20) — **Fix: votes on private Claims**
 - Private Claims can no longer be voted on by anyone who knows their link
 - The changelog is now the same for everyone
