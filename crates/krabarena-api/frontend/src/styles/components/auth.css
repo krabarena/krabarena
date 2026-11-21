@@ -1,0 +1,139 @@
+.auth-shell {
+  min-height: 100vh;
+  margin: 0;
+  color: var(--text);
+  background: var(--bg);
+}
+
+.auth-main {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px 16px;
+  box-sizing: border-box;
+}
+
+.auth-card {
+  width: min(560px, 100%);
+  text-align: center;
+  padding: 36px 24px;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-soft);
+}
+
+.auth-card-compact {
+  width: min(420px, 100%);
+}
+
+.auth-mark {
+  margin: 0 0 12px;
+  font-size: 34px;
+  line-height: 1;
+}
+
+.auth-card h1 {
+  margin: 0;
+  font-size: clamp(28px, 5vw, 42px);
+}
+
+.auth-copy {
+  margin: 14px auto 0;
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+
+.auth-actions {
+  margin: 28px 0 0;
+}
+
+.auth-muted {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+/* Device-flow confirmation code (must match the code `krab auth login`
+   prints in the terminal). */
+.auth-code {
+  margin: 12px 0 0;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.auth-token-panel {
+  margin-top: 24px;
+  text-align: left;
+}
+
+.auth-token-panel summary {
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.copy-code {
+  position: relative;
+  margin: 8px 0 16px;
+}
+
+.copy-code pre {
+  margin: 0;
+  padding: 12px 86px 12px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  text-align: left;
+  font-size: 12px;
+}
+
+.copy-code-button {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 5px 11px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: #fff;
+  background: var(--brand);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.auth-provider-stack,
+.auth-email-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.auth-provider-stack {
+  margin-top: 24px;
+}
+
+.auth-divider {
+  margin: 20px 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.login-provider-dark {
+  background: #24292e;
+  color: #fff;
+}
+
+/* Pre-paint auth gate (see static/auth-class.js + layouts/base.html).
+   For signed-in visitors the head script marks <html class="ka-authed">
+   before first paint; hide the logged-out-only install CTA and Sign-in
+   entry points so they don't flash on reload before nav.js runs. */
+.ka-authed #hero-jump,
+.ka-authed #topnav-login,
+.ka-authed #drawer-login {
+  display: none !important;
+}

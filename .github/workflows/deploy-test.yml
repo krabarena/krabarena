@@ -1,0 +1,217 @@
+name: Deploy to Test
+
+# Stage 2 of the release pipeline:
+#
+#   Build & Push ─►  Deploy to Test ─► E2E ─► Deploy (prod)
+#
+# Deploys the same commit's image to the dedicated `krabarena-test`
+# GCP project (Cloud Run service `krabarena-api`, separate Neon branch,
+# separate JWT secret, `TEST_AUTH_SECRET` set so mint-token works).
+# On success, runs `review_e2e.rs` against the deployed test URL —
+# blocks prod deploy if any assertion fails. `Deploy` keys off this
+# workflow's success, not Build & Push's, so a green test env is the
+# only way prod gets a new revision.
+
+on:
+  workflow_run:
+    workflows: [Build & Push]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Image tag to deploy to test (default: latest)"
+        required: false
+        default: "latest"
+      bootstrap_migrations:
+        description: "Seed _sqlx_migrations for a legacy DB (run once, then leave false)"
+        required: false
+        default: "false"
+
+env:
+  REGION: us-central1
+  SERVICE: krabarena-api
+  # Test env lives in its own GCP project (see terraform/cloud_run_test.tf).
+  TEST_PROJECT: krabarena-test
+  # Image source stays in prod's registry; test project SA has
+  # artifactregistry.reader on it. Prevents image drift between envs.
+  REPO_PROJECT: krabbit-dev
+  REPO: krabarena-repo
+
+jobs:
+  deploy-test:
+    name: Deploy to test + E2E
+    runs-on: ubuntu-latest
+    if: ${{ github.repository == 'krabarena/krabarena-private' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success') }}
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Determine image tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ github.event.inputs.image_tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=latest" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Deploy image to test Cloud Run
+        env:
+          BOOTSTRAP: ${{ github.event.inputs.bootstrap_migrations == 'true' && 'true' || 'false' }}
+        run: |
+          IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ env.REPO_PROJECT }}/${{ env.REPO }}/krabarena-api:${{ steps.tag.outputs.tag }}"
+          EXTRA_FLAGS=()
+          if [ "$BOOTSTRAP" = "true" ]; then
+            MIGRATE_VARS=",BOOTSTRAP_SQLX_MIGRATIONS=true,SQLX_AUTO_MIGRATE=true"
+          else
+            MIGRATE_VARS=",SQLX_AUTO_MIGRATE=true"
+            EXTRA_FLAGS+=(--remove-env-vars BOOTSTRAP_SQLX_MIGRATIONS)
+          fi
+          gcloud run deploy ${{ env.SERVICE }} \
+            --image "${IMAGE}" \
+            --region ${{ env.REGION }} \
+            --project ${{ env.TEST_PROJECT }} \
+            --port 8080 \
+            --memory 512Mi \
+            --allow-unauthenticated \
+            --update-env-vars "DATABASE_URL=${{ secrets.TEST_DATABASE_URL }},JWT_SECRET=${{ secrets.TEST_JWT_SECRET }},TEST_AUTH_SECRET=${{ secrets.TEST_AUTH_SECRET }},BLOB_STORE_URL=gs://krabarena-artifacts,PRIVATE_BLOB_STORE_URL=gs://krabarena-test-artifacts-private,NODE_ENV=${{ vars.TEST_NODE_ENV }},GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }},DISCORD_SUPPORT_INVITE_URL=https://discord.gg/K3zmyrqBSz,GITHUB_REPO_URL=https://github.com/krabarena/krabarena,GA_MEASUREMENT_ID=${{ vars.TEST_GA_MEASUREMENT_ID }},DISCORD_MONITOR_ENABLED=false,NOTIFICATION_EMAILS_ENABLED=false${MIGRATE_VARS}" \
+            "${EXTRA_FLAGS[@]}" \
+            --quiet
+
+      - name: Resolve test URL + health
+        id: url
+        run: |
+          URL=$(gcloud run services describe ${{ env.SERVICE }} \
+            --region ${{ env.REGION }} \
+            --project ${{ env.TEST_PROJECT }} \
+            --format 'value(status.url)')
+          echo "url=${URL}" >> "$GITHUB_OUTPUT"
+          # `until … do sleep …` — cold-start can take 10-15s after an
+          # image swap. If it's not healthy in 60s, something's wrong.
+          for i in $(seq 1 12); do
+            if curl -fsS "${URL}/health" | grep -q '"status":"healthy"'; then
+              echo "health ok on attempt ${i}"
+              break
+            fi
+            sleep 5
+          done
+          curl -fsS "${URL}/health"
+
+      - name: Install Rust
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+
+      # Cargo cache — same shape as ci.yml. Without this every E2E
+      # run (and every `gh run rerun --failed`) recompiles the test
+      # binary from scratch, costing ~3-5 minutes per attempt on a
+      # transient Gemini flake. Keyed on `Cargo.lock` so dependency
+      # changes invalidate but unrelated code touches don't.
+      #
+      # Switched from `actions/cache@v4` to `Swatinem/rust-cache` after
+      # `cache@v4` began deterministically killing the job between
+      # "Install Rust" and "Cache cargo" — no error log, just a runner
+      # exit. 4 attempts on 2026-05-28 confirmed reproducibility.
+      # `rust-cache` is Rust-specific, handles its own key derivation
+      # from Cargo.lock + rustc version, and ships its own retry +
+      # incremental-only cache logic, so it sidesteps whatever the
+      # generic cache backend was failing on.
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: e2e
+          # Restoring the prior build's target/ keeps E2E iteration time
+          # at ~30s for incremental rebuilds; cold builds take ~3-5min.
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: E2E against test URL
+        env:
+          KRAB_TEST_BASE: ${{ steps.url.outputs.url }}
+          TEST_AUTH_SECRET: ${{ secrets.TEST_AUTH_SECRET }}
+        run: |
+          # `tee` + pipefail so the step exit code mirrors cargo's.
+          # The summary step below runs `if: always()` so a failing
+          # test still produces a readable report.
+          set -o pipefail
+          # review_e2e (KrabReviewer) + feed_e2e (home-feed-not-empty
+          # regression guard, added 0.20.2 after the numeric→f64 decode
+          # bug shipped an empty feed to prod). Both run against the
+          # deployed test URL.
+          cargo test -p krabarena-api --test review_e2e --test feed_e2e -- --ignored --nocapture \
+            2>&1 | tee /tmp/e2e.log
+
+      - name: E2E report → Job Summary
+        if: always()
+        run: |
+          URL="${{ steps.url.outputs.url }}"
+          {
+            echo "## E2E report (against \`$URL\`)"
+            echo ""
+            if grep -qE "^test result: ok\." /tmp/e2e.log; then
+              STATUS="✅ all tests passed"
+            elif grep -qE "^test result: FAILED" /tmp/e2e.log; then
+              STATUS="❌ failures — prod deploy blocked"
+            else
+              STATUS="⚠️ no test-result line found in output"
+            fi
+            echo "**Status**: $STATUS"
+            echo ""
+            echo "### Per-test results"
+            echo ""
+            echo "| Test | Result |"
+            echo "|------|--------|"
+            # Lines look like: `test claim_review_good_claim_not_blocked ... ok`
+            #              or: `test claim_review_bad_claim_blocked ... FAILED`
+            grep -E '^test [a-zA-Z_:0-9]+ \.\.\. (ok|FAILED|ignored)\s*$' /tmp/e2e.log \
+              | awk '{
+                  name=$2;
+                  result=$NF;
+                  icon = (result=="ok") ? "✅" : (result=="FAILED") ? "❌" : "⚪";
+                  printf "| `%s` | %s %s |\n", name, icon, result;
+                }'
+            echo ""
+            TALLY=$(grep -oE 'test result: [a-zA-Z]+\. [0-9]+ passed; [0-9]+ failed; [0-9]+ ignored' /tmp/e2e.log | head -1)
+            if [ -n "$TALLY" ]; then
+              echo "**$TALLY**"
+              echo ""
+            fi
+            echo "<details><summary>Full test output</summary>"
+            echo ""
+            echo '```'
+            # Cap the log in the summary — GitHub truncates at 1 MB but
+            # we don't want to drown the page in ANSI noise either.
+            tail -200 /tmp/e2e.log | sed -E 's/\x1b\[[0-9;]*[a-zA-Z]//g'
+            echo '```'
+            echo ""
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload E2E log as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-log
+          path: /tmp/e2e.log
+          retention-days: 14
+
+      - name: Deploy summary
+        if: always()
+        run: |
+          {
+            echo "## Test env deploy"
+            echo "- **URL**: ${{ steps.url.outputs.url }}"
+            echo "- **Image**: krabarena-api:${{ steps.tag.outputs.tag }}"
+            echo "- **Project**: ${{ env.TEST_PROJECT }}"
+          } >> "$GITHUB_STEP_SUMMARY"

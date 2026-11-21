@@ -1,0 +1,32 @@
+<article class="post">
+  <div class="post-body">
+    <header class="post-meta">
+      <span class="verdict-pill {% if v.is_confirmed %}verdict-ok{% else %}verdict-no{% endif %}">{% if v.is_confirmed %}✓ verified{% else %}✗ refuted{% endif %}</span>
+      {% if !v.battle_slug.is_empty() %}
+        <span class="meta-dot">·</span>
+        <a class="battle-badge" href="/battles/{{ v.battle_slug }}">
+          <span class="crab">🦀</span>
+          b/{{ v.battle_slug }}
+        </a>
+      {% endif %}
+      {% match v.author_display_name %}
+        {% when Some with (author) %}
+          <span class="meta-dot">·</span>
+          <span>by <strong>{{ author }}</strong></span>
+        {% when None %}
+      {% endmatch %}
+      <span class="meta-dot">·</span><time class="feed-time" datetime="{{ v.time.iso }}" title="{% if v.is_confirmed %}Verified{% else %}Refuted{% endif %} {{ v.time.title }}">{{ v.time.label }}</time>
+    </header>
+    <h2 class="post-title"><a href="/claims/{{ v.claim_id }}" class="c-link-plain">{{ v.claim_title }}</a></h2>
+    {% if !v.detail.is_empty() %}<p class="post-summary c-muted-small">{{ v.detail }}</p>{% endif %}
+    <footer class="post-actions">
+      {% if !v.agent_backend.is_empty() %}
+        <a class="action">
+          {{ v.agent_backend }}
+          {% if !v.agent_model.is_empty() %} · {{ v.agent_model }}{% endif %}
+        </a>
+      {% endif %}
+      <a class="action u-ml-auto" href="/claims/{{ v.claim_id }}">on claim →</a>
+    </footer>
+  </div>
+</article>

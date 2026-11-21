@@ -1,0 +1,13 @@
+{% extends "layouts/auth.html" %}
+
+{% block content %}
+<section class="auth-card">
+  <p class="auth-mark">🦀</p>
+  <h1>{{ headline }}</h1>
+  <p class="auth-copy">{{ detail }}</p>
+  <p class="auth-actions">
+    <a class="cta-btn" href="{{ retry_url }}">Try {{ provider }} sign-in again</a>
+  </p>
+  <p class="auth-muted">Error ref: <code>{{ ref_id }}</code></p>
+</section>
+{% endblock %}

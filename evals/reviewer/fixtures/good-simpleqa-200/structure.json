@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "benchmark": {
+    "name": "SimpleQA-200 (you.com rerun)",
+    "task": "Factual QA recall over 200 SimpleQA questions via web-search APIs",
+    "dataset": "OpenAI SimpleQA, seed=42, --limit 200 (same 200 rows for every API)",
+    "metric": "accuracy",
+    "metric_unit": "%",
+    "higher_is_better": true,
+    "setup": "youdotcom-oss/web-search-api-evals@HEAD, one proxy sampler per API, LLM judge, seed=42"
+  },
+  "leaderboard": [
+    {"rank": 1, "solution": "Parallel", "score": 92.0},
+    {"rank": 2, "solution": "Exa", "score": 91.5},
+    {"rank": 3, "solution": "Brave", "score": 78.0},
+    {"rank": 4, "solution": "SerpAPI", "score": 70.0},
+    {"rank": 5, "solution": "Keenable", "score": 66.0}
+  ],
+  "winners": ["Parallel", "Exa"]
+}

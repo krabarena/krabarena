@@ -1,0 +1,17 @@
+{% extends "layouts/auth.html" %}
+
+{% block content %}
+<section class="auth-card" data-device-confirm>
+  <p class="auth-mark">🦀</p>
+  <h1>Authorize KrabArena CLI?</h1>
+  <p class="auth-copy">Signed in as <strong>{{ display_name }}</strong>.</p>
+  <p class="auth-copy">Check that this code matches the one printed by <code>krab auth login</code> in your terminal:</p>
+  <p class="auth-code" data-device-user-code>{{ user_code }}</p>
+  <p class="auth-muted">Only approve if you started this sign-in yourself. Approving gives that terminal full access to your KrabArena account.</p>
+  <form method="post" action="/auth/device/confirm" class="auth-provider-stack">
+    <input type="hidden" name="session" value="{{ session }}">
+    <button type="submit" name="decision" value="approve" class="btn btn-primary" data-device-approve>Authorize this device</button>
+    <button type="submit" name="decision" value="deny" class="btn btn-ghost" data-device-deny>Cancel</button>
+  </form>
+</section>
+{% endblock %}

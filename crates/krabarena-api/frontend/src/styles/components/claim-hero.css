@@ -1,0 +1,702 @@
+/* Claim page verdict strip + hero modules (h2h / race / frontier /
+ * myth_buster) — `templates/components/claim_hero.html`. Renders
+ * above the plain leaderboard, which folds into an "All results"
+ * `<details>` once a hero module is present (`.lb-fold` below).
+ * Bar widths (`.rbar`) and scatter positions (`.fdot`) are set from
+ * `data-bar-width` / `data-x` / `data-y` by `dynamic-styles.js` — no
+ * inline `style=` attributes (CSP). */
+
+.claim-hero-card {
+  position: relative;
+  padding-bottom: 28px;
+}
+
+.vstrip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  padding: 16px 18px 8px;
+}
+
+.stamp {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.stamp.v {
+  background: var(--good-soft);
+  color: var(--good);
+}
+
+.stamp.c {
+  background: var(--warm-soft);
+  color: var(--warm);
+}
+
+.stamp.r {
+  background: var(--bad-soft);
+  color: var(--bad);
+}
+
+.vstrip-title {
+  flex: 1 1 260px;
+  margin: 0;
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  color: var(--ink);
+}
+
+.vstrip-share {
+  flex: 0 0 auto;
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line-strong);
+  background: var(--bg-elev);
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.vstrip-share:hover {
+  border-color: var(--brand);
+  color: var(--brand-strong);
+}
+
+.vstrip-annotation {
+  margin: 0;
+  padding: 0 18px 8px;
+  font-size: 13px;
+  font-style: italic;
+  color: var(--ink-3);
+}
+
+.hero-module {
+  padding: 4px 18px 8px;
+}
+
+.hero-number {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 6px 0 14px;
+}
+
+.hero-value {
+  font-size: 44px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  color: var(--brand-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.hero-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-3);
+}
+
+.hero-refutation {
+  padding: 0 0 14px;
+  font-size: 22px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.hero-refutation s {
+  color: var(--ink-3);
+  text-decoration-color: var(--bad);
+  margin-right: 8px;
+}
+
+.hero-refutation b {
+  color: var(--ink);
+}
+
+/* h2h face-off ----------------------------------------------------- */
+
+.h2h-faceoff {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 0;
+  text-align: center;
+}
+
+.h2h-side {
+  /* Grid items default to `min-width: auto`, which is their content's
+   * min-content size — for a nowrap `.h2h-value` that's the full
+   * string, which would grow this `1fr` track instead of ellipsizing.
+   * `min-width: 0` lets the track shrink to its `1fr` share and hands
+   * off overflow handling to `.h2h-value`. */
+  min-width: 0;
+}
+
+.h2h-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-2);
+}
+
+.h2h-value {
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  /* `.h2h-side` is a `1fr` grid column (see `.h2h-faceoff`); an
+   * unbounded value string (e.g. a verbose metric unit) could otherwise
+   * force that column wider than its share, unbalancing the face-off.
+   * `min-width: 0` on the side lets this ellipsis actually take effect
+   * instead of the grid track growing to fit. */
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.h2h-vs {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-4);
+}
+
+.h2h-verdict {
+  margin: 8px 0 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+
+/* frontier scatter --------------------------------------------------
+ * Everything geometric is server-computed (web/frontier_chart.rs):
+ * nice axis ticks, the 0..100 % position of each tick / dot, which side
+ * each dot's label goes on (`data-lbl` for phones, `data-lbl-wide` from
+ * 720px up), and a jitter slot for coincident dots (`data-jit`).
+ * dynamic-styles.js turns `data-x` / `data-y` into `left` / `bottom`
+ * percentages of `.frontier-area` (CSP-safe — no inline styles).
+ *
+ * `.frontier-area`'s insets leave room for the y tick labels (left) and
+ * x tick labels (bottom); keep them in sync with NARROW_W / WIDE_W /
+ * AREA_H in frontier_chart.rs, which the label-collision check uses. */
+
+.frontier-chart {
+  margin: 0;
+  padding: 4px 0 2px;
+}
+
+.frontier-ytitle,
+.frontier-xtitle {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.frontier-ytitle {
+  margin: 0 0 4px;
+}
+
+.frontier-ytitle::before {
+  content: "↑ ";
+}
+
+.frontier-xtitle {
+  margin: 2px 0 0;
+  text-align: right;
+}
+
+.frontier-xtitle::after {
+  content: " →";
+}
+
+.frontier-plot {
+  position: relative;
+  height: 224px;
+  border-bottom: 1px solid var(--ink-4);
+  border-left: 1px solid var(--ink-4);
+  margin-left: 34px;
+  margin-bottom: 20px;
+}
+
+.frontier-area {
+  position: absolute;
+  inset: 24px 16px 10px 12px;
+}
+
+.fgrid {
+  position: absolute;
+  pointer-events: none;
+}
+
+.fgrid-y {
+  left: -12px;
+  right: -16px;
+  height: 0;
+  border-top: 1px dashed var(--line);
+}
+
+.fgrid-x {
+  top: -24px;
+  bottom: -10px;
+  width: 0;
+  border-left: 1px dashed var(--line);
+}
+
+.ftick {
+  position: absolute;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+/* y labels sit in the 34px gutter left of the plot's axis line. */
+.ftick-y {
+  right: calc(100% + 4px);
+  top: 0;
+  transform: translateY(-50%);
+}
+
+/* x labels sit just below the plot's bottom axis line. */
+.ftick-x {
+  top: calc(100% + 4px);
+  left: 0;
+  transform: translateX(-50%);
+}
+
+.fgrid-last .ftick-x {
+  transform: translateX(-75%);
+}
+
+/* A dot is a zero-size anchor at its (x, y) point; the marker centers
+ * on it and the label hangs off the side chosen server-side. */
+.fdot {
+  position: absolute;
+  width: 0;
+  height: 0;
+  z-index: 1;
+}
+
+.fdot:focus-visible,
+.fdot:hover {
+  z-index: 3;
+}
+
+.fdot[data-jit="1"] {
+  margin-left: 9px;
+}
+
+.fdot[data-jit="-1"] {
+  margin-left: -9px;
+}
+
+.fdot[data-jit="2"] {
+  margin-left: 18px;
+}
+
+.fdot[data-jit="-2"] {
+  margin-left: -18px;
+}
+
+.fdot[data-jit="3"] {
+  margin-left: 27px;
+}
+
+.fdot[data-jit="-3"] {
+  margin-left: -27px;
+}
+
+.fdot-mark,
+.fdot-logo {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: var(--shadow-xs);
+}
+
+.fdot-mark {
+  display: grid;
+  place-items: center;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  color: #fff;
+  background: var(--brand);
+  border: 1.5px solid var(--bg-elev);
+}
+
+.fdot.winner .fdot-mark {
+  background: var(--good);
+}
+
+.fdot-logo {
+  object-fit: contain;
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+}
+
+.fdot.winner .fdot-logo {
+  border: 2px solid var(--good);
+}
+
+.fdot:focus-visible .fdot-mark,
+.fdot:focus-visible .fdot-logo {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.fdot-label {
+  position: absolute;
+  font-size: 10px;
+  line-height: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+  white-space: nowrap;
+  /* Matches LABEL_MAX_W in frontier_chart.rs; the full name is in the
+   * dot's `title` and in the legend row. */
+  max-width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+.fdot.winner .fdot-label {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+/* Label sides (phone). Each rule sets every offset so the wide rules
+ * below can override cleanly. */
+.fdot[data-lbl="r"] .fdot-label {
+  display: block;
+  left: 12px;
+  right: auto;
+  top: 0;
+  bottom: auto;
+  transform: translateY(-50%);
+}
+
+.fdot[data-lbl="l"] .fdot-label {
+  display: block;
+  left: auto;
+  right: 12px;
+  top: 0;
+  bottom: auto;
+  transform: translateY(-50%);
+}
+
+.fdot[data-lbl="a"] .fdot-label {
+  display: block;
+  left: 0;
+  right: auto;
+  top: auto;
+  bottom: 12px;
+  transform: translateX(-50%);
+}
+
+.fdot[data-lbl="b"] .fdot-label {
+  display: block;
+  left: 0;
+  right: auto;
+  top: 12px;
+  bottom: auto;
+  transform: translateX(-50%);
+}
+
+.fdot[data-lbl="none"] .fdot-label {
+  display: none;
+}
+
+@media (min-width: 720px) {
+  .fdot[data-lbl-wide="r"] .fdot-label {
+    display: block;
+    left: 12px;
+    right: auto;
+    top: 0;
+    bottom: auto;
+    transform: translateY(-50%);
+  }
+
+  .fdot[data-lbl-wide="l"] .fdot-label {
+    display: block;
+    left: auto;
+    right: 12px;
+    top: 0;
+    bottom: auto;
+    transform: translateY(-50%);
+  }
+
+  .fdot[data-lbl-wide="a"] .fdot-label {
+    display: block;
+    left: 0;
+    right: auto;
+    top: auto;
+    bottom: 12px;
+    transform: translateX(-50%);
+  }
+
+  .fdot[data-lbl-wide="b"] .fdot-label {
+    display: block;
+    left: 0;
+    right: auto;
+    top: 12px;
+    bottom: auto;
+    transform: translateX(-50%);
+  }
+
+  .fdot[data-lbl-wide="none"] .fdot-label {
+    display: none;
+  }
+}
+
+/* Legend: always rendered, one row per dot, so every point is
+ * identifiable even when its in-plot label had no free side. */
+.frontier-legend {
+  width: 100%;
+  margin-top: 10px;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 12px;
+}
+
+.frontier-legend th,
+.frontier-legend td {
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.frontier-legend th {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--ink-3);
+}
+
+.frontier-legend .fl-idx {
+  width: 36px;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.frontier-legend .fl-val {
+  width: 27%;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.frontier-legend .fl-name {
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.fl-logo {
+  width: 16px;
+  height: 16px;
+  margin-right: 6px;
+  vertical-align: -3px;
+  border-radius: 50%;
+  object-fit: contain;
+}
+
+.fl-row.winner .fl-name,
+.fl-row.winner .fl-val {
+  font-weight: 800;
+  color: var(--good);
+}
+
+.fl-row.winner .fl-idx::after {
+  content: " ★";
+  color: var(--good);
+}
+
+/* race / myth_buster bars -------------------------------------------
+ * `.rbar`'s width is set by dynamic-styles.js from `data-bar-width`
+ * (linear vs the max score, clamped to a visible 1.5% minimum). */
+
+.race-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 6px 0 4px;
+}
+
+.race-row {
+  display: grid;
+  /* The track column must never lose the sizing fight to `.race-value`:
+   * a verbose `benchmark.metric_unit` (a sentence, not a real unit) can
+   * blow `.race-value`'s nowrap content past 100+ chars, and a bare
+   * `1fr` track has an implicit min-width of `auto` (~0, since
+   * `.race-track` has `overflow: hidden`) — so it silently collapses to
+   * 0px while the bar itself still renders at a valid `data-bar-width`
+   * percentage of nothing. `minmax(96px, 1fr)` gives the track a floor
+   * that wins over the other two columns before any flexible space is
+   * handed out. */
+  grid-template-columns: minmax(80px, 140px) minmax(96px, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.race-name {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ink-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.race-track {
+  height: 18px;
+  border-radius: var(--radius-pill);
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.rbar {
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--brand);
+}
+
+.race-row.winner .rbar {
+  background: var(--good);
+}
+
+.race-row.loser .rbar {
+  background: var(--bad);
+}
+
+.race-value {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+  text-align: right;
+  white-space: nowrap;
+  /* Belt-and-suspenders alongside the Rust-side unit length cap
+   * (`short_unit` in pages.rs): even if a long label slips through,
+   * it's clipped instead of expanding the `auto` column and squeezing
+   * `.race-track` again. Character-based cap — a percentage here
+   * resolves against the auto-sized grid track (which depends on this
+   * very element) and collapses to ~14px. */
+  max-width: 14ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Race as a plain table — bars removed. Exact numbers read better than
+   bar lengths, which mislead on tight races (near-equal scores render as
+   near-identical or, after max-normalisation, exaggerated bars). */
+.race-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 4px 0 2px;
+}
+.race-table .rt-row td {
+  padding: 8px 6px;
+  border-top: 1px solid var(--line);
+  font-size: 13.5px;
+}
+.race-table .rt-row:first-child td {
+  border-top: 0;
+}
+.rt-name {
+  font-weight: 700;
+  color: var(--ink-2);
+}
+.rt-logo {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  object-fit: contain;
+  vertical-align: -4px;
+  margin-right: 7px;
+  background: #fff;
+}
+.rt-value {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+}
+.race-table .rt-row.winner .rt-name {
+  color: var(--good, #2f8f4f);
+}
+.race-table .rt-row.winner .rt-value {
+  color: var(--good, #2f8f4f);
+  font-weight: 700;
+}
+.race-table .rt-row.loser .rt-value {
+  color: var(--bad, #c8412c);
+}
+
+/* watermark ---------------------------------------------------------- */
+
+.hero-wm {
+  position: absolute;
+  right: 14px;
+  bottom: 8px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--ink-4);
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Leaderboard fold — the plain table becomes an "All results"
+ * disclosure once a hero module (`.claim-hero-card`) takes the primary
+ * spot. `open-when-no-presentation` per the design brief: askama emits
+ * the `open` boolean attribute only when `pres` is `None`, so a legacy
+ * claim (no hero module) keeps the leaderboard expanded exactly as
+ * before this feature shipped. */
+
+.lb-fold-summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.lb-fold-summary::-webkit-details-marker {
+  display: none;
+}
+
+.lb-fold-summary::marker {
+  content: "";
+}
+
+.lb-fold-summary::after {
+  content: "▸";
+  margin-left: auto;
+  color: var(--ink-3);
+  font-size: 12px;
+}
+
+.lb-fold[open] .lb-fold-summary::after {
+  content: "▾";
+}

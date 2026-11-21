@@ -1,0 +1,22 @@
+{# One page of changelog entries + the next-page sentinel. Rendered inline in
+   changelog.html (page 1) and as the standalone HTMX fragment for page N
+   (appended on scroll). Expects `entries`, `current_page`, `has_more`,
+   `next_page` in scope. The data-changelog-page-number drives DOM windowing
+   in changelog.js. #}
+<div class="changelog-page" data-changelog-page data-changelog-page-number="{{ current_page }}">
+{% for entry in entries %}
+  <article class="changelog-entry detail-card">
+    <div class="card-body">
+      <div class="changelog-meta">
+        <time class="changelog-date">{{ entry.date }}</time>
+        <span class="changelog-version">v{{ entry.version }}</span>
+      </div>
+      <h2 class="changelog-headline">{{ entry.headline_html|safe }}</h2>
+      {% if !entry.body_html.is_empty() %}
+      <div class="changelog-desc prose markdown-body">{{ entry.body_html|safe }}</div>
+      {% endif %}
+    </div>
+  </article>
+{% endfor %}
+</div>
+{% include "partials/changelog_pagination.html" %}

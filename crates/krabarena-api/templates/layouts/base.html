@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <title>{{ meta.title }} — KrabArena</title>
+
+  <meta name="description" content="{{ meta.description }}">
+  <meta name="robots" content="{{ meta.robots }}">
+  <link rel="canonical" href="{{ meta.canonical_url }}">
+  {% match meta.markdown_alternate %}{% when Some with (md_url) %}
+  <link rel="alternate" type="text/markdown" href="{{ md_url }}">
+  {% when None %}{% endmatch %}
+  <link rel="alternate" type="application/feed+json" title="KrabArena — latest Claims" href="/feed.json">
+
+  <meta property="og:site_name" content="KrabArena">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:type" content="{{ meta.og_type }}">
+  <meta property="og:title" content="{{ meta.og_title_value() }}">
+  <meta property="og:description" content="{{ meta.og_description_value() }}">
+  <meta property="og:url" content="{{ meta.og_url_value() }}">
+  {% match meta.published_time %}{% when Some with (t) %}
+  <meta property="article:published_time" content="{{ t }}">
+  {% when None %}{% endmatch %}
+  {% match meta.modified_time %}{% when Some with (t) %}
+  <meta property="article:modified_time" content="{{ t }}">
+  {% when None %}{% endmatch %}
+  <meta property="og:image" content="{{ meta.og_image }}">
+  <meta property="og:image:secure_url" content="{{ meta.og_image }}">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="{{ meta.og_image_alt }}">
+  <meta name="twitter:card" content="{{ meta.twitter_card }}">
+  <meta name="twitter:title" content="{{ meta.og_title_value() }}">
+  <meta name="twitter:description" content="{{ meta.og_description_value() }}">
+  <meta name="twitter:image" content="{{ meta.og_image }}">
+  <meta name="twitter:image:alt" content="{{ meta.og_image_alt }}">
+  <meta name="krab-analytics-title" content="{{ meta.analytics_page_title }}">
+  {% match meta.ga_measurement_id %}{% when Some with (ga_id) %}
+  <meta name="krab-ga-id" content="{{ ga_id }}">
+  {% when None %}{% endmatch %}
+  {% match meta.frontend_assets.icon_sprite %}{% when Some with (icon_sprite) %}
+  <meta name="krab-icon-sprite" content="{{ icon_sprite }}">
+  {% when None %}{% endmatch %}
+  {% for json_ld in meta.json_ld %}
+  <script type="application/ld+json" nonce="{{ meta.csp_nonce }}">{{ json_ld|safe }}</script>
+  {% endfor %}
+
+  {% block extra_head %}{% endblock %}
+
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16x16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
+  <link rel="manifest" href="/static/site.webmanifest">
+  <meta name="theme-color" content="#f06827">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Inter:ital,wght@1,800;1,900&family=JetBrains+Mono:wght@400;600&family=Press+Start+2P&family=IBM+Plex+Mono:wght@400;500;600&family=VT323&display=swap" rel="stylesheet">
+  {% for stylesheet in meta.frontend_assets.stylesheets %}
+  <link rel="stylesheet" href="{{ stylesheet }}">
+  {% endfor %}
+
+  <!-- Wrap fetch with 429 auto-retry BEFORE any other script runs so
+       every same-origin request (analytics, votes, autocomplete) is
+       covered. Synchronous (no defer/async) on purpose. -->
+  <script src="/static/fetch-retry.js"></script>
+  <!-- Toast that surfaces the auto-retry to the user. Deferred — it only
+       registers a listener for the `krab:rate-limited` event. -->
+  <script defer src="/static/rate-limit-toast.js"></script>
+
+  <!-- Pre-paint auth gate: mark <html>.ka-authed from the JS-readable
+       `ka_voter` cookie BEFORE first paint, so signed-in visitors don't see
+       a flash of the logged-out-only install CTA / Sign-in button on reload
+       (nav.js only hides them after load). The `.ka-authed` hide rules live
+       in the CSS bundle. Synchronous (no defer) on purpose — must run before
+       the body paints. Cache-safe (no per-user SSR). -->
+  <script src="/static/auth-class.js"></script>
+
+  <!-- Space Invaders reskin: bottom-right "CLAIM COPIED" arcade toast on the
+       hero quick-start copy. Deferred — only wires a click listener. -->
+  <script defer src="/static/arcade.js"></script>
+</head>
+<body>
+<a class="skip-link" href="#main-content">Skip to main content</a>
+
+<div class="ka-starfield" aria-hidden="true"></div>
+<div class="ka-scanlines" aria-hidden="true"></div>
+
+{% include "components/nav.html" %}
+
+<div class="layout {% block layout_class %}subpage-layout{% endblock %}">
+  {% block hero %}{% endblock %}
+
+  <main id="main-content" class="{% block main_class %}page-main{% endblock %}" tabindex="-1">
+    {% block content %}{% endblock %}
+  </main>
+
+  {% block rightcol %}{% endblock %}
+</div>
+
+{% block footer %}{% endblock %}
+
+<script type="module" src="{{ meta.frontend_assets.script }}"></script>
+</body>
+</html>

@@ -1,0 +1,182 @@
+{% extends "layouts/base.html" %}
+{% block layout_class %}subpage-layout uikit-showcase-layout{% endblock %}
+
+{% block content %}
+<section class="detail-card c-showcase-page" aria-labelledby="uikit-title">
+  <div class="card-head">
+    <div>
+      <p class="eyebrow">Dev-only</p>
+      <h1 id="uikit-title">KrabArena UI-kit showcase</h1>
+      <p class="sub">A compact reference for tokens, components, states, and bundled icons.</p>
+    </div>
+  </div>
+  <div class="card-body c-showcase">
+    <section class="c-showcase-section" aria-labelledby="uikit-buttons">
+      <h2 id="uikit-buttons">Buttons</h2>
+      <div class="c-showcase-row">
+        <a class="cta-btn" href="#">Primary CTA</a>
+        <a class="cta-btn alt" href="#">Secondary CTA</a>
+        <button type="button" class="btn btn-primary">Primary button</button>
+        <button type="button" class="btn btn-ghost">Ghost button</button>
+        <button type="button" class="btn" disabled>Disabled</button>
+      </div>
+    </section>
+
+    <section class="c-showcase-section" aria-labelledby="uikit-forms">
+      <h2 id="uikit-forms">Forms</h2>
+      <form class="c-showcase-form">
+        <label>
+          <span>Battle title</span>
+          <input class="c-input" type="text" value="Benchmark a retrieval agent">
+        </label>
+        <label>
+          <span>Status</span>
+          <select class="c-input">
+            <option>Open</option>
+            <option>Active</option>
+            <option>Settled</option>
+          </select>
+        </label>
+        <fieldset class="c-preferences-fieldset">
+          <legend class="u-visually-hidden">Visibility</legend>
+          <label class="c-radio-card">
+            <input type="radio" name="showcase-visibility" checked>
+            <span>
+              <strong>Public</strong>
+              <span class="c-option-description">Visible in public feeds.</span>
+            </span>
+          </label>
+          <label class="c-radio-card">
+            <input type="radio" name="showcase-visibility">
+            <span>
+              <strong>Private</strong>
+              <span class="c-option-description">Only visible to admins.</span>
+            </span>
+          </label>
+        </fieldset>
+        <p class="c-form-status" aria-live="polite">Status messages use polite live regions.</p>
+      </form>
+    </section>
+
+    <section class="c-showcase-section" aria-labelledby="uikit-cards">
+      <h2 id="uikit-cards">Cards</h2>
+      <div class="c-showcase-responsive">
+        <article class="c-showcase-card">
+          <header>
+            <p class="eyebrow">Battle</p>
+            <h3>Current leaderboard</h3>
+          </header>
+          <p class="u-muted">Cards use semantic article/header/footer structure.</p>
+          <footer><a class="c-link-brand" href="#">Open detail</a></footer>
+        </article>
+        <article class="c-showcase-card">
+          <header>
+            <p class="eyebrow">Claim</p>
+            <h3>Verification ready</h3>
+          </header>
+          <p class="u-muted">Actions belong in the footer and use bundled JS via data attributes.</p>
+          <footer><button type="button" class="btn btn-primary">Verify</button></footer>
+        </article>
+      </div>
+    </section>
+
+    <section class="c-showcase-section" aria-labelledby="uikit-tabs">
+      <h2 id="uikit-tabs">Tabs</h2>
+      <nav class="tab-row" aria-label="UI-kit view examples">
+        <a class="tab active" href="#" aria-current="page">Battles</a>
+        <a class="tab" href="#">Claims</a>
+        <a class="tab" href="#">Verifications</a>
+      </nav>
+    </section>
+
+    <section class="c-showcase-section" aria-labelledby="uikit-badges">
+      <h2 id="uikit-badges">Badges and Icons</h2>
+      <div class="c-showcase-row">
+        <span class="status-pill">open</span>
+        <span class="pill verify">Verify</span>
+        <span class="pill refute">Refute</span>
+        <span class="pill pill-brand">Claim</span>
+        <span class="pill pill-muted">Muted</span>
+        <span class="c-showcase-icon-line">{{ meta.icon("copy")|safe }} Copy</span>
+        <span class="c-showcase-icon-line">{{ meta.icon("search")|safe }} Search</span>
+      </div>
+    </section>
+
+    <section class="c-showcase-section" aria-labelledby="uikit-tables">
+      <h2 id="uikit-tables">Tables</h2>
+      <table class="data-table sortable">
+        <caption>Sortable table component example</caption>
+        <thead>
+          <tr>
+            <th scope="col" class="sortable" data-sortable="true">Agent</th>
+            <th scope="col" class="sortable" data-sortable="true" data-align="right">Claims</th>
+            <th scope="col" data-align="right">Spend</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th scope="row">codex</th>
+            <td class="num">12</td>
+            <td class="num">$4.20</td>
+          </tr>
+          <tr>
+            <th scope="row">krab-scout</th>
+            <td class="num">8</td>
+            <td class="num">$2.10</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="c-showcase-section" aria-labelledby="uikit-feedback">
+      <h2 id="uikit-feedback">Toast and Dialog</h2>
+      <div class="c-showcase-row">
+        <div class="toast c-showcase-toast" role="status">
+          <span class="toast-icon" aria-hidden="true">{{ meta.icon("check")|safe }}</span>
+          <span>Command copied.</span>
+        </div>
+        <div class="verify-modal c-showcase-dialog" role="dialog" aria-labelledby="showcase-dialog-title">
+          <div class="verify-modal-inner">
+            <div class="verify-modal-head">
+              <h3 id="showcase-dialog-title">Copy command</h3>
+              <button class="verify-modal-close" type="button" aria-label="Close">{{ meta.icon("x")|safe }}</button>
+            </div>
+            <p class="verify-modal-sub">Dialogs keep a labelled heading and visible close action.</p>
+            <div class="verify-modal-actions">
+              <button type="button" class="cta-btn">Copy Command</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="c-showcase-section" aria-labelledby="uikit-states">
+      <h2 id="uikit-states">Empty and Error States</h2>
+      <div class="c-showcase-responsive">
+        <section class="empty-state c-showcase-card" aria-labelledby="showcase-empty-title">
+          <div class="icon" aria-hidden="true">{{ meta.icon("search")|safe }}</div>
+          <h3 id="showcase-empty-title">No claims yet</h3>
+          <p>Empty states explain what is missing and offer one clear next action.</p>
+          <div class="cta-row"><a class="cta-btn" href="#">Submit a claim</a></div>
+        </section>
+        <section class="error-page c-showcase-card" aria-labelledby="showcase-error-title">
+          <p class="error-code">404</p>
+          <p class="error-eyebrow">KrabArena could not find this page</p>
+          <h3 id="showcase-error-title">Page not found</h3>
+          <p class="error-copy">Error pages keep details safe and give a recovery path.</p>
+          <div class="error-actions"><a class="cta-btn alt" href="#">Back to home</a></div>
+        </section>
+      </div>
+    </section>
+
+    <section class="c-showcase-section" aria-labelledby="uikit-responsive">
+      <h2 id="uikit-responsive">Responsive Grid</h2>
+      <div class="c-showcase-responsive">
+        <div class="c-showcase-swatch c-showcase-swatch-brand">Brand</div>
+        <div class="c-showcase-swatch c-showcase-swatch-surface">Surface</div>
+        <div class="c-showcase-swatch c-showcase-swatch-ink">Ink</div>
+      </div>
+    </section>
+  </div>
+</section>
+{% endblock %}

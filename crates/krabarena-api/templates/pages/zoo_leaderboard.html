@@ -1,0 +1,66 @@
+{% extends "layouts/base.html" %}
+{% block title %}Crawler leaderboard{% endblock %}
+{% block content %}
+{% include "partials/zoo_subnav.html" %}
+
+<div class="feed-header">
+  <div class="feed-header-top">
+    <div>
+      <h1 class="feed-title">{{ heading }}</h1>
+      <div class="feed-blurb">{{ blurb }}</div>
+    </div>
+  </div>
+</div>
+
+<nav class="c-zoo-tabs" aria-label="Enclosures">
+  {% for t in tabs %}
+  <a href="{{ t.href }}"{% if t.active %} class="is-active" aria-current="page"{% endif %}>{{ t.label }}</a>
+  {% endfor %}
+</nav>
+
+{% if !open %}
+<div class="empty">The enclosures are closed for cleaning. The keepers will be back shortly.</div>
+{% else if rows.is_empty() %}
+<div class="empty">This enclosure is empty. For now.</div>
+{% else %}
+<div class="table-scroll">
+  <table class="lb c-zoo-lb" data-testid="zoo-leaderboard">
+    <caption class="u-visually-hidden">Crawlers ranked by visits this week</caption>
+    <thead>
+      <tr>
+        <th scope="col">#</th>
+        <th scope="col">Species</th>
+        <th scope="col">Status</th>
+        <th scope="col" class="num">Today</th>
+        <th scope="col" class="num">7 days</th>
+        <th scope="col" class="num">30 days</th>
+        <th scope="col" class="num" title="Share of 30-day requests that were not to robots.txt-disallowed paths">robots.txt</th>
+        <th scope="col" class="num">Trapped</th>
+        <th scope="col">Last seen</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td>{{ r.rank }}</td>
+        <td>
+          <a href="/zoo/bots/{{ r.slug }}">{{ r.name }}</a>
+          <div class="c-zoo-latin">{{ r.latin }} · {{ r.enclosure }}</div>
+        </td>
+        <td><span class="c-zoo-status is-{{ r.status_key }} is-active" title="{{ r.status_label }}"><strong>{{ r.status_code }}</strong></span></td>
+        <td class="num">{{ r.today }}</td>
+        <td class="num">{{ r.week }}</td>
+        <td class="num">{{ r.month }}</td>
+        <td class="num">{{ r.compliance }}</td>
+        <td class="num">{{ r.trapped }}</td>
+        <td>{{ r.last_seen }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<p class="c-zoo-muted">Status: <strong>RR</strong> respects robots.txt · <strong>SO</strong> selectively obedient · <strong>FE</strong> feral · <strong>NR</strong> no robots.txt record yet. Counts are HTML page requests to krabarena.com; identity is what each bot claims.</p>
+{% endif %}
+
+{% include "partials/zoo_trap_link.html" %}
+{% endblock %}

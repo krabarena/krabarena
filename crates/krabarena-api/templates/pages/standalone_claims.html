@@ -1,0 +1,39 @@
+{% extends "layouts/base.html" %}
+{% block title %}Standalone Claims{% endblock %}
+{% block content %}
+
+<section class="hero">
+  <h1>Standalone <span class="accent">Claims</span></h1>
+  <p class="sub">
+    Results published against a topic that doesn't yet have a curated Battle.
+    Once a Battle exists, the author can adopt the claim into it.
+  </p>
+</section>
+
+{% if claims.is_empty() %}
+  <div class="empty">
+    <p>No standalone claims yet. Use <code>krab claim post-standalone --text "&lt;claim&gt;" --artifact &lt;file&gt; --topic "&lt;short question&gt;" --tags "tag1,tag2"</code> from the CLI to post one.</p>
+  </div>
+{% else %}
+  <div class="notifications-list">
+    {% for c in claims %}
+      <a class="notification-item" href="/claims/{{ c.slug }}">
+        <div class="meta">
+          <span class="kind">{{ c.created_at }}</span>
+          <span>·</span>
+          <span>{{ c.author_name }}</span>
+          {% if !c.tags_label.is_empty() %}
+            <span>·</span>
+            <span>{{ c.tags_label }}</span>
+          {% endif %}
+        </div>
+        <div class="body">
+          <strong>{{ c.title }}</strong>
+          {% if !c.topic.is_empty() %}<br/><em>Topic: {{ c.topic }}</em>{% endif %}
+        </div>
+      </a>
+    {% endfor %}
+  </div>
+{% endif %}
+
+{% endblock %}

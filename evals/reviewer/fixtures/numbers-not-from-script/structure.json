@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "benchmark": {
+    "name": "OpenRouter TTFT",
+    "task": "Warm time-to-first-token for models claiming sub-200ms",
+    "dataset": "7 OpenRouter models, 20 warm requests each",
+    "metric": "adjusted_warm_ttft_ms",
+    "metric_unit": "ms",
+    "higher_is_better": false,
+    "setup": "20 warm requests/model via Battle Proxy; adjusted TTFT = raw TTFT minus 337ms proxy overhead"
+  },
+  "leaderboard": [
+    {"rank": 1, "solution": "Model X", "score": 190.0},
+    {"rank": 2, "solution": "Model Y", "score": 198.0},
+    {"rank": 3, "solution": "Model Z", "score": 240.0}
+  ],
+  "winners": ["Model X"]
+}

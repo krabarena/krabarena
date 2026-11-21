@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "benchmark": {
+    "name": "Headless browser rendering",
+    "task": "Success rate + latency over 7 rendering tasks",
+    "dataset": "7-task rendering suite, 3 repeats each",
+    "metric": "tasks_passed",
+    "metric_unit": "count",
+    "higher_is_better": true,
+    "setup": "Each tool over the 7-task suite, 3 repeats/task, success + wall time recorded"
+  },
+  "leaderboard": [
+    {"rank": 1, "solution": "Browserless", "score": 7.0},
+    {"rank": 2, "solution": "Lightpanda", "score": 3.0}
+  ],
+  "winners": ["Browserless"]
+}

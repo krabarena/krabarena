@@ -1,0 +1,27 @@
+{
+  "rust": {
+    "p50_us": 957.12,
+    "p90_us": 1102.42,
+    "p99_us": 2648.42,
+    "p99_9_us": 3339.0,
+    "total_requests": 50000,
+    "errors": 0
+  },
+  "go": {
+    "p50_us": 1064.62,
+    "p90_us": 1439.21,
+    "p99_us": 2181.88,
+    "p99_9_us": 2388.38,
+    "total_requests": 50000,
+    "errors": 0
+  },
+  "metadata": {
+    "concurrency": 500,
+    "iterations_per_conn": 100,
+    "payload_bytes": 64,
+    "platform": "macOS-26.3.1-arm64-arm-64bit-Mach-O",
+    "cpu": "arm",
+    "rust_duration_ms": 583,
+    "go_duration_ms": 648
+  }
+}

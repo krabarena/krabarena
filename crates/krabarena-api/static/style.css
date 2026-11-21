@@ -1,0 +1,1108 @@
+/* KrabArena — Polymarket-inspired web UI. */
+
+:root {
+  --bg: #0b0d10;
+  --bg-elev: #13161b;
+  --bg-card: #181c22;
+  --bg-hover: #1f242c;
+  --bg-input: #0f1216;
+
+  --text: #f0f2f5;
+  --text-muted: #8c96a6;
+  --text-dim: #5a6472;
+
+  --border: #262c36;
+  --border-strong: #343c48;
+
+  --krab: #f06827;
+  --krab-strong: #ff7a33;
+
+  --verify: #00d084;
+  --verify-soft: rgba(0, 208, 132, 0.15);
+  --refute: #ff4d4d;
+  --refute-soft: rgba(255, 77, 77, 0.15);
+
+  --status-open: #6b7280;
+  --status-active: #f59e0b;
+  --status-settled: #3b82f6;
+
+  /* Temperature scale — Cold→Boiling, used for the heat chip and sparkline. */
+  --temp-cold: #6b7280;
+  --temp-warm: #fbbf24;
+  --temp-hot: #f06827;
+  --temp-boiling: #ef4444;
+
+  --radius: 10px;
+  --radius-sm: 6px;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: inherit; text-decoration: none; }
+a:hover { color: var(--krab); }
+
+code, pre {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.88em;
+}
+
+button, .btn {
+  background: var(--krab);
+  color: #fff;
+  border: none;
+  padding: 10px 18px;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 14px;
+  transition: background 100ms ease;
+}
+button:hover, .btn:hover { background: var(--krab-strong); color: #fff; }
+
+.btn-verify { background: var(--verify); color: #041d13; }
+.btn-verify:hover { background: #00e896; color: #041d13; }
+.btn-refute { background: var(--refute); color: #fff; }
+.btn-refute:hover { background: #ff6666; color: #fff; }
+.btn-ghost { background: transparent; color: var(--text); border: 1px solid var(--border-strong); }
+.btn-ghost:hover { background: var(--bg-hover); color: var(--text); }
+
+/* ---------- nav ---------- */
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 14px 32px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(11, 13, 16, 0.85);
+  backdrop-filter: blur(12px);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.nav-brand {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.nav-brand .emoji { font-size: 22px; }
+.nav-brand .name { color: var(--text); }
+.nav-brand .name .accent { color: var(--krab); }
+
+.nav-links {
+  display: flex;
+  gap: 22px;
+  margin-left: 16px;
+}
+.nav-links a {
+  color: var(--text-muted);
+  font-weight: 500;
+  font-size: 14px;
+  padding: 6px 0;
+}
+.nav-links a:hover,
+.nav-links a.active { color: var(--text); }
+
+.nav-cta {
+  margin-left: auto;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+/* ---------- layout ---------- */
+
+main { max-width: 1280px; margin: 0 auto; padding: 32px; }
+
+.hero {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 36px 40px;
+  background: linear-gradient(135deg, var(--bg-elev) 0%, #10131a 100%);
+  margin-bottom: 32px;
+}
+.hero h1 .accent { color: var(--krab); }
+.hero .sub { color: var(--text-muted); font-size: 16px; }
+
+/* JUMP-INTO-YOUR-FIRST-BATTLE block. Lives inside the hero rather
+ * than as a nested card — no second border, no double-background.
+ * The horizontal divider with a centered "FOR AGENTS" label is the
+ * only visual separator between the hero pitch and the
+ * agent-specific CTA below it. Hidden client-side for users who
+ * have a `voter_token` in localStorage; see the inline script in
+ * `templates/index.html` / `about.html`. */
+.hero-jump {
+  margin: 28px 0 8px;
+}
+.hero-jump-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 18px;
+  color: var(--text-muted);
+  font-family: var(--sans, system-ui, sans-serif);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.hero-jump-divider::before,
+.hero-jump-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+.hero-jump-title {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  margin: 0 0 8px;
+}
+.hero-jump-sub {
+  color: var(--text-muted);
+  font-size: 14px;
+  margin: 0 0 14px;
+  line-height: 1.55;
+  max-width: 760px;
+}
+.hero-jump-cmd {
+  position: relative;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px 88px 14px 16px; /* right padding clears the badge */
+  margin: 0;
+  cursor: pointer;
+  font-family: var(--mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text);
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  transition: border-color 120ms ease, background 120ms ease, box-shadow 120ms ease;
+}
+.hero-jump-cmd:hover {
+  border-color: var(--krab);
+  background: var(--bg-card);
+  box-shadow: 0 0 0 3px rgba(255, 99, 0, 0.08); /* faint krab halo */
+}
+.hero-jump-cmd code {
+  background: transparent;
+  padding: 0;
+  border: 0;
+}
+.hero-jump-copy {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  transform: translateY(-50%);
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-family: var(--sans, system-ui, sans-serif);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 3px 8px;
+  pointer-events: none;
+  transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+.hero-jump-cmd:hover .hero-jump-copy { color: var(--text); }
+.hero-jump-copy.copied {
+  color: var(--bg);
+  background: var(--krab);
+  border-color: var(--krab);
+}
+.hero-jump-foot {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin: 12px 0 0;
+}
+.hero-jump-signin {
+  color: var(--krab);
+  font-weight: 600;
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 120ms ease;
+}
+.hero-jump-signin:hover { border-bottom-color: var(--krab); }
+
+.hero-counters {
+  display: flex;
+  gap: 32px;
+  margin-top: 24px;
+  flex-wrap: wrap;
+}
+.counter {
+  display: flex;
+  flex-direction: column;
+  min-width: 120px;
+}
+.counter .value {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.counter .label {
+  color: var(--text-muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-top: 2px;
+}
+
+/* ---------- filters ---------- */
+
+.filters {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+.filter-chip {
+  border: 1px solid var(--border);
+  padding: 7px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  color: var(--text-muted);
+  background: var(--bg-card);
+}
+.filter-chip:hover { background: var(--bg-hover); color: var(--text); }
+.filter-chip.active {
+  background: var(--krab);
+  color: #fff;
+  border-color: var(--krab);
+}
+
+/* ---------- battle / claim card grid ---------- */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 16px;
+}
+
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  transition: border-color 120ms ease, transform 120ms ease;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 210px;
+}
+.card:hover {
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+}
+
+.card .title {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+}
+.card .description {
+  color: var(--text-muted);
+  font-size: 13px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+/* Rich short-summary cards (home page Battle cards since 0.8.21) carry
+   markdown tables + emoji notes — the 2-line clamp kills them. Release
+   the clamp and tighten table styling so the three-section payload
+   (headline / Top 3 / Top Metrics / Notes) reads as one compact unit. */
+.card .description.short-summary {
+  display: block;
+  -webkit-line-clamp: unset;
+  overflow: visible;
+}
+.card .description.short-summary p {
+  margin: 0 0 8px;
+}
+.card .description.short-summary h3 {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin: 12px 0 4px;
+  font-weight: 600;
+}
+.card .description.short-summary table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+.card .description.short-summary th,
+.card .description.short-summary td {
+  padding: 3px 6px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+.card .description.short-summary th {
+  font-weight: 500;
+  color: var(--text-muted);
+}
+.card .description.short-summary tr:last-child td {
+  border-bottom: none;
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.chip {
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+}
+.chip.status-open      { color: var(--status-open); }
+.chip.status-active    { color: var(--status-active); border-color: rgba(245, 158, 11, 0.3); }
+.chip.status-settled   { color: var(--status-settled); border-color: rgba(59, 130, 246, 0.3); }
+.chip.temp-cold        { color: var(--temp-cold); }
+.chip.temp-warm        { color: var(--temp-warm); border-color: rgba(251, 191, 36, 0.3); background: rgba(251, 191, 36, 0.08); }
+.chip.temp-hot         { color: var(--temp-hot); border-color: rgba(240, 104, 39, 0.35); background: rgba(240, 104, 39, 0.08); }
+.chip.temp-boiling     { color: var(--temp-boiling); border-color: rgba(239, 68, 68, 0.35); background: rgba(239, 68, 68, 0.10); animation: temp-pulse 2.5s ease-in-out infinite; }
+@keyframes temp-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.0); }
+  50%      { box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.18); }
+}
+.chip.sponsor {
+  color: var(--krab);
+  border-color: rgba(240, 104, 39, 0.35);
+  background: rgba(240, 104, 39, 0.08);
+}
+.chip.agent { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+.chip.visibility-private {
+  color: #c084fc;
+  border-color: rgba(192, 132, 252, 0.35);
+  background: rgba(192, 132, 252, 0.08);
+}
+
+/* ---------- market bar (verify vs refute split) ---------- */
+
+.market-bar {
+  position: relative;
+  height: 10px;
+  background: var(--bg-hover);
+  border-radius: 999px;
+  overflow: hidden;
+  display: flex;
+}
+.market-bar .verify-fill {
+  background: linear-gradient(90deg, var(--verify) 0%, #14e39d 100%);
+  transition: width 200ms ease;
+}
+.market-bar .refute-fill {
+  background: linear-gradient(90deg, #ff6a6a 0%, var(--refute) 100%);
+  transition: width 200ms ease;
+}
+.market-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-top: 8px;
+}
+.market-row .verify-side { color: var(--verify); }
+.market-row .refute-side { color: var(--refute); }
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.pill.verify { background: var(--verify-soft); color: var(--verify); }
+.pill.refute { background: var(--refute-soft); color: var(--refute); }
+
+/* ---------- battle timeline (append-only event log) ---------- */
+
+.timeline {
+  position: relative;
+  margin: 16px 0;
+  padding-left: 22px;
+}
+.timeline-entry {
+  position: relative;
+  padding: 10px 0 14px 4px;
+}
+.timeline-entry::before {
+  content: '';
+  position: absolute;
+  left: -29px;
+  top: 14px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--bg);
+  border: 2px solid var(--border-strong);
+}
+.timeline-entry.kind-summary::before { border-color: var(--krab); background: var(--krab); }
+.timeline-entry.kind-claim::before   { border-color: var(--text-muted); }
+.timeline-entry.kind-verify::before  { border-color: var(--verify); background: var(--verify); }
+.timeline-entry.kind-refute::before  { border-color: var(--refute); background: var(--refute); }
+.timeline-time {
+  font-size: 11px;
+  color: var(--text-dim);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.timeline-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 4px;
+  flex-wrap: wrap;
+}
+.timeline-body {
+  color: var(--text);
+  line-height: 1.55;
+  font-size: 14px;
+}
+.timeline-body.summary {
+  padding: 12px 16px;
+  background: rgba(240, 104, 39, 0.06);
+  border-left: 3px solid var(--krab);
+  border-radius: 4px;
+  margin-top: 6px;
+}
+.timeline-detail {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 4px;
+  font-style: italic;
+}
+.timeline-toggle {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  padding: 6px 12px;
+  margin: 6px 0 12px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  cursor: pointer;
+}
+.timeline-toggle:hover { color: var(--text); border-color: var(--border-strong); }
+
+/* ---------- temperature sparkline ---------- */
+
+.sparkline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0 4px;
+}
+.sparkline svg { display: block; }
+.sparkline-label {
+  font-size: 11px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* ---------- claim detail ---------- */
+
+.claim-detail .hero-claim {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  margin-bottom: 16px;
+}
+
+.stat-pill {
+  display: inline-flex;
+  flex-direction: column;
+  padding: 10px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  min-width: 120px;
+}
+.stat-pill .label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+.stat-pill .value {
+  font-size: 16px;
+  font-weight: 600;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+.pow-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 18px 0;
+}
+
+.timeline {
+  margin-top: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.timeline-item {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--text-dim);
+  border-radius: var(--radius-sm);
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.timeline-item.verify { border-left-color: var(--verify); }
+.timeline-item.refute { border-left-color: var(--refute); }
+.timeline-item.comment { border-left-color: var(--krab); }
+.timeline-item .meta {
+  font-size: 12px;
+  color: var(--text-muted);
+  display: flex;
+  gap: 8px;
+}
+.timeline-item .body { font-size: 14px; }
+
+/* Refute body: structured Reason / Conditions sections.
+   Used on both the claim-page timeline (.timeline-item .body)
+   and the battle-page timeline (.timeline-body). Sections are
+   separated by a thin rule so the two arguments read distinctly. */
+.refute-body { display: flex; flex-direction: column; gap: 12px; }
+.refute-section { display: flex; flex-direction: column; gap: 6px; }
+.refute-section + .refute-section {
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.refute-label {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--refute);
+  font-weight: 600;
+}
+.timeline-body > .refute-section + .refute-section {
+  margin-top: 6px;
+  padding-top: 10px;
+}
+
+/* ---------- leaderboard ---------- */
+
+.leaderboard-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+.leaderboard-row {
+  display: grid;
+  grid-template-columns: 56px 1fr 120px 120px 120px;
+  align-items: center;
+  padding: 14px 20px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  transition: border-color 120ms ease;
+}
+.leaderboard-row:hover { border-color: var(--border-strong); }
+.leaderboard-row .rank {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text-dim);
+}
+.leaderboard-row .rank.top-3 { color: var(--krab); }
+.leaderboard-row .agent-name {
+  display: flex;
+  flex-direction: column;
+}
+.leaderboard-row .agent-name .display { font-weight: 600; }
+.leaderboard-row .agent-name .domain { color: var(--text-muted); font-size: 12px; }
+.leaderboard-row .stat {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-weight: 600;
+  text-align: right;
+}
+.leaderboard-row .stat .l { color: var(--text-muted); font-size: 11px; margin-right: 6px; text-transform: uppercase; letter-spacing: 0.06em; }
+
+/* ---------- arena leaderboard ---------- */
+
+.arena-table { width: 100%; border-collapse: separate; border-spacing: 0 6px; }
+.arena-table th {
+  text-align: left;
+  color: var(--text-muted);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 8px 16px;
+}
+.arena-table td {
+  background: var(--bg-card);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 16px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 14px;
+}
+.arena-table td:first-child { border-left: 1px solid var(--border); border-top-left-radius: var(--radius-sm); border-bottom-left-radius: var(--radius-sm); }
+.arena-table td:last-child  { border-right: 1px solid var(--border); border-top-right-radius: var(--radius-sm); border-bottom-right-radius: var(--radius-sm); }
+
+/* Horizontal-scroll wrapper for tables that don't fit on narrow screens
+   (the arena leaderboard has 6 columns and can't reflow). */
+.table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.table-scroll .arena-table { min-width: 560px; }
+
+/* ---------- mobile tweaks ---------- */
+
+@media (max-width: 640px) {
+  main { padding: 16px; }
+  .nav { padding: 12px 16px; gap: 12px; }
+  .nav-links { flex-wrap: wrap; gap: 14px; margin-left: 0; }
+  .hero { padding: 24px 20px; }
+
+  /* Agent leaderboard: trim grid so 56 + stats + gap fits a 360px
+     viewport. Stats columns compact; row padding tightens. */
+  .leaderboard-row {
+    grid-template-columns: 44px 1fr 60px 60px 60px;
+    padding: 12px 12px;
+    gap: 6px;
+  }
+  .leaderboard-row .rank { font-size: 18px; }
+  .leaderboard-row .stat { font-size: 13px; }
+  .leaderboard-row .stat .l { display: block; margin: 0 0 2px; font-size: 10px; }
+}
+
+/* ---------- about page ---------- */
+
+.about-section { max-width: 860px; }
+.about-section h2 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+  margin: 36px 0 12px;
+  font-weight: 600;
+}
+.about-section .vocab-entry { margin-bottom: 20px; }
+.about-section .vocab-entry .word {
+  color: var(--krab);
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 4px;
+}
+.about-section .vocab-entry .definition { color: var(--text); font-size: 14px; }
+.about-section .vocab-entry .example {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin-top: 4px;
+  font-style: italic;
+}
+
+/* ---------- breadcrumb ---------- */
+
+.breadcrumb {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+.breadcrumb a { color: var(--text-muted); }
+.breadcrumb a:hover { color: var(--krab); }
+
+/* ---------- empty state ---------- */
+
+.empty {
+  text-align: center;
+  padding: 64px 20px;
+  color: var(--text-muted);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+}
+
+/* ---------- deprecation banner ---------- */
+
+.banner {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  color: #fbbf24;
+  padding: 10px 18px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  margin-bottom: 20px;
+}
+
+/* ---------- rendered markdown content ---------- */
+/* User-supplied markdown (claim bodies, battle descriptions, changelog).
+   Global `* { margin:0; padding:0 }` reset strips defaults, so each
+   element is explicitly styled here. Scoped under `.markdown-body` to
+   avoid leaking into cards, tables elsewhere. */
+
+.markdown-body { color: var(--text); line-height: 1.65; }
+.markdown-body > * + * { margin-top: 0.75rem; }
+
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4,
+.markdown-body h5,
+.markdown-body h6 {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+  line-height: 1.25;
+}
+.markdown-body h1 { font-size: 1.75rem; }
+.markdown-body h2 { font-size: 1.4rem; }
+.markdown-body h3 { font-size: 1.18rem; }
+.markdown-body h4 { font-size: 1.05rem; }
+.markdown-body h5,
+.markdown-body h6 { font-size: 0.95rem; color: var(--text-muted); }
+
+.markdown-body p { margin: 0.5rem 0; }
+
+.markdown-body ul,
+.markdown-body ol {
+  margin: 0.5rem 0 0.5rem 0;
+  padding-left: 1.75rem;
+}
+.markdown-body ul { list-style: disc outside; }
+.markdown-body ol { list-style: decimal outside; }
+.markdown-body li { margin: 0.2rem 0; }
+.markdown-body li > ul,
+.markdown-body li > ol { margin-top: 0.2rem; }
+
+.markdown-body a {
+  color: var(--krab);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.markdown-body a:hover { color: var(--krab-strong); }
+
+.markdown-body strong { font-weight: 700; color: var(--text); }
+.markdown-body em { font-style: italic; }
+
+.markdown-body table {
+  border-collapse: collapse;
+  margin: 0.75rem 0;
+  width: 100%;
+  font-size: 0.92em;
+  display: block;
+  overflow-x: auto;
+}
+/* Editorial tables — KrabReviewer leaderboards, Top Evals tables,
+   Top 3 short-summary tables. Tuned to the keenable.ai/webql style
+   since 0.8.23: thin outer border, no vertical borders, single
+   light-gray row divider, no zebra, no thead background, dense
+   padding. Reads as a data sheet, not a chrome-heavy CMS table. */
+.markdown-body table {
+  border: 1px solid var(--border);
+}
+.markdown-body thead { background: transparent; }
+.markdown-body th,
+.markdown-body td {
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  padding: 5px 10px;
+  text-align: left;
+  vertical-align: top;
+  /* Explicit line-height so wrapped cells (long Notes column when
+     expanded) don't inherit 1.65 from `.markdown-body` and look
+     irregular relative to the numeric columns. */
+  line-height: 1.4;
+}
+.markdown-body th {
+  font-weight: 600;
+  color: var(--text);
+  border-bottom: 1px solid var(--border-strong, var(--border));
+}
+.markdown-body tbody tr:last-child td { border-bottom: 0; }
+/* Cap the last column (almost always "Notes" or a free-form prose
+   column on KrabReviewer leaderboards) and clamp to a single line
+   by default so row heights stay uniform across the table. Click
+   the cell to expand — `static/sortable-tables.js` toggles the
+   `.expanded` class. The cap survives the expansion so a 200-char
+   note still wraps within a sensible width. */
+.markdown-body td:last-child {
+  max-width: 320px;
+  font-size: 0.9em;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+/* Default: clamp to a single line via `nowrap + overflow + ellipsis`
+   instead of `-webkit-line-clamp` / `display: -webkit-box`. The
+   line-clamp approach pulls the cell out of `display: table-cell`,
+   which breaks border alignment with the row's other cells (the
+   bottom edge ends ~1.5px above siblings, leaving a visible gap in
+   the row divider — caught visually before push). The nowrap form
+   keeps the cell in normal table layout, so `border-bottom` lines
+   up cleanly across the whole row. */
+.markdown-body td:last-child:not(.expanded) {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.markdown-body td:last-child.expanded {
+  white-space: normal;
+}
+/* Sortable column headers (driven by `static/sortable-tables.js`).
+   The script tags `<table class="sortable">` + `<th class="sort-col">`
+   on every markdown table at load time so this styling lights up
+   automatically. */
+.markdown-body table.sortable th {
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+}
+.markdown-body table.sortable th:hover { color: var(--krab); }
+.markdown-body table.sortable th[data-sort-dir="asc"]::after  { content: " ▲"; font-size: 0.7em; opacity: 0.7; }
+.markdown-body table.sortable th[data-sort-dir="desc"]::after { content: " ▼"; font-size: 0.7em; opacity: 0.7; }
+.markdown-body table.sortable th[data-sortable="true"]:not([data-sort-dir])::after {
+  content: " ⇅";
+  font-size: 0.7em;
+  opacity: 0.3;
+}
+
+.markdown-body blockquote {
+  border-left: 3px solid var(--krab);
+  margin: 0.75rem 0;
+  padding: 0.25rem 0.85rem;
+  color: var(--text-muted);
+  background: rgba(240, 104, 39, 0.04);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+.markdown-body blockquote p { margin: 0.25rem 0; }
+
+.markdown-body pre {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  padding: 0.85rem 1rem;
+  overflow-x: auto;
+  border-radius: var(--radius-sm);
+  font-size: 0.88em;
+  line-height: 1.5;
+}
+.markdown-body code {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  padding: 0.08rem 0.35rem;
+  border-radius: 3px;
+  font-size: 0.88em;
+}
+.markdown-body pre code {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font-size: inherit;
+}
+
+.markdown-body img {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius-sm);
+}
+
+.markdown-body hr {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 1.5rem 0;
+}
+
+.markdown-body input[type="checkbox"] {
+  margin-right: 0.4rem;
+  vertical-align: middle;
+}
+
+/* ---------- share buttons ---------- */
+
+.share-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 16px 0;
+  align-items: center;
+}
+.share-buttons .share-label {
+  color: var(--text-muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-right: 4px;
+}
+.share-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-card);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 100ms ease, border-color 100ms ease;
+}
+.share-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--krab);
+  color: var(--text);
+}
+.share-btn .icon { font-weight: 700; }
+
+/* ---------- nav alerts badge ---------- */
+
+.nav-alerts {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.nav-alerts .badge {
+  display: inline-block;
+  background: var(--krab);
+  color: #fff;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  margin-left: 4px;
+  line-height: 1.4;
+}
+
+/* ---------- notifications page ---------- */
+
+.notifications-list { display: flex; flex-direction: column; gap: 10px; }
+.notification-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.notification-item.unread {
+  border-left: 3px solid var(--krab);
+  background: rgba(240, 104, 39, 0.04);
+}
+.notification-item .meta {
+  color: var(--text-muted);
+  font-size: 12px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.notification-item .kind {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+}
+.notification-item .kind.verify { color: var(--verify); }
+.notification-item .kind.refute { color: var(--refute); }
+
+/* ---------- responsive / mobile ---------- */
+
+@media (max-width: 768px) {
+  html, body { font-size: 14px; }
+  main { padding: 16px; }
+  .nav {
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 10px 16px;
+  }
+  .nav-links {
+    order: 3;
+    width: 100%;
+    margin-left: 0;
+    gap: 16px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+  }
+  .nav-cta { margin-left: auto; }
+  .hero { padding: 20px; }
+  .hero h1 { font-size: 26px; }
+  .hero-counters { gap: 16px; }
+  .counter { min-width: 80px; }
+  .counter .value { font-size: 22px; }
+  .grid { grid-template-columns: 1fr; }
+  .card { min-height: 0; }
+  .share-buttons { margin: 12px 0; }
+}
+
+@media (max-width: 480px) {
+  .nav { padding: 8px 12px; gap: 8px; }
+  .nav-brand { font-size: 16px; }
+  main { padding: 12px; }
+  .hero { padding: 16px; }
+  .hero h1 { font-size: 22px; }
+}
+
+/* Editorial body containing the KrabReviewer-generated executive
+   summary. Treated as prose flowing on the page (not a card / not a
+   quotation) since 0.8.23 — no background tint, no border, no
+   wrapping container. The page is the editorial; chrome around it
+   was just visual noise. See `docs/ui.md` → "executive summary
+   card" for the rationale. */
+.exec-summary {
+  margin-top: 14px;
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1.65;
+}
+.battle-description {
+  margin-top: 16px;
+  color: var(--text-muted);
+}
+.battle-description > summary {
+  cursor: pointer;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 6px 0;
+  list-style: none;
+}
+.battle-description > summary::-webkit-details-marker { display: none; }
+.battle-description > summary::before {
+  content: "▸ ";
+  display: inline-block;
+  margin-right: 4px;
+}
+.battle-description[open] > summary::before { content: "▾ "; }

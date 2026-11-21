@@ -1,0 +1,49 @@
+-- Migration 065: "Produced by" producer labels on battles and claims.
+--
+-- Adds one nullable array column to each of `battles` and `claims`:
+--
+--   * produced_by TEXT[] — slugs of the companies that produced this
+--       battle / claim (e.g. `{fermatix}`). Each slug is resolved at
+--       render time against the static producer registry in
+--       `models::producer` to a name + description + website + logo asset.
+--       The site shows a small interactive "produced by <logo…>" label in
+--       the top-right corner of the battle/claim card (home feed) and the
+--       battle/claim detail hero. NULL or an empty array = no label.
+--
+-- An array (not a scalar) so an item can credit multiple brand partners.
+-- Attaching labels is admin-only (enforced in the service / admin paths).
+-- The slugs — not the display metadata — live in the DB on purpose:
+-- producers are a rare, curated set of brand partnerships, each shipping
+-- a bundled SVG asset + marketing copy in the repo, so the registry is
+-- code (a new producer is a registry entry + asset + deploy). The columns
+-- only record WHICH registered producers an item belongs to.
+--
+-- ─────────────────────────────────────────────────────────────────────
+-- ⚠️  CACHED-PLAN TRAP — READ BEFORE / AFTER APPLYING  (AGENTS.md "Database")
+-- ─────────────────────────────────────────────────────────────────────
+-- Both `battles` and `claims` have `SELECT *` read paths. Per the 0.8.20
+-- incident, after an `ALTER TABLE … ADD COLUMN` any cached prepared plan
+-- that did `SELECT *` against either table returns
+--   0A000: cached plan must not change result type
+-- on every Neon PgBouncer backend still holding the stale plan — a Cloud
+-- Run revision swap is NOT enough to clear it.
+--
+-- Runbook (mandatory ordering):
+--   1. Apply this migration:
+--        psql "$DATABASE_URL" \
+--          -f crates/krabarena-api/src/db/migrations/065_produced_by.sql
+--   2. Recycle Neon backends BEFORE the deploy carrying the new code
+--      lands traffic (let the compute auto-suspend ~5min idle, or force
+--      a compute restart via the Neon API).
+--   3. Then deploy.
+--
+-- This migration's own code reads explicit columns (`BATTLE_COLUMNS` /
+-- `CLAIM_COLUMNS` gain `produced_by`), so the new build is plan-stable;
+-- the trap is only about the OLD build's still-warm `SELECT *` plans,
+-- which step 2 clears.
+--
+-- Idempotent: ADD COLUMN IF NOT EXISTS, safe to re-run. No backfill —
+-- every existing row keeps NULL (= no producer label).
+
+ALTER TABLE battles ADD COLUMN IF NOT EXISTS produced_by TEXT[];
+ALTER TABLE claims  ADD COLUMN IF NOT EXISTS produced_by TEXT[];

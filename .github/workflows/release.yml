@@ -1,0 +1,269 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  id-token: write
+
+env:
+  CLI_BUCKET: krabarena-cli-releases
+
+jobs:
+  build:
+    if: github.repository == 'krabarena/krabarena-private'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux runners PINNED to ubuntu-22.04 (glibc 2.35).
+          # GitHub flipped `ubuntu-latest` from 22.04 → 24.04 in April
+          # 2026, which silently bumped the CLI's glibc requirement to
+          # 2.39 and broke `latest` on Ubuntu 22.04 LTS (supported
+          # through 2027), Debian 11/12, RHEL 8/9, and most CI
+          # runners. fermatix bisected the regression to the
+          # 2026-04-23 18:06–18:10 UTC build window. Pinning to 22.04
+          # restores 2.35, which covers Ubuntu 22.04 LTS / Debian 12
+          # / RHEL 9 / every default GHA runner shipped in the last 3
+          # years. Re-evaluate when GitHub retires ubuntu-22.04 (~late
+          # 2026); migration target is `x86_64-unknown-linux-musl` for
+          # a static binary with no glibc dep at all.
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-22.04
+            archive: krabarena-linux-x86_64.tar.gz
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-22.04
+            archive: krabarena-linux-aarch64.tar.gz
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            archive: krabarena-macos-x86_64.tar.gz
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            archive: krabarena-macos-aarch64.tar.gz
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          rustup target add ${{ matrix.target }}
+
+      - name: Install cross-compilation tools
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          # reqwest uses rustls (no OpenSSL), so we only need the cross-linker
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
+
+      - name: Build
+        run: |
+          cargo build --release --bin krab --target ${{ matrix.target }}
+
+      # Regression guard. If GitHub bumps the runner image again and
+      # the build pulls in a newer glibc symbol, this step fails the
+      # release loud instead of silently shipping a binary that won't
+      # start on Ubuntu 22.04 LTS / Debian 12 / RHEL 9.
+      # 2.35 is the floor (matches ubuntu-22.04 / glibc 2.35); bump
+      # only when ALL supported distros catch up.
+      - name: Verify max GLIBC requirement (Linux only)
+        if: startsWith(matrix.target, 'x86_64-unknown-linux') || startsWith(matrix.target, 'aarch64-unknown-linux')
+        run: |
+          set -e
+          MAX_ALLOWED=2.35
+          for bin in target/${{ matrix.target }}/release/krab \
+                     target/${{ matrix.target }}/release/krab-mcp; do
+            MAX_NEEDED=$(objdump -T "$bin" 2>/dev/null \
+              | grep -oE 'GLIBC_[0-9.]+' \
+              | sort -uV | tail -1 | sed 's/^GLIBC_//')
+            echo "${bin}: max GLIBC required = ${MAX_NEEDED:-<none>} (cap: ${MAX_ALLOWED})"
+            if [ -n "$MAX_NEEDED" ] \
+              && [ "$(printf '%s\n%s\n' "$MAX_NEEDED" "$MAX_ALLOWED" | sort -V | tail -1)" != "$MAX_ALLOWED" ]; then
+              echo "::error::${bin} requires GLIBC_${MAX_NEEDED}; cap is ${MAX_ALLOWED}." \
+                   "Runner image likely bumped past ubuntu-22.04 — pin the runner or" \
+                   "switch to musl static linking."
+              exit 1
+            fi
+          done
+
+      - name: Package
+        run: |
+          cd target/${{ matrix.target }}/release
+          tar czf ../../../${{ matrix.archive }} krab
+          cd ../../..
+          if command -v sha256sum >/dev/null; then
+            sha256sum ${{ matrix.archive }} > ${{ matrix.archive }}.sha256
+          else
+            shasum -a 256 ${{ matrix.archive }} > ${{ matrix.archive }}.sha256
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.archive }}
+          path: |
+            ${{ matrix.archive }}
+            ${{ matrix.archive }}.sha256
+
+  # Upload to GCS on every main push (latest channel)
+  upload-gcs:
+    needs: build
+    if: ${{ github.repository == 'krabarena/krabarena-private' && (always() && !cancelled()) }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            skills
+            crates/krabarena-shared/src
+            docs
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      - name: Package skills
+        run: |
+          # Bundle the canonical `krabarena` skill plus any
+          # `krabarena-*` sibling directories for the platform. Bundle
+          # the canonical structure docs at
+          # the archive root so each SKILL.md can reference
+          # `../claim-structure.md` / `../battle-structure.md` /
+          # `../proxy-spec.md` at the installed path. Skills rely
+          # on the proxy-spec doc being locally readable because
+          # the repo is private and GitHub raw 404s anonymous HEAD.
+          for platform in claude-code openclaw codex github-copilot; do
+            staging=$(mktemp -d)
+            for skill in "skills/$platform"/krabarena "skills/$platform"/krabarena-*; do
+              [ -d "$skill" ] && cp -r "$skill" "$staging/"
+            done
+            cp docs/claim-structure.md "$staging/"
+            cp docs/battle-structure.md "$staging/"
+            cp docs/proxy-spec.md "$staging/"
+            tar czf "krabarena-skills-$platform.tar.gz" -C "$staging" .
+            tar tzf "krabarena-skills-$platform.tar.gz" > "krabarena-skills-$platform.list"
+            case "$platform" in
+              github-copilot)
+                grep -q '^./krabarena/copilot-instructions.md$' "krabarena-skills-$platform.list" \
+                  || { echo "::error::krabarena-skills-$platform.tar.gz missing ./krabarena/copilot-instructions.md"; exit 1; }
+                grep -q '^./krabarena/krabarena-join-battle.prompt.md$' "krabarena-skills-$platform.list" \
+                  || { echo "::error::krabarena-skills-$platform.tar.gz missing ./krabarena/krabarena-join-battle.prompt.md"; exit 1; }
+                ;;
+              *)
+                grep -q '^./krabarena/SKILL.md$' "krabarena-skills-$platform.list" \
+                  || { echo "::error::krabarena-skills-$platform.tar.gz missing ./krabarena/SKILL.md"; exit 1; }
+                ;;
+            esac
+            # Generate the SHA-256 sidecar alongside the bundle so
+            # `krab doctor`'s drift check can compare the installed
+            # skills against the published hash. Without this the
+            # `.sha256` glob in the GCS upload step matches nothing for
+            # skill bundles and doctor reports HTTP 404 on every
+            # drift check (skipping the verification entirely).
+            if command -v sha256sum >/dev/null; then
+              sha256sum "krabarena-skills-$platform.tar.gz" \
+                > "krabarena-skills-$platform.tar.gz.sha256"
+            else
+              shasum -a 256 "krabarena-skills-$platform.tar.gz" \
+                > "krabarena-skills-$platform.tar.gz.sha256"
+            fi
+          done
+
+      - name: Create GCS bucket if needed
+        run: |
+          # Bucket existence check only. The `gsutil iam ch
+          # allUsers:objectViewer` call we used to run here needed
+          # `storage.buckets.getIamPolicy` that the deploy SA doesn't
+          # have, so it logged a noisy AccessDenied on every release
+          # — swallowed by `|| true` but still alarming in the log
+          # output. The bucket's public binding is set once at
+          # infra-provisioning time (terraform/storage.tf); we don't
+          # need to re-apply it on every release.
+          gsutil ls gs://${{ env.CLI_BUCKET }} >/dev/null 2>&1 || \
+          gsutil mb -l us-central1 -p ${{ secrets.GCP_PROJECT_ID }} gs://${{ env.CLI_BUCKET }}
+
+      - name: Upload to GCS (latest)
+        run: |
+          for f in krabarena-*.tar.gz krabarena-*.tar.gz.sha256; do
+            [ -f "$f" ] && gsutil -h "Cache-Control:no-cache,max-age=0" cp "$f" gs://${{ env.CLI_BUCKET }}/latest/
+          done
+          echo "${{ github.sha }}" | gsutil cp - gs://${{ env.CLI_BUCKET }}/latest/VERSION
+
+      - name: Upload to GCS (commit SHA)
+        run: |
+          for f in krabarena-*.tar.gz krabarena-*.tar.gz.sha256; do
+            [ -f "$f" ] && gsutil cp "$f" gs://${{ env.CLI_BUCKET }}/${{ github.sha }}/
+          done
+
+  # Create GitHub Release on version tags only
+  release:
+    needs: [build, upload-gcs]
+    if: ${{ github.repository == 'krabarena/krabarena-private' && (always() && !cancelled() && startsWith(github.ref, 'refs/tags/')) }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            skills
+            crates/krabarena-shared/src
+            docs
+
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      - name: Package skills
+        run: |
+          # Bundle the canonical `krabarena` skill plus any
+          # `krabarena-*` sibling directories for the platform. Bundle
+          # the canonical structure docs at
+          # the archive root so each SKILL.md can reference
+          # `../claim-structure.md` / `../battle-structure.md` /
+          # `../proxy-spec.md` at the installed path.
+          for platform in claude-code openclaw codex github-copilot; do
+            staging=$(mktemp -d)
+            for skill in "skills/$platform"/krabarena "skills/$platform"/krabarena-*; do
+              [ -d "$skill" ] && cp -r "$skill" "$staging/"
+            done
+            cp docs/claim-structure.md "$staging/"
+            cp docs/battle-structure.md "$staging/"
+            cp docs/proxy-spec.md "$staging/"
+            tar czf "krabarena-skills-$platform.tar.gz" -C "$staging" .
+            tar tzf "krabarena-skills-$platform.tar.gz" > "krabarena-skills-$platform.list"
+            case "$platform" in
+              github-copilot)
+                grep -q '^./krabarena/copilot-instructions.md$' "krabarena-skills-$platform.list" \
+                  || { echo "::error::krabarena-skills-$platform.tar.gz missing ./krabarena/copilot-instructions.md"; exit 1; }
+                grep -q '^./krabarena/krabarena-join-battle.prompt.md$' "krabarena-skills-$platform.list" \
+                  || { echo "::error::krabarena-skills-$platform.tar.gz missing ./krabarena/krabarena-join-battle.prompt.md"; exit 1; }
+                ;;
+              *)
+                grep -q '^./krabarena/SKILL.md$' "krabarena-skills-$platform.list" \
+                  || { echo "::error::krabarena-skills-$platform.tar.gz missing ./krabarena/SKILL.md"; exit 1; }
+                ;;
+            esac
+          done
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --repo "${{ github.repository }}" \
+            --generate-notes \
+            krabarena-*.tar.gz krabarena-*.tar.gz.sha256

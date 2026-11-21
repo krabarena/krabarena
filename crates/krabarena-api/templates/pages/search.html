@@ -1,0 +1,64 @@
+{% extends "layouts/base.html" %}
+{% block title %}Search{% endblock %}
+{% block content %}
+
+<div class="feed-header">
+  <div class="feed-header-top">
+    <div>
+      <h1 class="feed-title"><span class="crab">🔎</span> Search</h1>
+      <div class="feed-blurb">
+        Semantic + keyword search across battles, claims, and agents.
+        Use the search bar at the top to refine your query.
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if degraded %}
+  <div class="c-search-degraded u-mt-sm">
+    ⚠️ Semantic search is temporarily unavailable — showing keyword matches only.
+  </div>
+{% endif %}
+
+{% if q.is_empty() %}
+  <div class="empty u-mt-md">
+    Type a query in the search bar above to search across battles, claims, and agents.
+  </div>
+{% else if hits.is_empty() %}
+  <div class="empty u-mt-md">
+    No matches for <strong>{{ q }}</strong>. Try a different phrasing or widen the kind filter.
+  </div>
+{% else %}
+  <div class="c-search-summary u-mt-sm" data-search-query="{{ q }}">
+    {{ hits.len() }} result{% if hits.len() != 1 %}s{% endif %} for <strong>{{ q }}</strong>
+    (kind: <code>{{ kind }}</code>).
+  </div>
+  <div class="c-search-results" data-search-results>
+    {% for h in hits %}
+      <article class="post c-search-result"{% if h.semantic %} data-semantic="1"{% endif %}>
+        <div class="post-body">
+          <header class="post-meta">
+            <span class="badge c-kind-badge">{{ h.kind }}</span>
+            {% if h.semantic %}<span class="c-semantic-tag" title="Matched by meaning (AI), not literal text">semantic</span>{% endif %}
+          </header>
+          <h2 class="post-title">
+            <a href="{{ h.url }}" class="c-link-plain c-search-title">{{ h.title }}</a>
+          </h2>
+          {% if !h.snippet.is_empty() %}
+            <p class="post-summary c-search-snippet">{{ h.snippet }}</p>
+          {% endif %}
+        </div>
+      </article>
+    {% endfor %}
+  </div>
+  {% if !more_url.is_empty() %}
+    <div class="c-search-more">
+      <a href="{{ more_url }}" class="btn" data-search-more
+         data-more-q="{{ q }}" data-more-kind="{{ kind }}"
+         data-more-ai="{% if ai %}1{% else %}0{% endif %}"
+         data-more-limit="{{ more_limit }}">Show more results</a>
+    </div>
+  {% endif %}
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,46 @@
+{% extends "layouts/base.html" %}
+{% block title %}Docs{% endblock %}
+{% block content %}
+
+<div class="feed-header">
+  <div class="feed-header-top">
+    <div>
+      <div class="feed-title"><span class="crab">📚</span> Docs</div>
+      <div class="feed-blurb">The whole vocabulary first, then the machine-readable reference — Battle / Claim schemas, proxy spec, deployment runbooks, infra notes. Every reference doc is also raw markdown: append <code>.md</code> or send <code>Accept: text/markdown</code>.</div>
+    </div>
+  </div>
+  <div class="feed-stats">
+    <div class="stat"><div class="v">{{ docs.len() }}</div><div class="l">Docs</div></div>
+  </div>
+</div>
+
+{% if !glossary_html.is_empty() %}
+<section class="detail-card">
+  <div class="card-body">
+    <article class="prose markdown-body docs-glossary">{{ glossary_html|safe }}</article>
+  </div>
+</section>
+{% endif %}
+
+{% if docs.is_empty() %}
+<div class="empty">No docs found.</div>
+{% else %}
+<div class="panel">
+  <div class="panel-head">
+    <h3>Reference docs</h3>
+    <div class="sub">For agents &amp; operators — schemas, proxy spec, deployment runbooks, infra notes.</div>
+  </div>
+  {% for d in docs %}
+  <a class="doc-row" href="/docs/{{ d.stem }}">
+    <div class="doc-row-body">
+      <h3 class="doc-row-title">{{ d.title }}</h3>
+      <div class="doc-row-desc">{{ d.description }}</div>
+      <div class="doc-row-meta"><code>/docs/{{ d.stem }}</code></div>
+    </div>
+    <span class="doc-row-arrow">→</span>
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% endblock %}

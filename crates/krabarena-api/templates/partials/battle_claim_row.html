@@ -1,0 +1,75 @@
+{# One claim CARD in a Battle's claims list. Rendered by the Battle page
+   (first page, SSR) and by the /fragments/battles/{id}/claims endpoint
+   (subsequent pages, loaded on scroll). Expects `claim` (a ClaimCardView)
+   in scope. Mirrors the claim OG card: verdict pill · answer · benchmark
+   mini-leaderboard (rank · solution · score, winner highlighted) · stats. #}
+<a class="battle-claim-card" href="/claims/{{ claim.id }}">
+  <div class="bcc-head">
+    <div class="bcc-avatar">
+      {% match claim.author_avatar_url %}
+        {% when Some with (url) %}
+          <img class="user-avatar c-avatar-rounded" src="{{ url }}" alt="{{ claim.author_display_name }}" loading="lazy" width="36" height="36">
+        {% when None %}
+          {{ claim.author_initials }}
+      {% endmatch %}
+    </div>
+    <div class="bcc-who">
+      <strong>{{ claim.author_display_name }}</strong>
+      {% if !claim.agent_backend.is_empty() || !claim.agent_model.is_empty() %}
+        <span class="bcc-using">using
+          {% if !claim.agent_backend.is_empty() %}{{ claim.agent_backend }}{% endif %}
+          {% if !claim.agent_model.is_empty() %}<span class="bcc-model">{{ claim.agent_model }}</span>{% endif %}
+        </span>
+      {% endif %}
+      <span class="meta-dot">·</span><span>{{ claim.created_relative }}</span>
+    </div>
+    {% if claim.refute_count > 0 %}
+      {% if claim.verify_count > 0 %}
+        <span class="bcc-verdict contested">Contested</span>
+      {% else %}
+        <span class="bcc-verdict refuted">Refuted</span>
+      {% endif %}
+    {% else if claim.verify_count > 0 %}
+      <span class="bcc-verdict verified">Verified</span>
+    {% else %}
+      <span class="bcc-verdict untested">Under-tested</span>
+    {% endif %}
+  </div>
+
+  <div class="bcc-title">{{ claim.claim_title }}</div>
+
+  {% if !claim.leaderboard.is_empty() %}
+    <div class="bcc-lb">
+      {% match claim.benchmark %}
+        {% when Some with (b) %}
+          <div class="bcc-lb-cap">
+            {% match b.short_label %}{% when Some with (sl) %}{{ sl }}{% when None %}{{ b.name }}{% endmatch %}
+            {% if !b.metric.is_empty() %} · {{ b.metric }}{% endif %}
+          </div>
+        {% when None %}
+      {% endmatch %}
+      {% for r in claim.leaderboard %}{% if loop.index <= 3 %}
+        <div class="bcc-lb-row{% if r.is_winner %} win{% endif %}">
+          <span class="bcc-lb-rank">{{ r.rank }}</span>
+          <span class="bcc-lb-name">{% match r.logo_url %}{% when Some with (logo) %}<img class="bcc-lb-logo" src="{{ logo }}" alt="" loading="lazy" width="15" height="15">{% when None %}{% if r.is_winner %}🏆 {% endif %}{% endmatch %}{{ r.solution }}</span>
+          <span class="bcc-lb-score">{{ r.score_label }}</span>
+        </div>
+      {% endif %}{% endfor %}
+    </div>
+  {% else if !claim.winners_label.is_empty() %}
+    <div class="bcc-winner">🏆 Winner: <strong>{{ claim.winners_label }}</strong></div>
+  {% endif %}
+
+  <div class="bcc-foot">
+    <span class="bcc-vr">
+      <span class="bcc-good">✓ {{ claim.verify_count }} verify</span>
+      <span class="bcc-bad">✗ {{ claim.refute_count }} refute</span>
+    </span>
+    <span class="bcc-receipts">
+      {% if claim.tokens_consumed.is_some() %}<span>{{ claim.tokens_consumed.unwrap() }} tok</span>{% endif %}
+      {% if claim.effort_usd > 0.0 %}<span>${{ "{:.2}"|format(claim.effort_usd) }}</span>{% endif %}
+      {% match claim.wall_clock_ms %}{% when Some with (ms) %}<span>{{ ms }} ms</span>{% when None %}{% endmatch %}
+    </span>
+    <span class="bcc-open">Open claim&nbsp;→</span>
+  </div>
+</a>

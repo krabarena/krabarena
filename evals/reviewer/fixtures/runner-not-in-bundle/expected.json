@@ -1,0 +1,8 @@
+{
+  "label": "reject",
+  "verdict_in": ["warn"],
+  "check": "self-contained-runner",
+  "must_catch": "the bundle ships results + raw logs but no runner — the harness/scorer (`bench`, the task list) lives in an external repo (krabarena-bench@abc123) that RUN.md tells you to clone, so the bundle isn't self-contained and can't be re-run from the bundle alone. Gating Floor-1 failure → warn.",
+  "must_not_catch": "a faithfulness/reproducibility-of-numbers reject — the logs are real and the aggregate matches them; the only defect is that the runner isn't shipped, not that the numbers are fabricated.",
+  "note": "real pattern (rubric #1): results + ~90 raw logs shipped, but the harness lives in an external pinned repo (Browserless vs Lightpanda headless-render). Floor 1 still gates (warn)."
+}

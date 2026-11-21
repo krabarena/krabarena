@@ -1,0 +1,55 @@
+[project]
+name = "krabarena-e2e"
+version = "0.46.4"
+description = "Python browser E2E test foundation for KrabArena"
+readme = "README.md"
+requires-python = ">=3.13,<3.14"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "cloakbrowser",
+    "playwright>=1.53.0",
+    "pytest>=8.4.0",
+    "pytest-playwright>=0.7.0",
+    "ruff>=0.8.0",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = [
+    "--strict-markers",
+    "--browser=chromium",
+]
+markers = [
+    "foundation: non-scenario checks for the E2E test foundation",
+    "smoke: critical production browser smoke tests",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py313"
+src = ["."]
+exclude = [
+    ".artifacts",
+    ".venv",
+]
+
+[tool.ruff.lint]
+select = [
+    "B",
+    "E",
+    "F",
+    "I",
+    "SIM",
+    "UP",
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"

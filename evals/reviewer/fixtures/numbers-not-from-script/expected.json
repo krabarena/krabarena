@@ -1,0 +1,8 @@
+{
+  "label": "reject",
+  "verdict_in": ["warn"],
+  "check": "faithful-numbers",
+  "must_catch": "the leaderboard/headline figures (Model X 190ms, Model Y 198ms) are not produced by the shipped script or present in any results/*.json — they are raw p50 (lowest ~524ms) minus an author-chosen 337ms constant that nothing in the bundle measures, so the sub-200ms number can't be reproduced from the artifact. This is the gating Floor-2 faithfulness failure → warn.",
+  "must_not_catch": "the mere act of disclosing/discussing proxy overhead. The failure is that the adjusted figure isn't in the artifact, not that the author mentioned overhead.",
+  "note": "real pattern (rubric #3): headline derived by author-controlled arithmetic, absent from the shipped results — OpenRouter 'sub-200ms after subtracting overhead', which two refuters later could not reproduce. Floor 2 still gates (warn)."
+}

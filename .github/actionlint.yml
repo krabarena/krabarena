@@ -1,0 +1,9 @@
+paths:
+  .github/workflows/agentics-maintenance.yml:
+    ignore:
+      - 'string should not be empty'
+  .github/workflows/web-smoke-triage.lock.yml:
+    ignore:
+      - 'property "workflow_(repository|sha|ref|file_path)" is not defined in object type'
+      - 'unexpected key "queue" for "concurrency" section'
+      - 'shellcheck reported issue in this script: SC2086:.+'

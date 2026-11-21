@@ -1,0 +1,32 @@
+-- Migration 036: Drop the `solutions` registry table.
+--
+-- Background: migration 032 introduced an admin-curated global
+-- registry that mapped a normalised solution name to a cached
+-- favicon URL. The leaderboard renderer joined every claim's
+-- leaderboard rows against this table on each page render to pull
+-- the favicon glyph.
+--
+-- That global-registry shape was the wrong abstraction: per-row
+-- logo metadata is *authoring data* that belongs inline in each
+-- claim's `structure.json.leaderboard[*]` blob, not in a separate
+-- admin-managed table that needs hand-curation to light up. Authors
+-- already paste solution names; making them paste a logo URL next
+-- to it (optional) keeps the data exactly where the eye expects to
+-- find it, removes a whole subsystem (favicon fetcher + admin
+-- endpoints + GCS rehosting + the 3-stage resolver), and means new
+-- claims render correct logos on day one with zero admin work.
+--
+-- At deprecation time prod had 0 rows in `solutions` (no admin had
+-- ever curated an entry — the favicon fetcher shipped but the
+-- curation queue stayed empty), so dropping the table is loss-less.
+-- The accompanying server code (`services::favicons`,
+-- `services::solutions_service`, the three `/v1/admin/solutions*`
+-- routes, the `populate_leaderboard_favicons` decorator) was deleted
+-- in the same PR. See CHANGELOG.md "0.12.0".
+--
+-- Replacement: `claim_structure.LeaderboardEntry` gains an optional
+-- `logo_url: Option<String>` (and an optional `website_url`) that the
+-- leaderboard renderer pipes straight into the template's `<img>`.
+-- See `docs/claim-structure.md` for the schema and authoring guidance.
+
+DROP TABLE IF EXISTS solutions;

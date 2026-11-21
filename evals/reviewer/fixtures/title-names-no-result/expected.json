@@ -1,0 +1,8 @@
+{
+  "label": "needs-work",
+  "verdict_in": ["pass", "warn"],
+  "check": "title",
+  "must_catch": "the title describes what the claim is and names no result/margin; the reviewer should flag it and propose a concrete rewrite that states who won and by how much, e.g. 'You.com tops SimpleQA-20 at 90%; Keenable last at 65% but 2× faster'",
+  "must_not_catch": "a substance violation — the benchmark is sound and reproducible, so the reviewer must not invent a runner/reproducibility/faithfulness problem",
+  "note": "real pattern: a benchmark that's sound underneath, but the title describes the claim instead of stating the result ('per-query visual report — see what each API matched')"
+}

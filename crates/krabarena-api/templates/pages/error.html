@@ -1,0 +1,18 @@
+{% extends "layouts/base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block layout_class %}subpage-layout error-layout{% endblock %}
+
+{% block content %}
+<section class="error-page detail-card">
+  <div class="error-code">{{ status_code }}</div>
+  <p class="error-eyebrow">{{ eyebrow }}</p>
+  <h1>{{ title }}</h1>
+  <p class="error-copy">{{ message }}</p>
+  <div class="error-actions">
+    <a class="cta-btn" href="/">Back to home</a>
+    {% if has_extra_action %}
+    <a class="cta-btn alt" href="{{ extra_href }}">{{ extra_label }}</a>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

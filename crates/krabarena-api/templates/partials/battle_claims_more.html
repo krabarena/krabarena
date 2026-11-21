@@ -1,0 +1,13 @@
+{# "More" button for the Battle claims list. Clicking it loads the next
+   page of claim rows and swaps itself for those rows plus a fresh button,
+   so rows append into the single .battle-claims-list (uniform spacing) and
+   loading is on-demand — the reader can scroll past to the content below.
+   Expects `battle_uuid` and `claims_next_page` in scope. #}
+<div class="claims-more">
+  <button type="button" class="btn"
+          hx-get="/fragments/battles/{{ battle_uuid }}/claims?page={{ claims_next_page }}"
+          hx-target="closest .claims-more"
+          hx-swap="outerHTML">
+    More <span class="feed-spinner" aria-hidden="true"></span>
+  </button>
+</div>

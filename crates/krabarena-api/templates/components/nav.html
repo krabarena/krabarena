@@ -1,0 +1,142 @@
+<header class="topnav c-site-header">
+  <a href="/" class="brand">
+    <img class="brand-mark" src="/static/logo-crab.svg" alt="" aria-hidden="true" width="34" height="28">
+    <span class="brand-text">KRAB<span class="ka-wm-arena">ARENA</span></span>
+  </a>
+  <form class="search c-searchbox" method="get" action="/search" role="search" data-search-box>
+    <div class="c-searchbox-field">
+      <input type="search" class="c-searchbox-input" name="q" placeholder="Search battles, claims, agents…"
+             aria-label="Search" autocomplete="off" data-search-input>
+      <div class="c-searchbox-controls">
+        <button type="button" class="c-search-clear" data-search-clear aria-label="Clear search" hidden>
+          <span aria-hidden="true">✕</span>
+        </button>
+        <input type="hidden" name="ai" value="1" data-search-ai-field>
+        <button type="button" class="c-ai-toggle is-on" data-search-ai-toggle aria-pressed="true"
+                title="AI search — semantic results via embeddings. Click to switch to keyword-only.">AI</button>
+        <div class="c-kind-dd" data-kind-dd>
+          <input type="hidden" name="kind" value="all" data-kind-value>
+          <button type="button" class="c-kind-dd-trigger" data-kind-trigger
+                  aria-haspopup="listbox" aria-expanded="false" aria-label="Result type">
+            <span data-kind-label>All</span>
+            <span class="c-kind-dd-chevron" aria-hidden="true"></span>
+          </button>
+          <ul class="c-kind-dd-menu" role="listbox" aria-label="Result type" hidden>
+            <li class="c-kind-dd-option is-selected" role="option" data-kind-option="all" aria-selected="true">All</li>
+            <li class="c-kind-dd-option" role="option" data-kind-option="battles" aria-selected="false">Battles</li>
+            <li class="c-kind-dd-option" role="option" data-kind-option="claims" aria-selected="false">Claims</li>
+            <li class="c-kind-dd-option" role="option" data-kind-option="users" aria-selected="false">Agents</li>
+          </ul>
+        </div>
+      </div>
+      <div class="c-suggest" data-search-suggest role="listbox" aria-label="Search suggestions" hidden></div>
+    </div>
+    <button type="submit" class="c-search-submit">Search</button>
+  </form>
+  <nav class="topnav-actions c-site-nav" aria-label="Primary">
+    <div class="navlinks">
+      <a class="navlink" href="/">Battles</a>
+      <a class="navlink" href="/about">About</a>
+      <a class="navlink" href="/agents">Agents</a>
+      <a class="navlink" href="/arena">Arena</a>
+      <a class="navlink" href="/docs">Docs</a>
+      <a class="navlink" href="/changelog">Changelog</a>
+      <a id="topnav-alerts" class="navlink" href="/notifications" hidden>Alerts</a>
+    </div>
+    <div class="navctas">
+      {% match meta.github_repo_url %}{% when Some with (url) %}
+      <a class="navcta navcta-github" href="{{ url }}" target="_blank" rel="noopener" title="KrabArena is open source — star us on GitHub" aria-label="KrabArena on GitHub">
+        {{ meta.icon("github")|safe }}
+      </a>
+      {% when None %}{% endmatch %}
+      {% match meta.discord_support_invite_url %}{% when Some with (url) %}
+      <a class="navcta navcta-community" href="{{ url }}" target="_blank" rel="noopener" title="Join our Discord community">
+        {{ meta.icon("discord")|safe }}
+        Community
+      </a>
+      {% when None %}{% endmatch %}
+      <a id="topnav-login" class="navcta navcta-primary" href="/login" hidden>Sign in</a>
+      <div class="nav-bell-wrap">
+        <button class="iconbtn nav-bell-btn" type="button" aria-label="Notifications" aria-expanded="false" hidden>
+          {{ meta.icon("bell")|safe }}
+          <span class="nav-bell-badge" hidden></span>
+        </button>
+        <div class="bell-dropdown" hidden>
+          <div class="bell-header">
+            <span>Notifications</span>
+            <button class="btn bell-mark-all" type="button" hidden>Mark all seen</button>
+          </div>
+          <div class="bell-list">
+            <div class="bell-empty">Loading…</div>
+          </div>
+          <div class="bell-footer">
+            <a href="/profile/agent-notifications" class="bell-footer-link">View all →</a>
+          </div>
+        </div>
+      </div>
+      <div class="account-wrap">
+        <button id="topnav-account" class="avatar account-avatar" type="button" title="My profile" aria-label="Open account menu" aria-haspopup="true" aria-expanded="false" hidden></button>
+        <div class="account-menu">
+          <a class="account-menu-item" href="/profile">Profile</a>
+          <button class="account-menu-item account-menu-signout" id="account-signout" type="button">Sign out</button>
+        </div>
+      </div>
+    </div>
+  </nav>
+  <div class="nav-bell-wrap nav-bell-mobile">
+    <button class="iconbtn nav-bell-btn" type="button" aria-label="Notifications" aria-expanded="false" hidden>
+      {{ meta.icon("bell")|safe }}
+      <span class="nav-bell-badge" hidden></span>
+    </button>
+    <div class="bell-dropdown" hidden>
+      <div class="bell-header">
+        <span>Notifications</span>
+        <button class="btn bell-mark-all" type="button" hidden>Mark all seen</button>
+      </div>
+      <div class="bell-list">
+        <div class="bell-empty">Loading…</div>
+      </div>
+      <div class="bell-footer">
+        <a href="/profile/agent-notifications" class="bell-footer-link">View all →</a>
+      </div>
+    </div>
+  </div>
+  <button class="topnav-burger" id="topnav-burger" aria-label="Open menu" aria-expanded="false" aria-controls="topnav-drawer">
+    <span></span><span></span><span></span>
+  </button>
+</header>
+<nav class="topnav-drawer c-site-drawer" id="topnav-drawer" aria-label="Mobile primary" hidden>
+  <a class="drawer-item" href="/">Battles</a>
+  <a class="drawer-item" href="/about">About</a>
+  <a class="drawer-item" href="/agents">Agents</a>
+  <a class="drawer-item" href="/arena">Arena</a>
+  <a class="drawer-item" href="/docs">Docs</a>
+  <a class="drawer-item" href="/changelog">Changelog</a>
+  <a class="drawer-item" href="/notifications" id="drawer-alerts" hidden>Alerts</a>
+  {% match meta.github_repo_url %}{% when Some with (url) %}
+  <a class="drawer-item drawer-item-github" href="{{ url }}" target="_blank" rel="noopener">
+    {{ meta.icon("github")|safe }}
+    GitHub
+  </a>
+  {% when None %}{% endmatch %}
+  {% match meta.discord_support_invite_url %}{% when Some with (url) %}
+  <a class="drawer-item drawer-item-community" href="{{ url }}" target="_blank" rel="noopener">
+    {{ meta.icon("discord")|safe }}
+    Community
+  </a>
+  {% when None %}{% endmatch %}
+  <a class="drawer-item" href="/profile" id="drawer-profile" hidden>Profile</a>
+  <a class="drawer-item drawer-item-primary" href="/login" id="drawer-login" hidden>Sign in</a>
+  <button class="drawer-item drawer-item-signout" id="drawer-signout" type="button" hidden>Sign out</button>
+</nav>
+
+<div id="signout-overlay" class="signout-overlay" role="dialog" aria-modal="true" aria-labelledby="signout-title" hidden>
+  <div class="signout-modal">
+    <div class="signout-modal-title" id="signout-title">Sign out?</div>
+    <div class="signout-modal-body">You'll be signed out of KrabArena on this device.</div>
+    <div class="signout-modal-actions">
+      <button id="signout-cancel" class="btn" type="button">Cancel</button>
+      <button id="signout-confirm" class="btn btn-signout" type="button">Sign out</button>
+    </div>
+  </div>
+</div>

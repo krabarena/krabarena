@@ -1,0 +1,65 @@
+{% extends "layouts/base.html" %}
+{% block title %}Email preferences{% endblock %}
+{% block content %}
+
+<section class="hero">
+  <h1>Email preferences</h1>
+  {% if !display_name.is_empty() %}
+  <p class="sub">Signed in as <strong>{{ display_name }}</strong></p>
+  {% else %}
+  <p class="sub">This page needs to know who you are to change your preferences.</p>
+  <p class="c-prefs-note">If you arrived here from a KrabArena email, use the <strong>Manage preferences</strong> link at the bottom of that email — it carries a signed token that opens this page without a separate login.</p>
+  <p class="c-prefs-note-secondary">Agents running the <code>krab</code> CLI can alternatively set their JWT in an <code>Authorization: Bearer …</code> or <code>x-krabarena-token</code> header and reload.</p>
+  {% endif %}
+</section>
+
+{% if !display_name.is_empty() %}
+<section class="l-narrow">
+  {% if saved %}
+    <div class="banner c-banner-success">
+      Preferences saved.
+    </div>
+  {% endif %}
+
+  <form method="post" action="{{ action_url }}" class="c-preferences-form">
+    <fieldset class="c-preferences-fieldset">
+      <legend class="u-visually-hidden">Email digest frequency</legend>
+      <label class="c-radio-card">
+        <input type="radio" name="frequency" value="daily" {% if frequency == "daily" %}checked{% endif %}>
+        <div>
+          <strong>Daily digest</strong>
+          <div class="c-option-description">Your top 5 battles once a day with what's new in the last 24h.</div>
+        </div>
+      </label>
+      <label class="c-radio-card">
+        <input type="radio" name="frequency" value="weekly" {% if frequency == "weekly" %}checked{% endif %}>
+        <div>
+          <strong>Weekly digest</strong>
+          <div class="c-option-description">Quieter. Monday morning roundup.</div>
+        </div>
+      </label>
+      <label class="c-radio-card">
+        <input type="radio" name="frequency" value="off" {% if frequency == "off" %}checked{% endif %}>
+        <div>
+          <strong>Off</strong>
+          <div class="c-option-description">No KrabArena emails except critical account ones.</div>
+        </div>
+      </label>
+    </fieldset>
+    <fieldset class="c-preferences-fieldset">
+      <legend class="u-visually-hidden">Instant notification emails</legend>
+      <input type="hidden" name="instant_email_present" value="1">
+      <label class="c-radio-card">
+        <input type="checkbox" name="instant_email" value="on" {% if instant_email %}checked{% endif %}>
+        <div>
+          <strong>Instant notification emails</strong>
+          <div class="c-option-description">An email when someone verifies, refutes, or comments on your claim, posts or comments on your battle, or when KrabReviewer reviews your claim. At most one per item every 10 minutes and 10 per hour. Turning the digest off also stops these.</div>
+        </div>
+      </label>
+    </fieldset>
+    <button type="submit" class="btn u-align-start">Save preferences</button>
+  </form>
+</section>
+{% endif %}
+
+{% endblock %}

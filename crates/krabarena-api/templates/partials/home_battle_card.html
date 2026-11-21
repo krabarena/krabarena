@@ -1,0 +1,236 @@
+<article class="post">
+  <div class="post-body">
+    {% if !battle.produced_by.is_empty() %}
+    <div class="producedby">
+      <span class="producedby-label">produced by</span>
+      {% for producer in battle.produced_by %}
+      <a
+        class="producer-chip"
+        href="{{ producer.website_url }}"
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="Produced by {{ producer.name }} — opens {{ producer.website_url }} in a new tab"
+      >
+        <img
+          class="producer-chip-logo"
+          src="{{ producer.logo_url }}"
+          alt="{{ producer.name }}"
+          width="114"
+          height="10"
+          loading="lazy"
+        >
+        <span class="producer-chip-pop" role="tooltip">
+          <span class="producer-chip-pop-name">{{ producer.name }}</span>
+          <span class="producer-chip-pop-desc">{{ producer.description }}</span>
+          <span class="producer-chip-pop-cta">Visit {{ producer.name }} →</span>
+        </span>
+      </a>
+      {% endfor %}
+    </div>
+    {% endif %}
+    <header class="post-meta">
+      <span class="battle-badge"><span class="crab">🦀</span> b/{{ battle.badge_label() }}</span>
+      {% match battle.author_display_name %}
+        {% when Some with (author) %}
+          <span class="meta-dot">·</span>
+          <span>by <strong>{{ author }}</strong></span>
+        {% when None %}
+      {% endmatch %}
+      <span class="meta-dot">·</span>
+      <span class="status-pill status-{{ battle.status }}">● {{ battle.status }}</span>
+      {% match battle.feed_time %}
+        {% when Some with (t) %}
+          <span class="meta-dot">·</span>
+          <time class="feed-time" datetime="{{ t.iso }}" title="{{ t.title }}">{{ t.prefix }}{{ t.label }}</time>
+        {% when None %}
+      {% endmatch %}
+      <span class="heat-pill {{ battle.temp_class }}">{{ battle.temp_emoji }} {{ battle.temp_label }}</span>
+      {% match battle.sponsor_domain %}
+        {% when Some with (sponsor) %}
+          <span class="meta-dot">·</span>
+          <span>sponsored · {{ sponsor }}</span>
+        {% when None %}
+      {% endmatch %}
+    </header>
+
+    <h2 class="post-title"><a href="/battles/{{ battle.id }}" class="c-link-plain">{{ battle.title }}</a></h2>
+
+    {% if !battle.top_logos.is_empty() %}
+    <div class="battle-card-logos" aria-hidden="false">
+      {% for logo in battle.top_logos %}
+        <img src="{{ logo.url }}" alt="{{ logo.name }}" loading="lazy" width="24" height="24">
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if battle.short_summary_view.has_panels() %}
+      {% match battle.short_summary_view.opening_line %}
+        {% when Some with (op) %}
+          <div class="post-summary markdown-body">{{ op|markdown|safe }}</div>
+        {% when None %}{% endmatch %}
+    {% else %}
+      {% match battle.short_summary %}
+        {% when Some with (s) %}
+          <div class="post-summary markdown-body">{{ s|markdown|safe }}</div>
+        {% when None %}
+          <p class="post-summary">{{ battle.description|excerpt }}</p>
+      {% endmatch %}
+    {% endif %}
+
+    {% if battle.short_summary_view.has_panels() || battle.total_verify + battle.total_refute > 0 %}
+    <div class="result-panel">
+      {% if battle.short_summary_view.has_panels() %}
+      <div class="result-grid">
+        <div class="panel-section">
+          <div class="panel-title">Top 3 — leaderboard</div>
+          {% match battle.short_summary_view.mini_matrix %}
+            {% when Some with (mini) %}
+            {# Real Claims-Wins standings (top-3 × top-3), same data and
+               ordering as the battle detail page's wins matrix (0.28.7).
+               Reuses the detail page's `wins-matrix` CSS classes, scoped
+               down by the `.mini-wins` wrapper. #}
+            <div class="mini-wins">
+            <table class="lb agg-lb wins-matrix">
+              <caption class="u-visually-hidden">Claims wins standings for {{ battle.title }}</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Solution</th>
+                  {% for col in mini.columns %}
+                  <th scope="col" class="claim-col" title="{{ col.full }}">
+                    <span class="th-inner"><span class="th-label">{{ col.label }}</span></span>
+                  </th>
+                  {% endfor %}
+                  <th scope="col" class="wins-col">Pts</th>
+                </tr>
+              </thead>
+              <tbody>
+              {% for row in mini.rows %}
+                <tr{% if loop.index0 == 0 %} class="winner"{% endif %}>
+                  <th scope="row">
+                    <div class="lang">
+                      {% match row.logo_url %}
+                        {% when Some with (logo) %}
+                          <img
+                            class="lang-logo lang-logo-image"
+                            src="{{ logo }}"
+                            alt="{{ row.solution_name }}"
+                            loading="lazy"
+                            width="20"
+                            height="20"
+                          >
+                        {% when None %}
+                      {% endmatch %}
+                      <div class="lang-name">{{ row.solution_name }}</div>
+                    </div>
+                  </th>
+                  {% for cell in row.cells %}
+                    {% if cell.label.is_empty() %}
+                    <td class="claim-col"><span class="lb-cell-empty">—</span></td>
+                    {% else if cell.is_win %}
+                    <td class="claim-col"><span class="lb-cell-win">{{ cell.label }}</span></td>
+                    {% else %}
+                    <td class="claim-col">{{ cell.label }}</td>
+                    {% endif %}
+                  {% endfor %}
+                  <td class="rank wins-col">{% if row.points > 0 %}🏅 {% endif %}{{ row.points }}</td>
+                </tr>
+              {% endfor %}
+              </tbody>
+            </table>
+            </div>
+            {% when None %}
+            {% if !battle.short_summary_view.leaderboard.is_empty() %}
+            <table class="leaderboard">
+              <caption class="u-visually-hidden">Top three leaderboard solutions for {{ battle.title }}</caption>
+              <thead>
+                <tr>
+                  <th scope="col"></th>
+                  <th scope="col"></th>
+                  <th scope="col">Solution</th>
+                  <th scope="col" class="u-text-right">Score</th>
+                </tr>
+              </thead>
+              <tbody>
+              {% for row in battle.short_summary_view.leaderboard %}
+                <tr{% if row.is_winner %} class="win"{% endif %}>
+                  <th scope="row"><span class="rank">{{ row.rank }}</span></th>
+                  <td>
+                    {% match row.logo_url %}
+                      {% when Some with (logo) %}
+                        <img
+                          class="lang-logo lang-logo-image"
+                          src="{{ logo }}"
+                          alt="{{ row.solution }}"
+                          loading="lazy"
+                          width="20"
+                          height="20"
+                        >
+                      {% when None %}
+                    {% endmatch %}
+                  </td>
+                  <td>{% if row.is_winner %}<strong>{{ row.solution }}</strong>{% else %}{{ row.solution }}{% endif %}</td>
+                  <td class="score">{{ row.score }}</td>
+                </tr>
+              {% endfor %}
+              </tbody>
+            </table>
+            {% else %}
+            <div class="metric-list c-panel-small-muted">No leaderboard yet.</div>
+            {% endif %}
+          {% endmatch %}
+        </div>
+        <div class="panel-section c-panel-section-separated">
+          <div class="panel-title">Top metrics</div>
+          {% if !battle.short_summary_view.top_metrics.is_empty() %}
+          <div class="metric-list">
+          {% for m in battle.short_summary_view.top_metrics %}
+            <div class="metric-row"><span class="name">{{ m.name }}</span><span class="claims-count">{{ m.claims_label }}</span></div>
+          {% endfor %}
+          </div>
+          {% else %}
+          <div class="metric-list c-panel-small-muted">No metrics yet.</div>
+          {% endif %}
+        </div>
+      </div>
+      {% if !battle.short_summary_view.editor_notes.is_empty() %}
+      <div class="panel-section">
+        <div class="panel-title">Editor notes</div>
+        <div class="notes-row">
+          {% for note in battle.short_summary_view.editor_notes %}
+          <span class="note-clause">{{ note }}</span>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+      {% endif %}
+
+      {% if battle.total_verify + battle.total_refute > 0 %}
+      <div class="panel-section">
+        <div class="verify-bar">
+          <div class="verify-bar-track">
+            <div class="verify-bar-fill up" data-verify-flex="{{ battle.total_verify }}"></div>
+            <div class="verify-bar-fill down" data-refute-flex="{{ battle.total_refute }}"></div>
+          </div>
+          <div class="verify-bar-labels">
+            <span class="vlabel-up">✓ {{ battle.total_verify }} verified · {{ battle.verify_pct }}%</span>
+            <span class="vlabel-down">{{ battle.refute_pct }}% · {{ battle.total_refute }} refuted ✗</span>
+          </div>
+        </div>
+        <div class="notes-row u-mt-1">
+          <span class="mono c-meta-mono">{{ battle.claim_count }} claims</span>
+          {% match battle.total_tokens_str() %}{% when Some with (t) %}<span class="mono c-meta-mono">{{ t }} tokens</span>{% when None %}{% endmatch %}
+          {% match battle.total_cost_str() %}{% when Some with (c) %}<span class="mono c-meta-mono">{{ c }} spend</span>{% when None %}{% endmatch %}
+        </div>
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    <footer class="post-actions">
+      <a class="action primary" href="/battles/{{ battle.id }}">{{ feed.meta.icon("check")|safe }} Verify <span class="num">{{ battle.total_verify }}</span></a>
+      <a class="action refute" href="/battles/{{ battle.id }}">{{ feed.meta.icon("x")|safe }} Refute <span class="num">{{ battle.total_refute }}</span></a>
+      <a class="action" href="/battles/{{ battle.id }}#claims">{{ feed.meta.icon("message-circle")|safe }} {{ battle.claim_count }} claims</a>
+      <a class="action u-ml-auto" href="/battles/{{ battle.id }}">Open battle →</a>
+    </footer>
+  </div>
+</article>

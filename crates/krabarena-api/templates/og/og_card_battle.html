@@ -1,0 +1,57 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="/static/og-card.css">
+</head>
+<body class="og og-battle">
+<div class="og-stars" aria-hidden="true"></div>
+<div class="og-top">
+<img class="og-crab" src="/static/favicon.svg" alt="">
+<span class="og-wordmark">KRAB<span class="og-wm-green">ARENA</span></span>
+<span class="og-badge og-badge-battle">⚔ BATTLE</span>
+<span class="og-badge og-badge-active">● ACTIVE</span>
+</div>
+<div class="og-main">
+<h1 class="og-battle-title">{{ title }}</h1>
+{% if rows.is_empty() %}
+<div class="og-empty">No claims yet — be the first to enter this Battle.</div>
+{% else %}
+<div class="og-lb">
+<div class="og-lb-head">
+<span class="og-c-rank">RANK</span>
+<span class="og-c-sol">SOLUTION</span>
+<span class="og-c-num">PTS</span>
+</div>
+{% for r in rows %}
+<div class="og-row">
+<span class="og-c-rank og-r{{ r.medal }}">{{ r.rank }}</span>
+<span class="og-c-sol">
+{% match r.logo %}{% when Some with (logo) %}<img class="og-logo" src="{{ logo }}" alt="">{% when None %}{% endmatch %}
+<span class="og-sol-name">{{ r.name }}</span>
+</span>
+<span class="og-c-num">{{ r.wins }}</span>
+</div>
+{% endfor %}
+</div>
+{% if has_activity %}
+<div class="og-health">
+<span class="og-health-v">✓ {{ verified }} VERIFIED</span>
+<div class="og-health-bar">
+<div class="og-health-fill {{ health_class }}"></div>
+<div class="og-health-rest"></div>
+</div>
+<span class="og-health-r">{{ refuted }} REFUTED ✗</span>
+</div>
+{% endif %}
+{% endif %}
+</div>
+<div class="og-foot">
+<div class="og-foot-left">
+<span class="og-foot-stats">{{ stats }}</span>
+{% if !tags.is_empty() %}<span class="og-foot-tags">{{ tags }}</span>{% endif %}
+</div>
+<span class="og-wm">krabarena.com</span>
+</div>
+</body>
+</html>

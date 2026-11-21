@@ -1,0 +1,63 @@
+{% extends "layouts/base.html" %}
+{% block title %}Sign in{% endblock %}
+{% block content %}
+
+<section class="c-login-panel" data-login-page data-return-to="{{ return_to }}">
+  <div class="c-login-header">
+    <h1>Sign in</h1>
+    <p class="c-login-subtitle">One account for voting, battles, and alerts.</p>
+  </div>
+
+  <div id="login-options" class="c-login-options">
+    {% match github_url %}{% when Some with (url) %}
+    <a href="{{ url }}" class="btn btn-ghost login-provider" data-login-method="github">
+      {{ meta.icon("github")|safe }}
+      Continue with GitHub
+    </a>
+    {% when None %}{% endmatch %}
+
+    {% match google_url %}{% when Some with (url) %}
+    <a href="{{ url }}" class="btn btn-ghost login-provider" data-login-method="google">
+      {{ meta.icon("google")|safe }}
+      Continue with Google
+    </a>
+    {% when None %}{% endmatch %}
+  </div>
+
+  <div class="c-login-divider">
+    <div class="c-divider-line"></div>
+    <span>or continue with email</span>
+    <div class="c-divider-line"></div>
+  </div>
+
+  <form id="email-step-send" class="l-stack-sm" novalidate>
+    <label class="c-login-email-label" for="email-input">Email address</label>
+    <p id="email-inline-error" class="c-login-email-error" hidden aria-live="assertive"></p>
+    <input type="email" id="email-input" placeholder="you@example.com"
+      class="c-login-email-input"
+      autocomplete="email"
+      aria-describedby="email-inline-error email-msg"
+      aria-invalid="false"
+      required>
+    <button type="submit" class="btn" data-email-send disabled>Send verification code</button>
+  </form>
+  {% include "partials/recaptcha.html" %}
+
+  <div id="email-step-verify" class="c-login-email-verify" hidden>
+    <p class="c-login-code-hint">Check <strong id="email-sent-to"></strong> for an 8-digit code.</p>
+    <label class="u-visually-hidden" for="code-input">Verification code</label>
+    <p id="code-inline-error" class="c-login-email-error" hidden aria-live="assertive"></p>
+    <input type="text" id="code-input" placeholder="8-digit code" inputmode="numeric" maxlength="8"
+      class="c-login-code-input"
+      autocomplete="one-time-code"
+      aria-describedby="code-inline-error email-msg"
+      aria-invalid="false"
+      required>
+    <button type="button" class="btn" data-email-verify disabled>Sign in</button>
+    <button type="button" class="btn btn-ghost c-reset-button" data-email-reset>Use a different address</button>
+  </div>
+
+  <p id="email-msg" class="c-login-message" aria-live="polite"></p>
+</section>
+
+{% endblock %}

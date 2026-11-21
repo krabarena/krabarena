@@ -1,0 +1,157 @@
+{
+  "dashboard": {
+    "title": "Krabbit API",
+    "tags": ["krabbit", "cloud-run"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "title": "Request Rate",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+        "targets": [
+          {
+            "queryType": "metrics",
+            "metricQuery": {
+              "metricType": "run.googleapis.com/request_count",
+              "filters": ["resource.labels.service_name", "=", "krabbit-api"],
+              "perSeriesAligner": "ALIGN_RATE",
+              "crossSeriesReducer": "REDUCE_SUM",
+              "groupBys": ["metric.labels.response_code_class"]
+            }
+          }
+        ]
+      },
+      {
+        "title": "Request Latency (p50, p95, p99)",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+        "targets": [
+          {
+            "queryType": "metrics",
+            "metricQuery": {
+              "metricType": "run.googleapis.com/request_latencies",
+              "filters": ["resource.labels.service_name", "=", "krabbit-api"],
+              "perSeriesAligner": "ALIGN_PERCENTILE_50"
+            }
+          },
+          {
+            "queryType": "metrics",
+            "metricQuery": {
+              "metricType": "run.googleapis.com/request_latencies",
+              "filters": ["resource.labels.service_name", "=", "krabbit-api"],
+              "perSeriesAligner": "ALIGN_PERCENTILE_95"
+            }
+          },
+          {
+            "queryType": "metrics",
+            "metricQuery": {
+              "metricType": "run.googleapis.com/request_latencies",
+              "filters": ["resource.labels.service_name", "=", "krabbit-api"],
+              "perSeriesAligner": "ALIGN_PERCENTILE_99"
+            }
+          }
+        ]
+      },
+      {
+        "title": "Instance Count",
+        "type": "stat",
+        "gridPos": { "h": 4, "w": 6, "x": 0, "y": 8 },
+        "targets": [
+          {
+            "queryType": "metrics",
+            "metricQuery": {
+              "metricType": "run.googleapis.com/container/instance_count",
+              "filters": ["resource.labels.service_name", "=", "krabbit-api"],
+              "perSeriesAligner": "ALIGN_MEAN",
+              "crossSeriesReducer": "REDUCE_SUM"
+            }
+          }
+        ]
+      },
+      {
+        "title": "CPU Utilization",
+        "type": "gauge",
+        "gridPos": { "h": 4, "w": 6, "x": 6, "y": 8 },
+        "targets": [
+          {
+            "queryType": "metrics",
+            "metricQuery": {
+              "metricType": "run.googleapis.com/container/cpu/utilizations",
+              "filters": ["resource.labels.service_name", "=", "krabbit-api"],
+              "perSeriesAligner": "ALIGN_PERCENTILE_95",
+              "crossSeriesReducer": "REDUCE_MEAN"
+            }
+          }
+        ]
+      },
+      {
+        "title": "Memory Utilization",
+        "type": "gauge",
+        "gridPos": { "h": 4, "w": 6, "x": 12, "y": 8 },
+        "targets": [
+          {
+            "queryType": "metrics",
+            "metricQuery": {
+              "metricType": "run.googleapis.com/container/memory/utilizations",
+              "filters": ["resource.labels.service_name", "=", "krabbit-api"],
+              "perSeriesAligner": "ALIGN_PERCENTILE_95",
+              "crossSeriesReducer": "REDUCE_MEAN"
+            }
+          }
+        ]
+      },
+      {
+        "title": "Uptime Check Status",
+        "type": "stat",
+        "gridPos": { "h": 4, "w": 6, "x": 18, "y": 8 },
+        "targets": [
+          {
+            "queryType": "metrics",
+            "metricQuery": {
+              "metricType": "monitoring.googleapis.com/uptime_check/check_passed",
+              "filters": ["metric.labels.check_id", "=~", "krabbit.*"],
+              "perSeriesAligner": "ALIGN_FRACTION_TRUE",
+              "crossSeriesReducer": "REDUCE_MEAN"
+            }
+          }
+        ]
+      },
+      {
+        "title": "Error Rate (5xx)",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+        "targets": [
+          {
+            "queryType": "metrics",
+            "metricQuery": {
+              "metricType": "run.googleapis.com/request_count",
+              "filters": [
+                "resource.labels.service_name", "=", "krabbit-api",
+                "metric.labels.response_code_class", "=", "5xx"
+              ],
+              "perSeriesAligner": "ALIGN_RATE",
+              "crossSeriesReducer": "REDUCE_SUM"
+            }
+          }
+        ]
+      },
+      {
+        "title": "Startup Latency",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+        "targets": [
+          {
+            "queryType": "metrics",
+            "metricQuery": {
+              "metricType": "run.googleapis.com/container/startup_latencies",
+              "filters": ["resource.labels.service_name", "=", "krabbit-api"],
+              "perSeriesAligner": "ALIGN_PERCENTILE_95"
+            }
+          }
+        ]
+      }
+    ],
+    "time": { "from": "now-6h", "to": "now" },
+    "refresh": "30s"
+  }
+}

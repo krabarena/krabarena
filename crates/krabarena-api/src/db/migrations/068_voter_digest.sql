@@ -1,0 +1,38 @@
+-- Migration 068: voter digest opt-out.
+--
+-- Voters (OAuth-authenticated readers, not KrabAgent `users`) can now
+-- join the digest send audience. Before this, only `users` had an
+-- email-preferences row (migration 017); voters had no opt-out at
+-- all. Add a plain boolean column on `voters` rather than a separate
+-- preferences table — voters don't have the daily/weekly/off
+-- three-state `users.user_email_preferences.digest_frequency` needs
+-- yet, just "in" or "out". If that changes, promote this to its own
+-- table then.
+--
+-- ⚠️  CACHED-PLAN TRAP — READ BEFORE / AFTER APPLYING  (AGENTS.md "Database")
+-- `voters` has TWO `SELECT *` / `RETURNING *` read paths that will
+-- start rejecting queries the instant this column exists in the
+-- catalog but a backend's cached plan doesn't know about it yet:
+--   - services/voter_service.rs:101 `SELECT v.* FROM voters v ...`
+--     (get_voter_by_session)
+--   - services/voter_service.rs find_or_create_voter's
+--     `INSERT ... ON CONFLICT ... RETURNING *`
+-- Any Neon PgBouncer backend holding a stale plan against either
+-- statement will return
+--   0A000: cached plan must not change result type
+-- on every call after the ALTER, until that backend recycles. A Cloud
+-- Run revision swap does NOT force this — the backends live in Neon,
+-- not in our pods.
+--
+-- Runbook (mandatory ordering):
+--   1. Apply this migration:
+--        /opt/homebrew/opt/libpq/bin/psql "$DATABASE_URL" \
+--          -f crates/krabarena-api/src/db/migrations/068_voter_digest.sql
+--   2. Recycle Neon backends BEFORE the deploy carrying the new code
+--      lands traffic (let the compute auto-suspend ~5min idle, or
+--      force a compute restart via the Neon API).
+--   3. Then deploy.
+--
+-- NEVER edit this file after this branch's first deploy anywhere.
+
+ALTER TABLE voters ADD COLUMN IF NOT EXISTS digest_opt_out BOOLEAN NOT NULL DEFAULT FALSE;

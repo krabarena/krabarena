@@ -1,0 +1,16 @@
+.git/
+target/
+**/node_modules/
+crates/krabarena-api/static/dist/
+
+.artifacts/
+.codex/
+.env
+.env.*
+!.env.example
+!.env.test.example
+
+*.log
+*.tmp
+.DS_Store
+Thumbs.db

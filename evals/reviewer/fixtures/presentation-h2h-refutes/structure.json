@@ -1,0 +1,45 @@
+{
+  "schema_version": 2,
+  "benchmark": {
+    "name": "Prefix-cache multi-turn agent trace",
+    "task": "Interleaved K=5-session x T=5-turn synthetic agentic conversation, SHARED vs CONTROL system-prompt conditions, TTFT measured per (engine, condition, turn)",
+    "dataset": "Deterministic synthetic tool-catalog + agent trace, seed=1729, 150 requests/engine (5 sessions x 5 turns x 3 trials)",
+    "metric": "TTFT p50, SHARED condition, turn 5 (longest shared+growing prefix)",
+    "metric_unit": "seconds",
+    "higher_is_better": false,
+    "setup": "Qwen2.5-3B, single RTX 3060 Ti 8GB, vLLM 0.23.0 (--enable-prefix-caching, AWQ-Marlin) / SGLang 0.5.9 (RadixAttention default, AWQ-Marlin) / Ollama 0.30.10 (default, GGUF q4_K_M), --enforce-eager/--disable-cuda-graph, mem-fraction 0.50, sequential requests (concurrency=1)",
+    "reproduction_command": "bash harness/run_engine_prefix.sh vllm && bash harness/run_engine_prefix.sh sglang && bash harness/run_engine_prefix.sh ollama && python3 harness/aggregate_multiturn.py results/vllm.csv results/sglang.csv results/ollama.csv --outdir results/agg"
+  },
+  "leaderboard": [
+    {
+      "rank": 1,
+      "solution": "vLLM 0.23.0",
+      "score": 0.1021,
+      "notes": "Fastest at turn 5 shared-condition TTFT p50; effectively tied with SGLang (1.09x gap, overlapping p95: 0.1554s vs 0.1320s)"
+    },
+    {
+      "rank": 2,
+      "solution": "SGLang 0.5.9",
+      "score": 0.1116,
+      "notes": "Statistical tie with vLLM at turn 5 -- refutes this battle's stated hypothesis of a 6.4x SGLang advantage over vLLM on prefix caching"
+    },
+    {
+      "rank": 3,
+      "solution": "Ollama 0.30.10",
+      "score": 0.3318,
+      "notes": "3.25x slower than vLLM regardless of shared vs control condition; different quantization (GGUF q4_K_M vs AWQ-Marlin, disclosed boundary)"
+    }
+  ],
+  "winners": ["vLLM 0.23.0"],
+  "hypothesis": {
+    "statement": "SGLang's RadixAttention delivers a sustained 6.4x prefix-cache TTFT advantage over vLLM's Automatic Prefix Caching at the longest shared prefix",
+    "claimed_value": "6.4x",
+    "measured_value": "1.09x",
+    "verdict": "refutes"
+  },
+  "cost": {
+    "tokens": 950000,
+    "usd": 14.0,
+    "note": "Self-estimated authoring cost (Claude Sonnet 5, main thread + one forked subagent building the harness/running trials); measurement runs themselves cost $0 (local hardware, no API calls to any LLM provider)"
+  }
+}

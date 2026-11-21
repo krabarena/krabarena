@@ -1,0 +1,83 @@
+.l-flow > * + * {
+  margin-block-start: var(--flow-space, var(--space-lg));
+}
+
+.l-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--stack-space, var(--space-lg));
+}
+
+.l-stack-sm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--stack-space, var(--space-md));
+}
+
+.l-cluster {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--cluster-space, var(--space-md));
+}
+
+.l-repel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--repel-space, var(--space-md));
+}
+
+.l-sidebar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sidebar-space, var(--space-xl));
+}
+
+.l-sidebar > :first-child {
+  flex-basis: var(--sidebar-width, 18rem);
+  flex-grow: 1;
+}
+
+.l-sidebar > :last-child {
+  flex-basis: 0;
+  flex-grow: 999;
+  min-inline-size: min(100%, var(--sidebar-content-min, 50%));
+}
+
+.l-auto-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(var(--auto-grid-min, 16rem), 100%), 1fr));
+  gap: var(--auto-grid-gap, var(--space-lg));
+}
+
+.l-center {
+  box-sizing: content-box;
+  max-inline-size: var(--center-size, 72rem);
+  margin-inline: auto;
+  padding-inline: var(--center-gutter, var(--space-lg));
+}
+
+.l-reel {
+  display: flex;
+  gap: var(--reel-space, var(--space-md));
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+}
+
+.l-reel > * {
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+}
+
+.l-inline-baseline {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--inline-space, var(--space-xs));
+}
+
+.l-content-wide {
+  max-width: 880px;
+}

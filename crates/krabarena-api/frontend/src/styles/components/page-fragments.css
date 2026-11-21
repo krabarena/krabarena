@@ -1,0 +1,221 @@
+.c-breadcrumb-list,
+.c-share-list {
+  display: contents;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.c-breadcrumb-list > li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.c-breadcrumb-list > li + li::before {
+  content: "/";
+  color: var(--ink-4);
+  font-weight: 400;
+}
+
+.c-share-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+}
+
+.c-share-list > li {
+  display: contents;
+}
+
+.hero-stats dt,
+.hero-stats dd,
+.pow-row dt,
+.pow-row dd {
+  margin: 0;
+}
+
+.hero-stats .v {
+  order: -1;
+}
+
+.c-preferences-fieldset {
+  display: contents;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+
+.pill.pill-muted {
+  background: rgb(107 114 128 / 20%);
+  color: var(--text-muted);
+}
+
+.pill.pill-brand {
+  background: rgb(240 104 39 / 15%);
+  color: var(--krab);
+}
+
+.c-link-plain {
+  color: inherit;
+  text-decoration: none;
+}
+
+.c-link-brand {
+  color: var(--krab);
+  font-weight: 600;
+}
+
+.c-link-inherit {
+  color: inherit;
+}
+
+.c-result-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+/* ---------- about page ---------- */
+
+.about-section {
+  max-width: 860px;
+}
+.about-section h2 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+  margin: 36px 0 12px;
+  font-weight: 600;
+}
+.about-section .vocab-entry {
+  margin-bottom: 20px;
+}
+.about-section .vocab-entry .word {
+  color: var(--krab);
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 4px;
+}
+.about-section .vocab-entry .definition {
+  color: var(--text);
+  font-size: 14px;
+}
+.about-section .vocab-entry .example {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin-top: 4px;
+  font-style: italic;
+}
+
+/* ---------- breadcrumb ---------- */
+
+.breadcrumb {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+.breadcrumb a {
+  color: var(--text-muted);
+}
+.breadcrumb a:hover {
+  color: var(--krab);
+}
+
+/* ---------- empty state ---------- */
+
+.empty {
+  text-align: center;
+  padding: 64px 20px;
+  color: var(--text-muted);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+}
+
+/* ---------- deprecation banner ---------- */
+
+.banner {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  color: #fbbf24;
+  padding: 10px 18px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  margin-bottom: 20px;
+}
+
+/* Editorial body containing the KrabReviewer-generated executive
+   summary. Treated as prose flowing on the page (not a card / not a
+   quotation) since 0.8.23 — no background tint, no border, no
+   wrapping container. The page is the editorial; chrome around it
+   was just visual noise. See `docs/ui.md` → "executive summary
+   card" for the rationale. */
+.exec-summary {
+  margin-top: 14px;
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1.65;
+}
+.battle-description {
+  margin-top: 16px;
+  color: var(--text-muted);
+}
+.battle-description > summary {
+  cursor: pointer;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 6px 0;
+  list-style: none;
+}
+.battle-description > summary::-webkit-details-marker {
+  display: none;
+}
+.battle-description > summary::before {
+  content: "▸ ";
+  display: inline-block;
+  margin-right: 4px;
+}
+.battle-description[open] > summary::before {
+  content: "▾ ";
+}
+/* ---------- claim detail ---------- */
+
+.claim-detail .hero-claim {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  margin-bottom: 16px;
+}
+
+.stat-pill {
+  display: inline-flex;
+  flex-direction: column;
+  padding: 10px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  min-width: 120px;
+}
+.stat-pill .label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+.stat-pill .value {
+  font-size: 16px;
+  font-weight: 600;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+}
+
+.pow-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 18px 0;
+}

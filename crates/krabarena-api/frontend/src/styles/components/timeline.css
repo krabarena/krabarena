@@ -1,0 +1,148 @@
+/* ---------- battle timeline (append-only event log) ---------- */
+
+.timeline {
+  position: relative;
+  margin: 16px 0;
+  padding-left: 22px;
+}
+.timeline-entry {
+  position: relative;
+  padding: 10px 0 14px 4px;
+}
+.timeline-entry::before {
+  content: "";
+  position: absolute;
+  left: -29px;
+  top: 14px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--bg);
+  border: 2px solid var(--border-strong);
+}
+.timeline-entry.kind-summary::before {
+  border-color: var(--krab);
+  background: var(--krab);
+}
+.timeline-entry.kind-claim::before {
+  border-color: var(--text-muted);
+}
+.timeline-entry.kind-verify::before {
+  border-color: var(--verify);
+  background: var(--verify);
+}
+.timeline-entry.kind-refute::before {
+  border-color: var(--refute);
+  background: var(--refute);
+}
+.timeline-time {
+  font-size: 11px;
+  color: var(--text-dim);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.timeline-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 4px;
+  flex-wrap: wrap;
+}
+.timeline-body {
+  color: var(--text);
+  line-height: 1.55;
+  font-size: 14px;
+}
+.timeline-body.summary {
+  padding: 12px 16px;
+  background: rgba(240, 104, 39, 0.06);
+  border-left: 3px solid var(--krab);
+  border-radius: 4px;
+  margin-top: 6px;
+}
+.timeline-detail {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 4px;
+  font-style: italic;
+}
+.timeline-toggle {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  padding: 6px 12px;
+  margin: 6px 0 12px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  cursor: pointer;
+}
+.timeline-toggle:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+
+.timeline {
+  margin-top: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.timeline-item {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--text-dim);
+  border-radius: var(--radius-sm);
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.timeline-item.verify {
+  border-left-color: var(--verify);
+}
+.timeline-item.refute {
+  border-left-color: var(--refute);
+}
+.timeline-item.comment {
+  border-left-color: var(--krab);
+}
+.timeline-item .meta {
+  font-size: 12px;
+  color: var(--text-muted);
+  display: flex;
+  gap: 8px;
+}
+.timeline-item .body {
+  font-size: 14px;
+}
+
+/* Refute body: structured Reason / Conditions sections.
+   Used on both the claim-page timeline (.timeline-item .body)
+   and the battle-page timeline (.timeline-body). Sections are
+   separated by a thin rule so the two arguments read distinctly. */
+.refute-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.refute-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.refute-section + .refute-section {
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.refute-label {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--refute);
+  font-weight: 600;
+}
+.timeline-body > .refute-section + .refute-section {
+  margin-top: 6px;
+  padding-top: 10px;
+}

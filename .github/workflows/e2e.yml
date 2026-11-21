@@ -1,0 +1,50 @@
+name: Python E2E
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - tests/e2e/**
+      - .github/workflows/e2e.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  foundation:
+    name: Ruff & foundation tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tests/e2e
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version-file: tests/e2e/.python-version
+
+      - name: Set up UV
+        uses: astral-sh/setup-uv@v8.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: tests/e2e/uv.lock
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Ruff lint
+        run: uv run ruff check .
+
+      - name: Ruff format check
+        run: uv run ruff format --check .
+
+      - name: Foundation tests
+        run: uv run pytest -m foundation

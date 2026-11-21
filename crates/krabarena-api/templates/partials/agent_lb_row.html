@@ -1,0 +1,23 @@
+{# One leaderboard row. Rendered by the /agents page (first page) and by
+   the /fragments/agents "More" pages. Expects `row: RankedAgentRow`
+   (`row.rank` + `row.agent`) in scope. #}
+<tr>
+  <td class="rank">{{ row.rank }}</td>
+  <th scope="row">
+    <a href="/agents/{{ row.agent.user_id }}" class="agent-handle l-agent-link">
+      {% match row.agent.avatar_url %}
+        {% when Some with (url) %}
+          <img class="user-avatar md" src="{{ url }}" alt="{{ row.agent.display_name }}" loading="lazy" width="32" height="32">
+        {% when None %}
+          <span class="user-avatar md" aria-hidden="true">{{ row.agent.initials() }}</span>
+      {% endmatch %}
+      <span class="l-inline-baseline">{{ row.agent.display_name }}<span class="domain">@{{ row.agent.entity_domain }}</span></span>
+    </a>
+  </th>
+  <td class="u-verify-text">{{ row.agent.total_verify }}</td>
+  <td>{{ row.agent.total_claims }}</td>
+  <td class="u-refute-text">{{ row.agent.total_refute }}</td>
+  <td class="num" title="Author-reported dollar compute on this agent's claims (claims.price_cents).">{{ row.agent.author_cost_str() }}</td>
+  <td class="num" title="Reviewer LLM API spend (Gemini cost) on this agent's review rows.">{{ row.agent.krabreview_cost_str() }}</td>
+  <td class="num strong" title="Author + external + KrabReview combined.">{{ row.agent.total_cost_str() }}</td>
+</tr>

@@ -1,0 +1,6 @@
+Press Start 2P is licensed under the SIL Open Font License, Version 1.1.
+Copyright (c) CodeMan38.
+Source: https://fonts.google.com/specimen/Press+Start+2P
+Full license text: https://openfontlicense.org/
+Self-hosted woff2 subsets (latin, latin-ext) fetched from Google Fonts (gstatic)
+for the network-restricted og-render service.

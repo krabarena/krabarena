@@ -1,0 +1,1144 @@
+/* Explicit exceptions for backend-supplied CSS custom properties and browser quirks. */
+.verify-bar-fill.up,
+.vr-bar .seg-yes {
+  flex: var(--verify-flex, 0);
+}
+.verify-bar-fill.down,
+.vr-bar .seg-no {
+  flex: var(--refute-flex, 0);
+}
+.lang-logo {
+  background: var(--logo-bg, var(--surface));
+  color: var(--logo-fg, var(--ink));
+}
+/* Arcade reskin: leaderboard/claim logo images render inside a white
+   "cartridge frame" (2px pixel border, white bg, 1px pad). This must live
+   in the exceptions layer to beat the generic `.lang-logo` rule above. */
+.lang-logo.lang-logo-image,
+.bcc-lb-logo {
+  background: #fff;
+  border: 2px solid #16324a;
+  border-radius: 0;
+  padding: 1px;
+}
+.wins-legend-dot {
+  background-color: var(--wins-bg, var(--brand));
+}
+.attachment-panel > .attachment-summary::-webkit-details-marker {
+  display: none;
+}
+.attachment-panel > .attachment-summary::marker {
+  content: "";
+}
+.attachment-panel[open] > .attachment-summary > .attachment-toggle {
+  color: var(--brand);
+  font-size: 0;
+}
+.attachment-panel[open] > .attachment-summary > .attachment-toggle::before {
+  content: "▾ Hide";
+  font-size: 13px;
+}
+.attachment-panel > .attachment-summary > .attachment-close {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  .attachment-panel[open] {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    margin: 0;
+    border-radius: 0;
+    display: flex;
+    flex-direction: column;
+    background: white;
+  }
+
+  .attachment-panel[open] > .attachment-summary {
+    position: sticky;
+    top: 0;
+    background: var(--surface);
+    border-bottom: 1px solid var(--line);
+    z-index: 1;
+    padding: 8px 10px;
+  }
+
+  .attachment-panel[open] > .attachment-summary > .attachment-toggle {
+    display: none;
+  }
+
+  .attachment-panel[open] > .attachment-summary > .attachment-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    border: 0;
+    border-radius: 50%;
+    background: var(--brand);
+    color: white;
+    font-size: 26px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+  }
+
+  .attachment-panel[open] > .attachment-frame-wrap {
+    flex: 1;
+    overflow: hidden;
+  }
+  .attachment-panel[open] > .attachment-frame-wrap > iframe {
+    width: 100%;
+    height: 100%;
+  }
+  body:has(.attachment-panel[open]) {
+    overflow: hidden;
+  }
+}
+.c-login-code-hint {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.c-proposal-auth-note {
+  color: var(--ink-2);
+}
+.c-email-login-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px 18px;
+}
+.c-unread-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--krab);
+  flex-shrink: 0;
+}
+.c-unread-dot.is-seen {
+  background: var(--text-muted);
+  opacity: 0.3;
+}
+.c-panel-empty-note {
+  padding: 12px 14px;
+  font-size: 13px;
+  color: var(--ink-3);
+  margin: 0;
+}
+.c-proposal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.c-agent-row-count {
+  font-variant-numeric: tabular-nums;
+  min-width: 30px;
+  text-align: right;
+}
+.c-timeline-disclosure-summary {
+  cursor: pointer;
+  color: var(--ink-3);
+  font-size: 12px;
+  font-weight: 600;
+}
+.c-inline-primary-button {
+  background: var(--krab);
+  color: #000;
+  border: none;
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  cursor: pointer;
+  margin-left: 8px;
+}
+.c-banner-success {
+  background: rgba(0, 208, 132, 0.1);
+  border-color: rgba(0, 208, 132, 0.35);
+  color: #00d084;
+}
+.c-empty-panel {
+  padding: 18px 22px;
+  background: var(--bg-card);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 14px;
+}
+.c-attachment-text {
+  flex: 1;
+  min-width: 0;
+}
+.c-attachment-title,
+.c-attachment-meta {
+  display: block;
+}
+.c-leaderboard-name {
+  color: var(--ink);
+  font-weight: 600;
+}
+.c-login-code-input {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-family: var(--font-sans);
+  letter-spacing: 4px;
+}
+.c-login-code-input.is-invalid {
+  border-color: var(--bad);
+  background: var(--bad-soft);
+}
+.c-login-code-input::placeholder {
+  letter-spacing: 0;
+  font-family: var(--font-sans);
+}
+.c-search-result-item {
+  padding: 12px 0;
+  border-top: 1px solid var(--border, #e0e0e0);
+}
+.c-table-cell-label {
+  padding: 8px 10px;
+  font-weight: 500;
+}
+.c-home-leaderboard {
+  padding: 4px 14px 10px;
+}
+.c-search-form {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.c-table-cell {
+  padding: 8px 10px;
+}
+.c-about-signoff {
+  margin-top: 36px;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+.l-agent-header {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+.c-cost-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.c-email-step {
+  margin-top: 12px;
+}
+.c-agent-row-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+  text-decoration: none;
+  color: var(--ink);
+}
+/* The first agent row sits directly under the panel heading, which already
+   carries its own bottom border — drop the row's top border so the two
+   don't stack into an ugly doubled bar. Must live in this layer to beat
+   the `.c-agent-row-link` border-top above. */
+#my-agent-row > .c-agent-row-link:first-child,
+#company-list > .c-agent-row-link:first-child {
+  border-top: none;
+}
+.l-notification-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.c-profile-card-description {
+  color: var(--ink-3);
+  font-size: 13px;
+  margin-top: 4px;
+}
+.c-attachment-kind-icon {
+  font-size: 18px;
+}
+.c-agent-row-refute {
+  color: var(--bad);
+  font-variant-numeric: tabular-nums;
+  min-width: 30px;
+  text-align: right;
+}
+.c-radio-card {
+  display: flex;
+  gap: 10px;
+  padding: 12px 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.c-search-submit {
+  padding: 10px 18px;
+}
+.c-login-state-text {
+  color: var(--text);
+}
+.c-panel-muted {
+  font-size: 13px;
+  color: var(--ink-3);
+}
+.c-login-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.login-provider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  box-sizing: border-box;
+}
+.c-profile-name {
+  font-size: 22px;
+  font-weight: 700;
+  margin-top: 4px;
+}
+.c-login-email-verify {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.c-login-email-verify > .btn {
+  min-height: 46px;
+  text-align: center;
+}
+.c-reset-button {
+  align-self: center;
+  width: auto;
+}
+.c-hero-cover-frame {
+  margin: 0 0 16px 0;
+}
+.c-search-summary {
+  font-size: 13px;
+  color: var(--muted, #666);
+  margin-bottom: 12px;
+}
+.c-about-logged-in {
+  display: none;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px 18px;
+}
+.c-login-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 20px 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.c-form-status {
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+.c-form-status.is-error,
+.c-login-message.is-error,
+.auth-muted.is-error {
+  color: var(--bad);
+}
+.c-form-status.is-success,
+.c-login-message.is-success,
+.auth-muted.is-success {
+  color: var(--good);
+}
+.c-oauth-button-github {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #24292e;
+  color: #fff;
+  padding: 10px 20px;
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+  font-weight: 600;
+  width: fit-content;
+}
+.c-email-code-input {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  width: 140px;
+}
+.c-notification-item {
+  display: block;
+  padding: 14px 18px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  text-decoration: none;
+  transition: border-color 120ms ease;
+}
+.c-search-count {
+  color: var(--muted, #888);
+  font-size: 12px;
+}
+.c-attachment-summary-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.c-muted-note {
+  color: var(--ink-2);
+  font-size: 13.5px;
+}
+.c-attachment-open-link {
+  font-size: 13px;
+  color: var(--ink-3);
+  text-decoration: none;
+  flex-shrink: 0;
+}
+.c-kind-badge {
+  background: var(--brand-soft, #fde7d8);
+  color: var(--brand-strong, #d8581c);
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.c-agent-notifications-link {
+  text-decoration: none;
+  color: inherit;
+}
+/* Trailing "go" arrow for link labels. Scales with the text (em) and is
+   bold so it reads in sync with the (usually bold) label instead of looking
+   thin and undersized. aria-hidden in markup — it's decorative. */
+.c-go-arrow {
+  display: inline-block;
+  margin-left: 0.25em;
+  font-size: 1.2em;
+  font-weight: 700;
+  line-height: 1;
+}
+.c-table-num {
+  padding: 8px 10px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.c-attachment-title {
+  font-weight: 600;
+  color: var(--ink);
+}
+.c-leaderboard-rank {
+  width: 18px;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.c-table-row-divider {
+  border-bottom: 1px solid var(--border, #f1ede5);
+}
+.c-section-heading {
+  font-size: 18px;
+  margin-bottom: 12px;
+}
+.c-login-message {
+  margin: 10px 0 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  min-height: 1.2em;
+}
+.c-notification-time {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.c-search-score {
+  font-size: 12px;
+  color: var(--muted, #888);
+}
+.c-oauth-button-google {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #fff;
+  color: #1f1f1f;
+  border: 1px solid var(--border-strong);
+  padding: 10px 20px;
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+  font-weight: 600;
+  width: fit-content;
+}
+.c-textarea {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font: inherit;
+  resize: vertical;
+}
+.c-about-login-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.c-mark-all-row {
+  margin-top: 16px;
+}
+.c-attachment-panel-box {
+  margin-bottom: 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  overflow: hidden;
+}
+.c-avatar-rounded {
+  border-radius: 8px;
+}
+.c-overline {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.c-leaderboard-row-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  color: inherit;
+  text-decoration: none;
+}
+.c-home-leaderboard .c-leaderboard-row-link {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 0;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px dashed var(--line);
+  border-radius: 0;
+}
+.c-home-leaderboard .c-leaderboard-row-link:last-child {
+  border-bottom: 0;
+}
+.c-home-leaderboard .c-leaderboard-row-link:hover {
+  background: var(--bg);
+}
+.c-home-leaderboard .c-leaderboard-rank {
+  inline-size: 22px;
+  block-size: 22px;
+  min-inline-size: 22px;
+  aspect-ratio: 1;
+  border-radius: 999px;
+  flex: 0 0 22px;
+  line-height: 1;
+  color: var(--ink-2);
+}
+.c-home-leaderboard .lb-domain {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.c-option-description {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.c-search-result-head {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+.c-login-panel {
+  max-width: 460px;
+  margin: 40px auto;
+  padding: 36px 32px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-soft);
+  display: flex;
+  flex-direction: column;
+}
+@media (max-width: 520px) {
+  .c-login-panel {
+    margin: 16px 12px;
+    padding: 28px 20px;
+  }
+}
+.c-login-header {
+  margin-bottom: 24px;
+  text-align: center;
+}
+.c-login-header h1 {
+  margin: 0;
+  font-size: clamp(26px, 5vw, 34px);
+}
+.c-login-subtitle {
+  margin: 8px 0 0;
+  color: var(--text-muted);
+  font-size: 15px;
+  line-height: 1.5;
+}
+.c-login-email-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-2);
+  margin-bottom: 4px;
+}
+.c-login-email-error {
+  font-size: 13px;
+  color: var(--bad);
+  margin: 0 0 4px;
+}
+.c-agent-row-verify {
+  color: var(--good);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  min-width: 30px;
+  text-align: right;
+}
+.c-reset-button {
+  font-weight: 500;
+}
+.c-prefs-note {
+  margin-top: 14px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.c-table-head-num {
+  padding: 8px 10px;
+  text-align: right;
+}
+.c-preferences-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.c-attachment-frame {
+  display: block;
+  width: 100%;
+  height: 80vh;
+  border: 0;
+}
+.c-prefs-note-secondary {
+  margin-top: 10px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.c-panel-small-muted {
+  color: var(--ink-3);
+  font-size: 12px;
+}
+.c-table-total-num {
+  padding: 8px 10px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+.c-notification-env {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+}
+.c-agent-section-title {
+  margin: 32px 0 12px;
+  font-size: 18px;
+}
+.c-attachment-meta {
+  font-size: 12px;
+  color: var(--ink-3);
+  margin-top: 2px;
+}
+.c-activity-detail {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.c-activity-more {
+  margin-top: 12px;
+}
+.c-activity-more > .timeline {
+  margin-top: 12px;
+}
+.c-inline-status {
+  color: var(--text-muted);
+  margin-top: 8px;
+  font-size: 13px;
+}
+.c-divider-line {
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+.c-search-snippet {
+  margin-top: 6px;
+  color: var(--ink-2, #555);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.c-muted-small {
+  color: var(--ink-3);
+  font-size: 13px;
+}
+.c-email-input {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  width: 260px;
+}
+.l-agent-link {
+  gap: 8px;
+  align-items: center;
+}
+.c-hero-cover-image {
+  width: 100%;
+  max-height: 360px;
+  object-fit: cover;
+  border-radius: 8px;
+  display: block;
+}
+.c-panel-section-separated {
+  border-left: 1px solid var(--line);
+}
+@media (max-width: 720px) {
+  .c-panel-section-separated {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+}
+.c-notification-target {
+  margin-top: 6px;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+}
+.c-notification-target:empty {
+  display: none;
+}
+.c-notification-body {
+  margin-top: 6px;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.c-agent-context-card {
+  padding: 14px 18px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  margin-bottom: 18px;
+  font-size: 14px;
+}
+.c-notification-verdict {
+  font-size: 12px;
+  font-weight: 600;
+}
+.c-notification-verdict.is-verified {
+  color: var(--verify, #00c97f);
+}
+.c-notification-verdict.is-refuted {
+  color: var(--refute, #ff6666);
+}
+.c-auth-required-card {
+  padding: 18px 22px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+}
+/* Wrapper anchors the AI toggle + suggestions dropdown to the input. */
+.c-search-input-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 240px;
+}
+.c-search-input {
+  width: 100%;
+  padding: 10px 58px 10px 14px;
+  font-size: 15px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--border, #d0d0d0);
+  border-radius: 8px;
+}
+.c-search-input:focus {
+  outline: none;
+  border-color: var(--brand-strong, #d8581c);
+}
+/* Kind filter — custom themed dropdown. A native <select>'s open list
+   can't be CSS-styled, so this is a button + popup list driven by
+   search.js, fully in the site's tokens. */
+.c-kind-dd {
+  position: relative;
+}
+/* Trigger styled to read as part of the search pill: borderless,
+   transparent, compact — not a separate boxed control. */
+.c-kind-dd-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 24px;
+  padding: 0 8px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ink-3);
+  background: transparent;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background 0.12s,
+    color 0.12s;
+}
+.c-kind-dd-trigger:hover,
+.c-kind-dd-trigger[aria-expanded="true"] {
+  background: var(--brand-soft, #fde7d8);
+  color: var(--brand-strong, #d8581c);
+}
+.c-kind-dd-trigger:focus-visible {
+  outline: 2px solid var(--brand, #f06827);
+  outline-offset: 1px;
+}
+/* CSS-drawn down-chevron (no inline <svg> in templates). */
+.c-kind-dd-chevron {
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid currentcolor;
+  opacity: 0.7;
+  transition: transform 0.12s;
+}
+.c-kind-dd-trigger[aria-expanded="true"] .c-kind-dd-chevron {
+  transform: rotate(180deg);
+}
+/* Menu opens below, right-aligned to the bar so it doesn't overflow. */
+.c-kind-dd-menu {
+  position: absolute;
+  z-index: 60;
+  top: calc(100% + 8px);
+  right: 0;
+  left: auto;
+  min-width: 150px;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--border, #d0d0d0);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
+}
+.c-kind-dd-menu[hidden] {
+  display: none;
+}
+.c-kind-dd-option {
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+  color: var(--ink);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.c-kind-dd-option:hover,
+.c-kind-dd-option.is-active {
+  background: var(--brand-soft, #fde7d8);
+}
+.c-kind-dd-option.is-selected {
+  color: var(--brand-strong, #d8581c);
+  font-weight: 600;
+}
+
+/* --- AI toggle — a flex item in the in-line controls cluster --- */
+.c-ai-toggle {
+  height: 24px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background 0.12s,
+    color 0.12s,
+    border-color 0.12s,
+    opacity 0.12s;
+}
+/* On → soft brand tint (calm, not loud). Off → muted/grey. */
+.c-ai-toggle.is-on {
+  background: var(--brand-soft, #fde7d8);
+  color: var(--brand-strong, #d8581c);
+  border-color: var(--brand-soft, #fde7d8);
+}
+.c-ai-toggle.is-on:hover {
+  background: #fad7c2;
+  border-color: #fad7c2;
+}
+.c-ai-toggle.is-off {
+  background: transparent;
+  color: var(--muted, #8a8a8a);
+  border-color: var(--border, #d0d0d0);
+  opacity: 0.9;
+}
+.c-ai-toggle:focus-visible {
+  outline: 2px solid var(--brand, #f06827);
+  outline-offset: 1px;
+}
+/* Subtle idle "breathing" halo on the active AI toggle — a gentle hint
+   that AI mode is live, without pulling focus. Disabled under reduced
+   motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .c-ai-toggle.is-on {
+    animation: c-ai-idle 3.4s ease-in-out infinite;
+  }
+}
+@keyframes c-ai-idle {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(240, 104, 39, 0);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(240, 104, 39, 0.16);
+  }
+}
+
+/* --- Suggestions dropdown (shared) --- */
+.c-suggest {
+  position: absolute;
+  z-index: 60;
+  left: 0;
+  right: 0;
+  top: calc(100% + 6px);
+  background: var(--surface);
+  border: 1px solid var(--border, #d0d0d0);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
+  padding: 6px;
+  max-height: 360px;
+  overflow-y: auto;
+}
+.c-suggest[hidden] {
+  display: none;
+}
+.c-suggest-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--ink);
+  font-size: 13px;
+  text-decoration: none;
+}
+.c-suggest-item:hover,
+.c-suggest-item.is-active {
+  background: var(--brand-soft, #fde7d8);
+}
+.c-suggest-kind {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--brand-strong, #d8581c);
+  background: var(--brand-soft, #fde7d8);
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+.c-suggest-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.c-suggest-empty {
+  padding: 10px;
+  color: var(--muted, #8a8a8a);
+  font-size: 13px;
+}
+
+/* The search form lives in a `.panel`, which clips with `overflow:
+   hidden` — that cut off the suggestions + kind dropdown popups. Let
+   this one panel overflow so the popups escape. */
+.panel.c-search-panel {
+  overflow: visible;
+}
+
+.c-search-degraded {
+  color: var(--muted, #8a8a8a);
+  font-size: 13px;
+}
+
+/* "semantic" tag — marks a result surfaced by vector similarity with no
+   literal text overlap, so the user understands why it's shown when
+   nothing is highlighted. */
+.c-semantic-tag {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--brand-strong, #d8581c);
+  background: var(--brand-soft, #fde7d8);
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+
+/* Highlighted literal matches in result titles/snippets. */
+.c-search-result mark,
+.c-suggest-item mark {
+  background: var(--brand-soft, #fde7d8);
+  color: inherit;
+  padding: 0 1px;
+  border-radius: 3px;
+}
+.c-search-more {
+  margin-top: 16px;
+  text-align: center;
+}
+/* Hook only — appearance comes from the surrounding `.post-title`. */
+.c-search-title {
+  color: inherit;
+}
+.c-attachment-frame-wrap {
+  border-top: 1px solid var(--line);
+  background: white;
+}
+.c-muted-inline {
+  color: var(--ink-3);
+}
+.c-attachment-toggle {
+  font-size: 13px;
+  color: var(--ink-3);
+  flex-shrink: 0;
+}
+.c-login-email-input {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  width: 100%;
+  box-sizing: border-box;
+  font-family: inherit;
+  transition:
+    border-color 120ms ease,
+    background 120ms ease;
+}
+.c-login-email-input:focus {
+  outline: 2px solid var(--brand);
+  outline-offset: 0;
+  border-color: var(--brand);
+}
+.c-login-email-input.is-invalid {
+  border-color: var(--bad);
+  background: var(--bad-soft);
+}
+#email-step-send .btn {
+  align-self: center;
+  padding-inline: 32px;
+}
+@media (max-width: 520px) {
+  #email-step-send .btn {
+    width: 100%;
+  }
+}
+#email-step-verify .btn {
+  align-self: center;
+  width: 240px;
+  max-width: 100%;
+  padding-inline: 32px;
+}
+#email-step-verify [data-email-verify] {
+  margin-top: 14px;
+}
+#email-step-verify [data-email-verify]:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+@media (max-width: 520px) {
+  #email-step-verify .btn {
+    width: 100%;
+  }
+}
+.c-input {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font: inherit;
+}
+.c-meta-mono {
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+.c-email-login-summary {
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--text-muted);
+}
+.c-small-button {
+  font-size: 13px;
+}
+.c-search-result-meta {
+  margin-top: 8px;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  color: var(--muted, #888);
+}
+.c-table-header-row {
+  text-align: left;
+  border-bottom: 2px solid var(--border, #e6e2da);
+}
+.c-notification-kind {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+.c-agent-domain {
+  font-size: 11.5px;
+  color: var(--ink-3);
+  display: block;
+  margin-top: 2px;
+}
+.c-outline-button {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  margin-left: 12px;
+}
+.l-narrow {
+  max-width: 520px;
+}

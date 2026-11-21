@@ -1,0 +1,72 @@
+name: Build & Push
+
+on:
+  push:
+    branches: [main]
+  # Manual dispatch lets us build a feature branch's image so we can
+  # deploy it to the `krabarena-test` env (designer preview etc.)
+  # without going through main. Feature-branch builds tag the image
+  # with the commit SHA only — `:latest` is reserved for main so a
+  # subsequent `Deploy` (prod) never accidentally picks up a preview.
+  workflow_dispatch: {}
+
+env:
+  REGION: us-central1
+  REPO: krabarena-repo
+  IMAGE: krabarena-api
+  REGISTRY: us-central1-docker.pkg.dev
+
+jobs:
+  build:
+    if: github.repository == 'krabarena/krabarena-private'
+    name: Build & Push Image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          token_format: access_token
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Login to Artifact Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: oauth2accesstoken
+          password: ${{ steps.auth.outputs.access_token }}
+
+      # Tag set: SHA always, `:latest` only on main (push event). A
+      # workflow_dispatch run on a feature branch produces a SHA-only
+      # image so the next prod deploy can't accidentally ship it.
+      - name: Compute image tags
+        id: tags
+        run: |
+          IMG="${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/${{ env.REPO }}/${{ env.IMAGE }}"
+          TAGS="${IMG}:${{ github.sha }}"
+          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            TAGS="${TAGS}
+          ${IMG}:latest"
+          fi
+          {
+            echo "tags<<EOF"
+            echo "$TAGS"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

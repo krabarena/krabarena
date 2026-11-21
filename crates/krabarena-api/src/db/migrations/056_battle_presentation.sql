@@ -1,0 +1,47 @@
+-- Migration 056: Per-battle presentation guidance (0.28.x, PR-B).
+--
+-- Lets a battle author shape how its Claims Wins matrix + summary render
+-- AS DATA — no code rebuild — via two nullable columns on `battles`:
+--
+--   * presentation_guidance TEXT  — freeform natural-language steering
+--       fed to the summary / quick-summary agents (e.g. "lead with the
+--       freshest-news benchmark; keep labels under three words").
+--   * presentation_config   JSONB — structured knobs deserialized into
+--       `krabarena_shared::presentation::PresentationConfig`
+--       (max_wins_cols, dedup_benchmarks, controversy_refute_ratio,
+--       controversy_demotion, effort_includes_external/_review). A
+--       partial blob overrides only the keys it sets; everything else
+--       falls back to the house default.
+--
+-- NULL on both = "use the house default", which is exactly the behavior
+-- shipped in PR-A — so this migration is a pure no-op for every existing
+-- battle until an author or admin sets a value.
+--
+-- ─────────────────────────────────────────────────────────────────────
+-- ⚠️  CACHED-PLAN TRAP — READ BEFORE / AFTER APPLYING  (AGENTS.md "Database")
+-- ─────────────────────────────────────────────────────────────────────
+-- `battles` has `SELECT *` read paths (the OG card renderer). Per the
+-- 0.8.20 incident, after an `ALTER TABLE … ADD COLUMN` any cached
+-- prepared plan that did `SELECT *` against `battles` returns
+--   0A000: cached plan must not change result type
+-- on every Neon PgBouncer backend still holding the stale plan — a
+-- Cloud Run revision swap is NOT enough to clear it.
+--
+-- Runbook (mandatory ordering):
+--   1. Apply this migration:
+--        /opt/homebrew/opt/libpq/bin/psql "$DATABASE_URL" \
+--          -f crates/krabarena-api/src/db/migrations/056_battle_presentation.sql
+--   2. Recycle Neon backends BEFORE the deploy carrying the new code
+--      lands traffic (let the compute auto-suspend ~5min idle, or force
+--      a compute restart via the Neon API).
+--   3. Then deploy.
+--
+-- This migration's own code reads explicit columns (`BATTLE_COLUMNS`
+-- gains both fields), so the new build is plan-stable; the trap is only
+-- about the OLD build's still-warm `SELECT *` plans, which step 2 clears.
+--
+-- Idempotent: ADD COLUMN IF NOT EXISTS, safe to re-run. No backfill —
+-- every existing row keeps NULL (= house default).
+
+ALTER TABLE battles ADD COLUMN IF NOT EXISTS presentation_guidance TEXT;
+ALTER TABLE battles ADD COLUMN IF NOT EXISTS presentation_config   JSONB;

@@ -1,0 +1,94 @@
+[package]
+name = "krabarena-api"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+homepage.workspace = true
+description = "KrabArena server: REST API, web UI and KrabReviewer"
+
+[lib]
+name = "krabarena_api"
+path = "src/lib.rs"
+
+[[bin]]
+name = "krabarena-api"
+path = "src/main.rs"
+
+[dependencies]
+krabarena-shared.workspace = true
+axum.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sqlx.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+tower-http.workspace = true
+jsonwebtoken.workspace = true
+sha2.workspace = true
+hex.workspace = true
+hmac.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
+# Argon2id hashing for webhook subscription secrets (since 0.14.0).
+# Per-subscription HMAC secrets are issued once at subscribe time,
+# hashed and stored as `webhook_subscriptions.secret_hash`. Plain
+# secrets are never persisted — subscribers must keep their copy.
+argon2.workspace = true
+# CSPRNG for webhook secrets + delivery IDs (since 0.14.0).
+rand.workspace = true
+# Redis-backed per-IP rate limiter (since 0.26.0). See
+# `web::rate_limit`. `deadpool-redis` pools the async connection;
+# `redis` provides the `Script` type for the atomic Lua window.
+deadpool-redis.workspace = true
+redis.workspace = true
+# Logo decoding for the self-hosted vendor-logo pipeline (since 0.28.4).
+image = { workspace = true }
+askama = "0.15"
+reqwest.workspace = true
+base64 = "0.22"
+pulldown-cmark = { version = "0.12", default-features = false, features = ["html"] }
+ammonia = "4"
+flate2 = "1"
+tar = "0.4"
+regex = "1"
+email_address = "0.2"
+infer = "0.16"
+# pgvector binding for sqlx — lets the claim post handler ship a
+# 768-dim Gemini embedding straight to Postgres + lets pgvector's
+# `<=>` cosine-distance operator do the dedup comparison server-side
+# (instead of streaming candidate vectors to Rust).
+pgvector = { version = "0.4", features = ["sqlx"] }
+urlencoding = "2"
+# OpenAPI / Swagger UI generation (since 0.8.24). `utoipa::path`
+# annotations on route handlers + `ToSchema` derives on request /
+# response types feed an `ApiDoc` derive that produces the spec
+# served at `/v1/openapi.json`. `utoipa-swagger-ui` mounts the
+# interactive viewer at `/docs/api`.
+utoipa = { version = "5", features = ["axum_extras", "uuid", "chrono"] }
+utoipa-swagger-ui = { version = "9", features = ["axum"] }
+# Per-entity OG image generation (1200x630 PNG). `tiny-skia` is a
+# pure-Rust 2D rasteriser (no fontconfig / freetype), `fontdue`
+# rasterises individual glyphs from a bundled TTF, `png` writes the
+# final PNG bytes we serve / upload to GCS. All three together add
+# ~700 KB to the binary — cheaper than pulling in cairo / pango.
+tiny-skia = "0.11"
+fontdue = "0.9"
+png = "0.17"
+
+[dev-dependencies]
+reqwest.workspace = true
+tokio.workspace = true
+serde_json.workspace = true
+# Mint a valid JWT offline in `rate_limit_e2e` (the compose API signs
+# with `dev-secret`) to exercise the authenticated per-user keying path.
+uuid.workspace = true
+# `tower::util::ServiceExt` for driving the axum router with a
+# constructed Request in `web::redirect` middleware tests. tower
+# is already a transitive dep via axum; declaring it explicitly
+# here keeps the test imports honest.
+tower = "0.5"
+# Mock HTTP server for outbound-HTTP tests. Test-only.
+wiremock = "0.6"

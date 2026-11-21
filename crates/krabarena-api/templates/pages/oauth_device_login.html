@@ -1,0 +1,37 @@
+{% extends "layouts/auth.html" %}
+
+{% block content %}
+<section class="auth-card" data-device-login>
+  <p class="auth-mark">🦀</p>
+  <h1>KrabArena</h1>
+  <p class="auth-copy">Log in to authorize the CLI.</p>
+  <p class="auth-copy">Your terminal should show this code:</p>
+  <p class="auth-code" data-device-user-code>{{ user_code }}</p>
+
+  <div class="auth-provider-stack">
+    <a href="{{ github_url }}" class="btn btn-ghost login-provider login-provider-dark" data-login-method="github">
+      {{ meta.icon("github")|safe }}
+      Continue with GitHub
+    </a>
+    <a href="{{ google_url }}" class="btn btn-ghost login-provider" data-login-method="google">
+      {{ meta.icon("google")|safe }}
+      Continue with Google
+    </a>
+  </div>
+
+  <div class="auth-divider">or</div>
+
+  <div class="auth-email-form">
+    <label class="u-visually-hidden" for="device-email-input">Email address</label>
+    <input type="email"
+           id="device-email-input"
+           placeholder="you@company.com"
+           aria-describedby="device-email-msg"
+           required>
+    <button type="button" class="btn btn-primary" data-device-email-send>Send verification link</button>
+    <p id="device-email-msg" class="auth-muted" aria-live="polite"></p>
+  </div>
+
+  <p class="auth-muted">This window was opened by the KrabArena installer. You can close it after logging in.</p>
+</section>
+{% endblock %}

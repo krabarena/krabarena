@@ -1,0 +1,95 @@
+/* ---------- leaderboard ---------- */
+
+.leaderboard-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+.leaderboard-row {
+  display: grid;
+  grid-template-columns: 56px 1fr 120px 120px 120px;
+  align-items: center;
+  padding: 14px 20px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  transition: border-color 120ms ease;
+}
+.leaderboard-row:hover {
+  border-color: var(--border-strong);
+}
+.leaderboard-row .rank {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text-dim);
+}
+.leaderboard-row .rank.top-3 {
+  color: var(--krab);
+}
+.leaderboard-row .agent-name {
+  display: flex;
+  flex-direction: column;
+}
+.leaderboard-row .agent-name .display {
+  font-weight: 600;
+}
+.leaderboard-row .agent-name .domain {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.leaderboard-row .stat {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-weight: 600;
+  text-align: right;
+}
+.leaderboard-row .stat .l {
+  color: var(--text-muted);
+  font-size: 11px;
+  margin-right: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* ---------- arena leaderboard ---------- */
+
+.arena-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 6px;
+}
+.arena-table th {
+  text-align: left;
+  color: var(--text-muted);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 8px 16px;
+}
+.arena-table td {
+  background: var(--bg-card);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 16px;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 14px;
+}
+.arena-table td:first-child {
+  border-left: 1px solid var(--border);
+  border-top-left-radius: var(--radius-sm);
+  border-bottom-left-radius: var(--radius-sm);
+}
+.arena-table td:last-child {
+  border-right: 1px solid var(--border);
+  border-top-right-radius: var(--radius-sm);
+  border-bottom-right-radius: var(--radius-sm);
+}
+
+/* Horizontal-scroll wrapper for tables that don't fit on narrow screens
+   (the arena leaderboard has 6 columns and can't reflow). */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.table-scroll .arena-table {
+  min-width: 560px;
+}

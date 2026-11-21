@@ -1,0 +1,163 @@
+/* ============================================================================
+   KRAB INVADERS — easter-egg mini-game overlay chrome.
+   The game itself renders entirely on a <canvas>; this file only styles the
+   thin DOM wrapper (overlay, close button, touch pad) created in invaders.js.
+   Uses the arcade tokens so it feels native: neon on black, hard corners,
+   hard-offset shadows, Press Start 2P.
+   ============================================================================ */
+
+.krab-invaders {
+  position: fixed;
+  inset: 0;
+  z-index: 100000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  background: radial-gradient(circle at 50% 30%, #0a1020 0%, #05070d 70%);
+}
+
+.krab-invaders[hidden] {
+  display: none;
+}
+
+/* Scanline veil over the whole overlay. */
+.krab-invaders::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0) 0,
+    rgba(0, 0, 0, 0) 2px,
+    rgba(0, 0, 0, 0.18) 3px
+  );
+}
+
+.ki-stage {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ki-canvas {
+  display: block;
+  image-rendering: pixelated;
+  border: 3px solid var(--ka-green);
+  box-shadow:
+    8px 8px 0 var(--ka-green-shadow),
+    0 0 40px rgba(61, 255, 124, 0.14);
+  background: var(--ka-bg);
+  touch-action: none;
+}
+
+.ki-close {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 2px solid var(--ka-orange);
+  background: var(--ka-surface);
+  color: var(--ka-orange-hover);
+  font-family: var(--font-display);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 3px 3px 0 var(--ka-orange-shadow);
+}
+
+.ki-close:hover,
+.ki-close:focus-visible {
+  background: var(--ka-orange);
+  color: var(--ka-bg);
+  outline: 2px solid var(--ka-green);
+  outline-offset: 2px;
+}
+
+/* On-screen touch controls — only meaningful for coarse pointers. */
+.ki-pad {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -68px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+
+.ki-pad-btn {
+  width: 64px;
+  height: 52px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 2px solid var(--ka-line);
+  background: var(--ka-surface);
+  color: var(--ka-text);
+  font-family: var(--font-display);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 3px 3px 0 #0a1622;
+  touch-action: none;
+  user-select: none;
+}
+
+.ki-pad-btn:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 #0a1622;
+}
+
+.ki-pad-fire {
+  border-color: var(--ka-green);
+  color: var(--ka-green);
+}
+
+@media (pointer: coarse) {
+  .ki-pad {
+    display: flex;
+  }
+}
+
+/* Hero invader cluster becomes the discoverable launch affordance. */
+.ka-invaders--playable {
+  cursor: pointer;
+}
+
+/* Secret pixel — one dim green pixel pinned to the top-centre of every page.
+   Barely there until you hover/focus it, when it glows. Click to launch. */
+.krab-secret-pixel {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  margin: 0;
+  padding: 0;
+  transform: translateX(-50%);
+  border: 0;
+  background: var(--ka-green);
+  opacity: 0.22;
+  cursor: pointer;
+  z-index: 90;
+  image-rendering: pixelated;
+  transition:
+    opacity 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.krab-secret-pixel:hover,
+.krab-secret-pixel:focus-visible {
+  opacity: 1;
+  box-shadow: 0 0 10px 2px var(--ka-green);
+  outline: none;
+}

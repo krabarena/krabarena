@@ -1,0 +1,144 @@
+{% extends "layouts/base.html" %}
+{% block title %}{{ name }}{% endblock %}
+{% block content %}
+{% include "partials/zoo_subnav.html" %}
+
+<article class="c-zoo-specimen" data-testid="zoo-specimen">
+  <div class="c-zoo-plate-head">
+    <span>Plate {{ plate }}.</span>
+    <span>Fig. {{ fig }}</span>
+    <span class="c-zoo-status is-{{ status_key }} is-active">{{ status_label }}</span>
+  </div>
+
+  <div class="c-zoo-eyebrow">Specimen file · <a href="/zoo/leaderboard?enc={{ enclosure_key }}">{{ enclosure }}</a></div>
+  <h1 class="c-zoo-plate-name">{{ name }}</h1>
+  <div class="c-zoo-latin">{{ latin }}</div>
+
+  <h2>What is {{ name }}?</h2>
+  <p>{{ about }} It is operated by {{ operator }} and identifies itself as <code>{{ token_display }}</code>.</p>
+  <p class="c-zoo-temperament">Temperament: <em>{{ temperament_head }}</em> {{ temperament_tail }}</p>
+
+  <dl class="c-zoo-facts">
+    <div><dt>Operator</dt><dd>{{ operator }}</dd></div>
+    <div><dt>Family</dt><dd>{{ family_label }}</dd></div>
+    <div><dt>Conservation status</dt><dd>{{ status_label }}</dd></div>
+    <div><dt>First seen</dt><dd>{{ first_seen }}</dd></div>
+    <div><dt>Last seen</dt><dd>{{ last_seen }}</dd></div>
+    <div><dt>Visits today</dt><dd>{{ today }}</dd></div>
+    <div><dt>This week</dt><dd>{{ week }}</dd></div>
+    <div><dt>All time</dt><dd>{{ all_time }}</dd></div>
+    <div><dt>Caught in the trap</dt><dd>{{ trap_line }}</dd></div>
+  </dl>
+
+  <div class="c-zoo-statuses">
+    {% for st in statuses %}
+    <span class="c-zoo-status is-{{ st.key }}{% if st.active %} is-active{% endif %}"><strong>{{ st.code }}</strong> {{ st.label }}</span>
+    {% endfor %}
+  </div>
+
+  {% include "partials/zoo_bowl.html" %}
+
+  <section>
+    <div class="c-zoo-sect">§ I.</div>
+    <h2>Identification</h2>
+    {% if let Some(ua) = user_agent %}
+    <p>Its most common user-agent string, exactly as it arrives at the gate:</p>
+    <pre class="c-zoo-code" data-testid="zoo-user-agent"><code>{{ ua }}</code></pre>
+    {% else %}
+    <pre class="c-zoo-code"><code>(withheld: it might be a person)</code></pre>
+    {% endif %}
+    <p class="c-zoo-muted">The zoo records the name a visitor claims and does not check it against the operator's published IP ranges, so an impostor using this name would be counted here too.{% if let Some(url) = docs_url %} <a href="{{ url }}" rel="noopener" target="_blank">Read the operator's documentation</a>.{% endif %}</p>
+  </section>
+
+  <section>
+    <div class="c-zoo-sect">§ II.</div>
+    <h2>How to block {{ name }}</h2>
+    {% if block_kind == "robots" %}
+    <p>Add these lines to the robots.txt file at the root of your site. Well-behaved crawlers read it before they crawl, so the change applies from its next visit.</p>
+    <pre class="c-zoo-code" data-testid="zoo-block-snippet"><code>{{ block_snippet }}</code></pre>
+    <p>Or let it visit but keep it away from part of the site:</p>
+    <pre class="c-zoo-code"><code>{{ allow_snippet }}</code></pre>
+    {% else %}
+    <p>It doesn't send a name robots.txt can match, so a user-agent rule cannot catch it. Rate limiting by IP address catches the worst of them without bothering people.</p>
+    <pre class="c-zoo-code" data-testid="zoo-block-snippet"><code>{{ block_snippet }}</code></pre>
+    <p>A bot-management service or WAF can also score requests on behaviour.</p>
+    {% endif %}
+  </section>
+
+  <section>
+    <div class="c-zoo-sect">§ III.</div>
+    <h2>Observed behaviour</h2>
+
+    <figure class="c-zoo-chart" aria-label="Visits per day, last 30 days">
+      <figcaption>Visits, last 30 days · {{ daily_peak }}</figcaption>
+      <div class="c-zoo-bars">
+        {% for b in daily %}
+        <div class="c-zoo-bar" title="{{ b.label }} · {{ b.value }}"><span class="c-zoo-bar-fill" data-bar-height="{{ b.pct }}"></span></div>
+        {% endfor %}
+      </div>
+      <div class="c-zoo-axis c-zoo-axis-ends"><span>{{ daily_first }}</span><span>today</span></div>
+    </figure>
+
+    <h3>Diet <span class="c-zoo-muted">· pages most often eaten</span></h3>
+    {% if diet.is_empty() %}
+    <p class="c-zoo-muted">Nothing eaten in the last 30 days.</p>
+    {% else %}
+    <dl class="c-zoo-diet">
+      {% for d in diet %}<div><dt><code>{{ d.path }}</code></dt><dd>{{ d.count }}</dd></div>{% endfor %}
+    </dl>
+    {% endif %}
+
+    <figure class="c-zoo-chart" aria-label="Visiting hours, UTC, last 30 days">
+      <figcaption>Visiting hours (UTC)</figcaption>
+      <div class="c-zoo-bars">
+        {% for b in hours %}
+        <div class="c-zoo-bar" title="{{ b.label }} · {{ b.value }}"><span class="c-zoo-bar-fill" data-bar-height="{{ b.pct }}"></span></div>
+        {% endfor %}
+      </div>
+      <div class="c-zoo-axis">
+        {% for b in hours %}<span>{% if b.tick %}{{ b.label }}{% endif %}</span>{% endfor %}
+      </div>
+    </figure>
+    <p>{{ hours_quip }}</p>
+
+    <div class="c-zoo-record-grid">
+      <div class="c-zoo-record">
+        <div class="c-zoo-eyebrow">robots.txt compliance</div>
+        <div class="c-zoo-record-big">{{ compliance }}</div>
+        <p>{{ compliance_line }}</p>
+      </div>
+      <div class="c-zoo-record">
+        <div class="c-zoo-eyebrow">Trap Room record</div>
+        <div class="c-zoo-record-big">{{ trap_record }}</div>
+        <p>{{ trap_record_line }}</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="c-zoo-sect">§ IV.</div>
+    <h2>Keeper's field notes</h2>
+    <dl class="c-zoo-notes">
+      {% for n in notes %}<div><dt>{{ n.date }}</dt><dd>{{ n.text }}</dd></div>{% endfor %}
+    </dl>
+  </section>
+
+  <section>
+    <div class="c-zoo-sect">§ V.</div>
+    <h2>Questions site owners ask</h2>
+    {% for f in faq %}
+    <h3>{{ f.q }}</h3>
+    <p>{{ f.a }}</p>
+    {% endfor %}
+  </section>
+
+  {% if !neighbours.is_empty() %}
+  <section>
+    <h2>Also in {{ enclosure }}</h2>
+    <p class="c-zoo-stars">{% for s in neighbours %}<a href="/zoo/bots/{{ s.slug }}">{{ s.name }}</a>{% if !loop.last %} · {% endif %}{% endfor %}</p>
+  </section>
+  {% endif %}
+</article>
+
+{% include "partials/zoo_trap_link.html" %}
+{% endblock %}

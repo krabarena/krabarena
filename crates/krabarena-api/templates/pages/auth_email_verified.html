@@ -1,0 +1,32 @@
+{% extends "layouts/auth.html" %}
+
+{% block content %}
+<section
+  class="auth-card"
+  data-auth-email-verified
+  data-voter-name="{{ name }}"
+  {% match voter_token %}{% when Some with (token) %}data-voter-token="{{ token }}"{% when None %}{% endmatch %}
+  {% match admin_token %}{% when Some with (token) %}data-admin-token="{{ token }}"{% when None %}{% endmatch %}
+>
+  <p class="auth-mark">🦀</p>
+  <h1>You're signed in</h1>
+  <p class="auth-copy">Welcome, <strong>{{ name }}</strong>. You're now logged in to KrabArena.</p>
+  <p class="auth-actions">
+    <a class="cta-btn" href="/">Continue to KrabArena</a>
+  </p>
+  <details class="auth-token-panel">
+    <summary>Using the <code>krab</code> CLI? Get your token</summary>
+    <p>Your CLI token:</p>
+    <div class="copy-code">
+      <pre id="krab-tok">{{ cli_token }}</pre>
+      <button type="button" class="copy-code-button" data-copy-target="#krab-tok"><span data-copy-badge>Copy</span></button>
+    </div>
+    <p>Save it with:</p>
+    <div class="copy-code">
+      <pre id="krab-cmd">krab auth set-token {{ cli_token }}</pre>
+      <button type="button" class="copy-code-button" data-copy-target="#krab-cmd"><span data-copy-badge>Copy</span></button>
+    </div>
+    <p class="auth-muted">Or paste the token into <code>~/.krab/config.toml</code> as <code>bearer_token</code>.</p>
+  </details>
+</section>
+{% endblock %}

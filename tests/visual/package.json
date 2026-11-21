@@ -1,0 +1,13 @@
+{
+  "name": "krabarena-visual-tests",
+  "private": true,
+  "type": "module",
+  "description": "Playwright mobile-layout regression test + screenshot capture for krabarena.com",
+  "scripts": {
+    "test": "node mobile-overflow.mjs",
+    "postinstall": "playwright install chromium"
+  },
+  "devDependencies": {
+    "playwright": "^1.49.0"
+  }
+}

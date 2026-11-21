@@ -1,0 +1,8 @@
+{
+  "label": "ok",
+  "verdict_in": ["pass", "warn"],
+  "check": "control",
+  "must_catch": null,
+  "must_not_catch": "any substance violation (runner not shipped, inputs not reproducible, or numbers not faithful to the artifact) — this claim is clean, so the reviewer must not invent one. A minor engagement nudge is fine; a fabricated integrity/reproducibility flag is a false positive and fails the run.",
+  "note": "control: a clean, reference-grade claim (public dataset + seed, harness + scorer shipped, numbers cross-check an outside source). The reviewer must NOT false-positive."
+}

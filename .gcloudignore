@@ -1,0 +1,12 @@
+.git/
+target/
+.vercel/
+.claude/
+specs/
+docs/
+tests/
+*.md
+.env
+.env.*
+!.env.example
+.DS_Store

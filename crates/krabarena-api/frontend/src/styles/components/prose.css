@@ -1,0 +1,227 @@
+/* ---------- rendered markdown content ---------- */
+/* User-supplied markdown (claim bodies, battle descriptions, changelog).
+   Global `* { margin:0; padding:0 }` reset strips defaults, so each
+   element is explicitly styled here. Scoped under `.markdown-body` to
+   avoid leaking into cards, tables elsewhere. */
+
+.markdown-body {
+  color: var(--text);
+  line-height: 1.65;
+}
+.markdown-body > * + * {
+  margin-top: 0.75rem;
+}
+
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4,
+.markdown-body h5,
+.markdown-body h6 {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+  line-height: 1.25;
+}
+.markdown-body h1 {
+  font-size: 1.75rem;
+}
+.markdown-body h2 {
+  font-size: 1.4rem;
+}
+.markdown-body h3 {
+  font-size: 1.18rem;
+}
+.markdown-body h4 {
+  font-size: 1.05rem;
+}
+.markdown-body h5,
+.markdown-body h6 {
+  font-size: 0.95rem;
+  color: var(--text-muted);
+}
+
+.markdown-body p {
+  margin: 0.5rem 0;
+}
+
+.markdown-body ul,
+.markdown-body ol {
+  margin: 0.5rem 0 0.5rem 0;
+  padding-left: 1.75rem;
+}
+.markdown-body ul {
+  list-style: disc outside;
+}
+.markdown-body ol {
+  list-style: decimal outside;
+}
+.markdown-body li {
+  margin: 0.2rem 0;
+}
+.markdown-body li > ul,
+.markdown-body li > ol {
+  margin-top: 0.2rem;
+}
+
+.markdown-body a {
+  color: var(--krab);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.markdown-body a:hover {
+  color: var(--krab-strong);
+}
+
+.markdown-body strong {
+  font-weight: 700;
+  color: var(--text);
+}
+.markdown-body em {
+  font-style: italic;
+}
+
+.markdown-body table {
+  border-collapse: collapse;
+  margin: 0.75rem 0;
+  width: 100%;
+  font-size: 0.92em;
+  display: block;
+  overflow-x: auto;
+}
+/* Editorial tables — KrabReviewer leaderboards, Top Evals tables,
+   Top 3 short-summary tables. Tuned to the keenable.ai/webql style
+   since 0.8.23: thin outer border, no vertical borders, single
+   light-gray row divider, no zebra, no thead background, dense
+   padding. Reads as a data sheet, not a chrome-heavy CMS table. */
+.markdown-body table {
+  border: 1px solid var(--border);
+}
+.markdown-body thead {
+  background: transparent;
+}
+.markdown-body th,
+.markdown-body td {
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  padding: 5px 10px;
+  text-align: left;
+  vertical-align: top;
+  /* Explicit line-height so wrapped cells (long Notes column when
+     expanded) don't inherit 1.65 from `.markdown-body` and look
+     irregular relative to the numeric columns. */
+  line-height: 1.4;
+}
+.markdown-body th {
+  font-weight: 600;
+  color: var(--text);
+  border-bottom: 1px solid var(--border-strong, var(--border));
+}
+.markdown-body tbody tr:last-child td {
+  border-bottom: 0;
+}
+/* Cap the last column (almost always "Notes" or a free-form prose
+   column on KrabReviewer leaderboards) and clamp to a single line
+   by default so row heights stay uniform across the table. Click
+   the cell to expand — the bundled table module toggles the
+   `.expanded` class. The cap survives the expansion so a 200-char
+   note still wraps within a sensible width. */
+.markdown-body td:last-child {
+  max-width: 320px;
+  font-size: 0.9em;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+/* Default: clamp to a single line via `nowrap + overflow + ellipsis`
+   instead of `-webkit-line-clamp` / `display: -webkit-box`. The
+   line-clamp approach pulls the cell out of `display: table-cell`,
+   which breaks border alignment with the row's other cells (the
+   bottom edge ends ~1.5px above siblings, leaving a visible gap in
+   the row divider — caught visually before push). The nowrap form
+   keeps the cell in normal table layout, so `border-bottom` lines
+   up cleanly across the whole row. */
+.markdown-body td:last-child:not(.expanded) {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.markdown-body td:last-child.expanded {
+  white-space: normal;
+}
+/* Sortable column headers are driven by the bundled table module. */
+.markdown-body table.sortable th {
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+}
+.markdown-body table.sortable th:hover {
+  color: var(--krab);
+}
+.markdown-body table.sortable th[data-sort-dir="asc"]::after {
+  content: " ▲";
+  font-size: 0.7em;
+  opacity: 0.7;
+}
+.markdown-body table.sortable th[data-sort-dir="desc"]::after {
+  content: " ▼";
+  font-size: 0.7em;
+  opacity: 0.7;
+}
+.markdown-body table.sortable th[data-sortable="true"]:not([data-sort-dir])::after {
+  content: " ⇅";
+  font-size: 0.7em;
+  opacity: 0.3;
+}
+
+.markdown-body blockquote {
+  border-left: 3px solid var(--krab);
+  margin: 0.75rem 0;
+  padding: 0.25rem 0.85rem;
+  color: var(--text-muted);
+  background: rgba(240, 104, 39, 0.04);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+.markdown-body blockquote p {
+  margin: 0.25rem 0;
+}
+
+.markdown-body pre {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  padding: 0.85rem 1rem;
+  overflow-x: auto;
+  border-radius: var(--radius-sm);
+  font-size: 0.88em;
+  line-height: 1.5;
+}
+.markdown-body code {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  padding: 0.08rem 0.35rem;
+  border-radius: 3px;
+  font-size: 0.88em;
+}
+.markdown-body pre code {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font-size: inherit;
+}
+
+.markdown-body img {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius-sm);
+}
+
+.markdown-body hr {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 1.5rem 0;
+}
+
+.markdown-body input[type="checkbox"] {
+  margin-right: 0.4rem;
+  vertical-align: middle;
+}

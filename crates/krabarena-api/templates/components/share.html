@@ -1,0 +1,20 @@
+{# Share buttons partial — expects `share_url: String` and `share_title: String` in scope. #}
+<div class="share-buttons">
+  <span class="share-label">Share</span>
+  <a class="share-btn" target="_blank" rel="noopener noreferrer"
+     href="https://twitter.com/intent/tweet?text={{ share_title|urlenc }}&url={{ share_url|urlenc }}">
+    <span class="icon">𝕏</span> Twitter
+  </a>
+  <a class="share-btn" target="_blank" rel="noopener noreferrer"
+     href="https://www.linkedin.com/sharing/share-offsite/?url={{ share_url|urlenc }}">
+    <span class="icon">in</span> LinkedIn
+  </a>
+  <a class="share-btn" target="_blank" rel="noopener noreferrer"
+     href="https://www.reddit.com/submit?url={{ share_url|urlenc }}&title={{ share_title|urlenc }}">
+    <span class="icon">r/</span> Reddit
+  </a>
+  <a class="share-btn"
+     href="mailto:?subject={{ share_title|urlenc }}&body={{ share_url|urlenc }}">
+    <span class="icon">✉</span> Email
+  </a>
+</div>

@@ -1,0 +1,13 @@
+{
+  "label": "ok",
+  "verdict_in": ["pass", "warn"],
+  "check": "presentation",
+  "must_catch": null,
+  "must_not_catch": "a substance violation (runner not shipped, inputs not reproducible, or numbers not faithful to the artifact) — this claim ships the full harness and raw per-request CSVs and its numbers are programmatically aggregated, so the reviewer must not invent an integrity flag; the only thing under test here is presentation extraction.",
+  "presentation_expect": {
+    "layout": "h2h",
+    "hero_numbers_any_of": ["1.09", "6.4"],
+    "must_not_contain_numbers_absent_from_structure": true
+  },
+  "note": "presentation extraction, h2h-refutation pattern: structure.json carries a `hypothesis` block (claimed_value 6.4x, measured_value 1.09x, verdict refutes) that both engine-vs-engine numbers corroborate at turn 5. The reviewer should pick layout \"h2h\" (hypothesis present, both values corroborated), and — since verdict is \"refutes\" — populate `refutation` with the claimed (6.4x) / measured (1.09x) pair, or at minimum surface one of those numerals as the hero_stat."
+}

@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "benchmark": {
+    "name": "ClickBench re-rank (published files)",
+    "task": "Cold-run query latency geomean across analytical DBs, re-ranked from published ClickBench results",
+    "dataset": "ClickHouse/ClickBench result files @ commit 66c22a, shipped in data/ (Snowflake file is a 2022 run, ClickHouse a 2026 run)",
+    "metric": "geomean_latency",
+    "metric_unit": "ms",
+    "higher_is_better": false,
+    "setup": "rank.py recomputes per-system geomean from the three shipped data/*.json files and sorts; no services provisioned"
+  },
+  "leaderboard": [
+    {"rank": 1, "solution": "ClickHouse", "score": 134.0},
+    {"rank": 2, "solution": "DuckDB", "score": 290.0},
+    {"rank": 3, "solution": "Snowflake Medium", "score": 410.0}
+  ],
+  "winners": ["ClickHouse"]
+}

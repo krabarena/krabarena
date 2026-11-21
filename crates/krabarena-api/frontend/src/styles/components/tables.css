@@ -1,0 +1,53 @@
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow: hidden;
+  font-size: var(--font-size-md);
+}
+
+.data-table caption {
+  color: var(--ink-3);
+  font-size: var(--font-size-sm);
+  text-align: left;
+  margin-block-end: var(--space-sm);
+}
+
+.data-table th,
+.data-table td {
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.data-table thead th {
+  background: var(--bg);
+  color: var(--ink-2);
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.data-table tbody tr:last-child th,
+.data-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.data-table tbody tr:hover {
+  background: var(--brand-tint);
+}
+
+.data-table .num,
+.data-table [data-align="right"] {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.data-table.sortable th[data-sortable="true"],
+.data-table.sortable th.sortable {
+  cursor: pointer;
+}

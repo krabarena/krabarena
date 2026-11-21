@@ -1,0 +1,14 @@
+{# Bottom pagination marker. changelog.js (bidirectional scroll controller)
+   removes this on init and manages its own top/bottom sentinels via
+   IntersectionObserver + fetch. Kept here as the no-JS / crawler fallback:
+   the visually-hidden <a> is a real link to the next page (full shell on a
+   non-HX request). Reuses .home-feed-sentinel / .feed-spinner — no new CSS.
+   Expects `has_more` and `next_page` in scope. #}
+{% if has_more %}
+<div class="home-feed-sentinel" data-changelog-sentinel="down" data-changelog-target="{{ next_page }}"
+     role="status" aria-live="polite">
+  <span class="feed-spinner" aria-hidden="true"></span>
+  <span class="u-visually-hidden">Loading more…</span>
+  <a class="u-visually-hidden" href="/changelog?page={{ next_page }}">Next page</a>
+</div>
+{% endif %}

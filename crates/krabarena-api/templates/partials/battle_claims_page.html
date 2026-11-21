@@ -1,0 +1,6 @@
+{# One page of Battle claims, returned by /fragments/battles/{id}/claims.
+   Bare rows (no wrapper) so they append directly into the existing
+   .battle-claims-list with uniform spacing, followed by a fresh "More"
+   button when more pages remain. #}
+{% for claim in claims %}{% include "partials/battle_claim_row.html" %}{% endfor %}
+{% if has_more %}{% include "partials/battle_claims_more.html" %}{% endif %}

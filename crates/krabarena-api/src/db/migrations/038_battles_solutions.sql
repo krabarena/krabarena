@@ -1,0 +1,45 @@
+-- Migration 038: Battle-owned solutions registry (since 0.13.0).
+--
+-- Background: 0.12.1 (PR #146) put per-row `logo_url` / `website_url`
+-- on each `leaderboard[i]` entry inside the claim's structure.json.
+-- The pushback: the same Solution appears across many Claims on one
+-- Battle, and asking every author to re-paste the URL leads to
+-- drift — `Browserless v2 (Chromium-as-a-service)` here, `Browserless`
+-- there, `browserless` everywhere, three different vendor logo URLs.
+--
+-- Fix: the canonical solution→logo map lives on the parent Battle.
+-- Claims that have a parent battle look up their per-row logo from
+-- there at render time, keyed on a normalised solution name. Claims
+-- WITHOUT a parent battle (rare; possible after #148) still fall
+-- back to the per-row `logo_url` inside structure.json — that field
+-- stays for the standalone-claim case, by design (see CHANGELOG.md
+-- → 0.12.1 — the field is not removed).
+--
+-- Shape of `battles.solutions`:
+--
+-- ```
+-- [
+--   {"name": "Browserless",
+--    "name_normalized": "browserless",
+--    "logo_url": "https://www.google.com/s2/favicons?domain=browserless.io&sz=64",
+--    "website_url": "https://browserless.io"},
+--   ...
+-- ]
+-- ```
+--
+-- `name_normalized` is lowercase + trim + collapse whitespace +
+-- strip-parens-content. Matches the same normalisation applied to
+-- each claim's `leaderboard[i].solution` at render time. See
+-- `services::solution_names::normalize_name`.
+--
+-- JSONB column, default empty array — additive change, no CHECK
+-- constraints affected. PgBouncer cached-plan trap (AGENTS.md →
+-- "ALTER TABLE on prod") does NOT apply: every read goes through
+-- the explicit `BATTLE_COLUMNS` list, never `SELECT *`.
+--
+-- Backfill is a separate one-shot admin endpoint, not a SQL UPDATE
+-- here — the curated vendor map and the per-claim distinct-solutions
+-- scan live in the Rust service layer where they're testable.
+
+ALTER TABLE battles
+    ADD COLUMN IF NOT EXISTS solutions JSONB NOT NULL DEFAULT '[]'::jsonb;

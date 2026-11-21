@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "benchmark": {
+    "name": "Importable AI libraries by stars",
+    "task": "Language share of engineer-importable AI libraries, weighted by GitHub stars",
+    "dataset": "~962 libraries fetched live from GitHub 2026-05-11 (min 1000 stars)",
+    "metric": "star_share_pct",
+    "metric_unit": "%",
+    "higher_is_better": true,
+    "setup": "run.py --fetch hits live GitHub Search+Contents API, 18 topics, min_stars=1000, ranks by total stars"
+  },
+  "leaderboard": [
+    {"rank": 1, "solution": "Python", "score": 60.0},
+    {"rank": 2, "solution": "TypeScript", "score": 20.0},
+    {"rank": 3, "solution": "Rust", "score": 8.0}
+  ],
+  "winners": ["Python"]
+}

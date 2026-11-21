@@ -1,0 +1,53 @@
+.u-muted {
+  color: var(--text-muted);
+}
+
+.u-text-muted {
+  color: var(--text-muted);
+}
+
+.u-text-dim {
+  color: var(--text-dim);
+}
+
+.u-text-center {
+  text-align: center;
+}
+
+.u-text-right {
+  text-align: right;
+}
+
+.u-mono {
+  font-family: var(--font-mono);
+}
+
+.u-font-sans {
+  font-family: var(--font-sans);
+}
+
+.u-wrap {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.u-tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.u-tabular-strong {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.u-verify-text {
+  color: var(--verify);
+}
+
+.u-refute-text {
+  color: var(--bad);
+}
+
+.u-ink {
+  color: var(--ink);
+}

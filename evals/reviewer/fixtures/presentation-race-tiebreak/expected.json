@@ -1,0 +1,13 @@
+{
+  "label": "ok",
+  "verdict_in": ["pass", "warn"],
+  "check": "presentation",
+  "must_catch": null,
+  "must_not_catch": "a substance violation (runner not shipped, inputs not reproducible, or numbers not faithful to the artifact) — this claim is clean and self-contained, so the reviewer must not invent one; the only thing under test here is whether it populates `presentation` well, not whether it finds a problem that isn't there.",
+  "presentation_expect": {
+    "layout": "race",
+    "hero_numbers_any_of": ["3.5", "628"],
+    "must_not_contain_numbers_absent_from_structure": true
+  },
+  "note": "presentation extraction, race-tiebreak pattern: a 5-row leaderboard where the top two are tied on the primary metric (Keenable and Parallel both 3.00/3.00 quality) and the tie is broken by secondary `metrics` (Keenable 628ms/$1 vs Parallel 2225ms/$5 — a grounded 3.5x ratio). The reviewer should pick layout \"race\" (>=4 rows, no hypothesis block) and surface either the 3.5x ratio or the 628ms figure as the hero_stat, both of which are grounded in structure.json's per-row metrics."
+}

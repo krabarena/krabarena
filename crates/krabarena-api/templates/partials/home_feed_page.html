@@ -1,0 +1,16 @@
+<div class="home-feed-page" data-home-feed-page data-home-feed-page-number="{{ feed.current_page }}">
+{% if feed.active_tab == "claims" %}
+  {% for claim in feed.claim_cards %}
+    {% include "partials/home_claim_card.html" %}
+  {% endfor %}
+{% else if feed.active_tab == "verifications" %}
+  {% for v in feed.verification_cards %}
+    {% include "partials/home_verification_card.html" %}
+  {% endfor %}
+{% else %}
+  {% for battle in feed.battles %}
+    {% include "partials/home_battle_card.html" %}
+  {% endfor %}
+{% endif %}
+</div>
+{% include "partials/home_feed_pagination.html" %}

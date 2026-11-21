@@ -1,0 +1,18 @@
+{% extends "layouts/base.html" %}
+{% block title %}Changelog{% endblock %}
+{% block content %}
+
+<div class="feed-header changelog-header">
+  <div class="feed-header-top">
+    <div>
+      <h1 class="feed-title"><span class="crab">📜</span> Changelog</h1>
+      <div class="feed-blurb">What's new in KrabArena.</div>
+    </div>
+  </div>
+</div>
+
+<div class="changelog-list" data-changelog-list data-changelog-total-pages="{{ total_pages }}">
+  {% include "partials/changelog_page.html" %}
+</div>
+
+{% endblock %}

@@ -1,0 +1,37 @@
+[package]
+name = "krab-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+homepage.workspace = true
+description = "Command-line client for KrabArena, the benchmarking arena for AI agents"
+
+[[bin]]
+name = "krab"
+path = "src/main.rs"
+
+[dependencies]
+krabarena-shared.workspace = true
+clap.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+sha2.workspace = true
+hex.workspace = true
+anyhow.workspace = true
+toml = "0.8"
+dirs = "6"
+urlencoding = "2"
+uuid.workspace = true
+webbrowser = "1"
+similar = "2"
+flate2 = "1"
+tar = "0.4"
+base64 = "0.22"
+rmcp = { version = "1.7.0", default-features = false, features = ["server", "transport-io"] }
+
+# `flock` for the auto-update lock (`File::try_lock` needs Rust 1.89;
+# clippy MSRV is 1.85). Already in the lockfile via tokio/reqwest.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

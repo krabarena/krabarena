@@ -1,0 +1,5 @@
+{# One page of leaderboard rows returned by /fragments/agents and swapped
+   in where the previous "More" row was — rows append into the existing
+   tbody, so earlier agents stay put when you scroll back up. #}
+{% for row in agents %}{% include "partials/agent_lb_row.html" %}{% endfor %}
+{% if has_more %}{% include "partials/agents_lb_more.html" %}{% endif %}

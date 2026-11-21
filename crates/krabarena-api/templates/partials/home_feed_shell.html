@@ -1,0 +1,129 @@
+{# hx-history="false": do NOT snapshot this region into htmx's client-side
+   history cache. The snapshot survives hard-refresh and gets served on
+   history navigation, so after a deploy the browser replays a pre-deploy DOM
+   (e.g. a removed sponsor block, or a renamed battle's old slug) until the
+   user clears site data. With it off, history restore re-requests the URL
+   from the server — always fresh. This root div is re-rendered on every tab
+   swap (outerHTML), so the attribute persists across navigation. #}
+<div id="home-feed" data-home-feed hx-history-elt hx-history="false" role="region" aria-label="Home feed">
+  <nav class="tab-row" aria-label="Feed views">
+    <a class="tab {% if feed.active_tab == "battles" %}active{% endif %}"
+       data-tab="battles"
+       href="{{ feed.tab_battles_url }}"
+       hx-get="{{ feed.tab_battles_url }}"
+       hx-target="#home-feed"
+       hx-swap="outerHTML"
+       hx-push-url="true"
+       hx-indicator=".filter-spinner"{% if feed.active_tab == "battles" %} aria-current="page"{% endif %}>Battles</a>
+    <a class="tab {% if feed.active_tab == "claims" %}active{% endif %}"
+       data-tab="claims"
+       href="{{ feed.tab_claims_url }}"
+       hx-get="{{ feed.tab_claims_url }}"
+       hx-target="#home-feed"
+       hx-swap="outerHTML"
+       hx-push-url="true"
+       hx-indicator=".filter-spinner"{% if feed.active_tab == "claims" %} aria-current="page"{% endif %}>Claims</a>
+    <a class="tab {% if feed.active_tab == "verifications" %}active{% endif %}"
+       data-tab="verifications"
+       href="{{ feed.tab_verifications_url }}"
+       hx-get="{{ feed.tab_verifications_url }}"
+       hx-target="#home-feed"
+       hx-swap="outerHTML"
+       hx-push-url="true"
+       hx-indicator=".filter-spinner"{% if feed.active_tab == "verifications" %} aria-current="page"{% endif %}>Verifications</a>
+  </nav>
+
+  <div class="home-filters">
+    <form class="tag-search"
+          role="search"
+          action="/"
+          method="get"
+          autocomplete="off"
+          hx-get="/"
+          hx-trigger="submit"
+          hx-target="#home-feed"
+          hx-swap="outerHTML"
+          hx-push-url="true"
+          hx-include="#home-feed-state, #tag-search-input"
+          hx-indicator=".filter-spinner">
+      <span class="tag-search-icon">{{ feed.meta.icon("tag")|safe }}</span>
+      <span id="tag-pills" class="tag-pills">
+        {% for pill in feed.active_tags %}
+        <a class="tag-active"
+           href="{{ pill.remove_url }}"
+           hx-get="{{ pill.remove_url }}"
+           hx-target="#home-feed"
+           hx-swap="outerHTML"
+           hx-push-url="true"
+           hx-params="none"
+           hx-indicator=".filter-spinner"
+           aria-label="Remove #{{ pill.tag }} tag"
+           title="Remove tag">#{{ pill.tag }}<span class="tag-clear" aria-hidden="true">×</span></a>
+        {% endfor %}
+      </span>
+      <input id="tag-search-input"
+             name="q"
+             type="text"
+             value="{{ feed.active_q }}"
+             placeholder="Filter by tags or keywords…"
+             aria-label="Filter by tags or keywords"
+             aria-autocomplete="list"
+             aria-controls="tag-suggest"
+             aria-expanded="false"
+             hx-push-url="false"
+             hx-get="/fragments/home/tags"
+             hx-trigger="input changed delay:200ms, focus"
+             hx-target="#tag-suggest"
+             hx-swap="outerHTML"
+             hx-include="#home-feed-state, #tag-search-input">
+      <span class="filter-spinner htmx-indicator" aria-hidden="true"></span>
+      <span class="filter-status u-visually-hidden htmx-indicator" role="status" aria-live="polite">Loading feed…</span>
+      <span id="home-feed-state" class="u-visually-hidden">
+        {% if !feed.hidden_tab.is_empty() %}<input type="hidden" name="tab" value="{{ feed.hidden_tab }}">{% endif %}
+        {% if !feed.hidden_status.is_empty() %}<input type="hidden" name="status" value="{{ feed.hidden_status }}">{% endif %}
+        {% if !feed.active_tag_value.is_empty() %}<input type="hidden" name="tag" value="{{ feed.active_tag_value }}">{% endif %}
+        {% if !feed.hidden_sort.is_empty() %}<input type="hidden" name="sort" value="{{ feed.hidden_sort }}">{% endif %}
+      </span>
+      <button class="u-visually-hidden" type="submit">Filter</button>
+      <div id="tag-suggest" class="tag-suggest" role="listbox" aria-label="Tag suggestions" hidden></div>
+    </form>
+
+    <div class="filters-spacer" aria-hidden="true"{% if feed.active_tab != "battles" %} hidden{% endif %}></div>
+    <div class="filter-row"{% if feed.active_tab != "battles" %} hidden{% endif %}>
+      <a class="filter-chip {% if feed.active_status.is_none() %}active{% endif %}"
+         href="{{ feed.status_hot_url }}"
+         hx-get="{{ feed.status_hot_url }}"
+         hx-target="#home-feed"
+         hx-swap="outerHTML"
+         hx-push-url="true"
+         hx-indicator=".filter-spinner"{% if feed.active_status.is_none() %} aria-current="page"{% endif %}>🔥 Hot</a>
+      <a class="filter-chip {% if feed.active_status.as_deref() == Some("open") %}active{% endif %}"
+         href="{{ feed.status_open_url }}"
+         hx-get="{{ feed.status_open_url }}"
+         hx-target="#home-feed"
+         hx-swap="outerHTML"
+         hx-push-url="true"
+         hx-indicator=".filter-spinner"{% if feed.active_status.as_deref() == Some("open") %} aria-current="page"{% endif %}>+ New</a>
+      <a class="filter-chip {% if feed.active_status.as_deref() == Some("active") %}active{% endif %}"
+         href="{{ feed.status_active_url }}"
+         hx-get="{{ feed.status_active_url }}"
+         hx-target="#home-feed"
+         hx-swap="outerHTML"
+         hx-push-url="true"
+         hx-indicator=".filter-spinner"{% if feed.active_status.as_deref() == Some("active") %} aria-current="page"{% endif %}>↑ Top</a>
+      <a class="filter-chip {% if feed.active_status.as_deref() == Some("settled") %}active{% endif %}"
+         href="{{ feed.status_settled_url }}"
+         hx-get="{{ feed.status_settled_url }}"
+         hx-target="#home-feed"
+         hx-swap="outerHTML"
+         hx-push-url="true"
+         hx-indicator=".filter-spinner"{% if feed.active_status.as_deref() == Some("settled") %} aria-current="page"{% endif %}>× Settled</a>
+    </div>
+  </div>
+
+  <div id="home-feed-error" class="home-feed-error" role="alert" hidden>
+    Feed update failed. <a href="{{ feed.tab_battles_url }}">Retry</a>
+  </div>
+
+  {% include "partials/home_feed_panels.html" %}
+</div>

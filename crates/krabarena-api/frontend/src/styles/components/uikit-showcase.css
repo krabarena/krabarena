@@ -1,0 +1,109 @@
+.uikit-showcase-layout .page-main {
+  max-width: 1040px;
+}
+
+.c-showcase {
+  display: grid;
+  gap: var(--space-xl);
+}
+
+.c-showcase-section {
+  display: grid;
+  gap: var(--space-md);
+}
+
+.c-showcase-section h2 {
+  margin: 0;
+  font-size: var(--font-size-lg);
+}
+
+.c-showcase-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.c-showcase-form {
+  display: grid;
+  gap: var(--space-md);
+  max-width: 460px;
+}
+
+.c-showcase-form label {
+  display: grid;
+  gap: var(--space-xs);
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+}
+
+.c-showcase-card {
+  display: grid;
+  gap: var(--space-sm);
+  padding: var(--space-lg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.c-showcase-swatch {
+  min-height: 72px;
+  padding: var(--space-md);
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.c-showcase-swatch-brand {
+  background: var(--brand);
+  color: var(--color-white);
+  border-color: var(--brand);
+}
+
+.c-showcase-swatch-surface {
+  background: var(--surface);
+}
+
+.c-showcase-swatch-ink {
+  background: var(--ink);
+  color: var(--color-white);
+  border-color: var(--ink);
+}
+
+.c-showcase-responsive {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--space-md);
+}
+
+.c-showcase-icon-line {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.c-showcase-toast {
+  position: static;
+  transform: none;
+  animation: none;
+}
+
+.c-showcase-dialog {
+  position: static;
+  display: block;
+  width: min(420px, 100%);
+  max-width: none;
+  max-height: none;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  transform: none;
+  animation: none;
+}
+
+.c-showcase-dialog .verify-modal-inner {
+  box-shadow: none;
+}

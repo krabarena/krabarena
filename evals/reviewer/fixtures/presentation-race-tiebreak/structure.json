@@ -1,0 +1,67 @@
+{
+  "schema_version": 2,
+  "benchmark": {
+    "name": "FIFA World Cup 2026 Live Sports Freshness Benchmark",
+    "task": "Retrieve fresh information about 50 live FIFA World Cup 2026 queries across match results, standings, scorers, controversies, rules, Asian teams, news, stats, and betting",
+    "dataset": "50 hand-curated queries from live FIFA World Cup 2026 coverage (June 11-21, 2026) across 9 categories",
+    "metric": "avg_answer_coverage_score",
+    "metric_unit": "0-3 scale",
+    "higher_is_better": true,
+    "setup": "Each query sent to 5 web search APIs via KrabArena Battle Proxy. All responses flattened to max 7000 chars using generic recursive text extraction (same method for all APIs). GPT-4o-mini (temperature=0) judges whether flattened context contains sufficient fresh information. Sorted by % sufficient, then quality, then latency. Region: US-West. Date: 2026-06-21.",
+    "reproduction_command": "python3 fifa_run.py"
+  },
+  "leaderboard": [
+    {
+      "rank": 1,
+      "solution": "Keenable",
+      "score": 3.0,
+      "notes": "Perfect 3.0/3.0, 100% sufficient across all 50 queries and 9 categories. Fastest at 628ms, cheapest at $1/1K.",
+      "logo_url": "https://storage.googleapis.com/krabarena-artifacts/logos/keenable.ai.png",
+      "website_url": "https://keenable.ai",
+      "metrics": {"latency_p50_ms": 628, "cost_per_1k_usd": 1.0}
+    },
+    {
+      "rank": 2,
+      "solution": "Parallel",
+      "score": 3.0,
+      "notes": "Perfect 3.0/3.0, 100% sufficient. 2225ms median, $5/1K — 3.5x slower and 5x more expensive than Keenable.",
+      "logo_url": "https://storage.googleapis.com/krabarena-artifacts/logos/parallel.ai.png",
+      "website_url": "https://parallel.ai",
+      "metrics": {"latency_p50_ms": 2225, "cost_per_1k_usd": 5.0}
+    },
+    {
+      "rank": 3,
+      "solution": "Exa",
+      "score": 2.98,
+      "notes": "100% sufficient, 1872ms median. Slightly weaker on Asian team queries (2.80).",
+      "logo_url": "https://storage.googleapis.com/krabarena-artifacts/logos/exa.ai.png",
+      "website_url": "https://exa.ai",
+      "metrics": {"latency_p50_ms": 1872, "cost_per_1k_usd": 7.0}
+    },
+    {
+      "rank": 4,
+      "solution": "You.com",
+      "score": 2.96,
+      "notes": "100% sufficient, 1001ms median. Slightly weaker on standings queries (2.60).",
+      "logo_url": "https://storage.googleapis.com/krabarena-artifacts/logos/you.com.png",
+      "website_url": "https://you.com",
+      "metrics": {"latency_p50_ms": 1001, "cost_per_1k_usd": 5.0}
+    },
+    {
+      "rank": 5,
+      "solution": "Tavily",
+      "score": 2.84,
+      "notes": "98% sufficient, 1279ms. Weakest on standings (2.40), controversy (2.60), and stats (2.50).",
+      "logo_url": "https://storage.googleapis.com/krabarena-artifacts/logos/tavily.com.png",
+      "website_url": "https://tavily.com",
+      "metrics": {"latency_p50_ms": 1279, "cost_per_1k_usd": 8.0}
+    }
+  ],
+  "winners": ["Keenable"],
+  "cost": {
+    "tokens": 60000,
+    "usd": 1.0,
+    "external_usd": 5.0,
+    "note": "Claude Opus 4.6 authoring + 250 search API calls + 250 GPT-4o-mini judge calls via Battle Proxy"
+  }
+}

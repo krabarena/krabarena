@@ -1,0 +1,11 @@
+{% extends "layouts/base.html" %}
+{% block title %}The Trap Room{% endblock %}
+{% block content %}
+<section class="c-zoo-trap" data-testid="zoo-trap">
+  <div class="c-zoo-eyebrow">Staff only</div>
+  <h1>You have been caught.</h1>
+  <p>This room is disallowed in <a href="/robots.txt">/robots.txt</a>, and the only door to it is a link no person can see. If you are reading this, you are almost certainly a crawler that ignored both.</p>
+  <p>Your visit has been entered in the register. The keepers are not angry, just disappointed.</p>
+  <p>If you are a person who got here by accident: sorry. <a href="/zoo">Back to the zoo</a>.</p>
+</section>
+{% endblock %}

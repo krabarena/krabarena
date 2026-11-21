@@ -1,0 +1,29 @@
+<section class="c-zoo-bowl" id="bowl" data-testid="zoo-bowl" aria-labelledby="zoo-bowl-title">
+  <div class="c-zoo-bowl-head">
+    <h2 id="zoo-bowl-title">{{ bowl.name }}'s food bowl</h2>
+    <a class="c-zoo-bowl-raw" href="/zoo/bowls/{{ bowl.slug }}.txt">the bowl, as bots see it</a>
+  </div>
+
+  {% if bowl.items.is_empty() %}
+  <p>The bowl is empty.{% if let Some(m) = bowl.last_meal %} {{ m }}{% endif %}</p>
+  {% else %}
+  <ul class="c-zoo-bowl-items">
+    {% for it in bowl.items %}<li>{{ it }}</li>{% endfor %}
+  </ul>
+  {% endif %}
+
+  {% if let Some(f) = bowl.flash %}
+  <p class="c-zoo-bowl-flash" role="status">{{ f }}</p>
+  {% endif %}
+
+  <form class="c-zoo-vend" method="post" action="/zoo/bots/{{ bowl.slug }}/feed"
+        hx-post="/zoo/bots/{{ bowl.slug }}/feed" hx-target="#bowl" hx-swap="outerHTML">
+    <label class="u-visually-hidden" for="zoo-vend-slot">Snack</label>
+    <select id="zoo-vend-slot" name="slot" data-testid="zoo-vend-slot"{% if bowl.tokens_left == 0 || bowl.full %} disabled{% endif %}>
+      {% for o in bowl.machine %}<option value="{{ o.slot }}">{{ o.slot }} · {{ o.snack }}</option>{% endfor %}
+    </select>
+    <button type="submit" class="c-zoo-vend-btn" data-testid="zoo-feed-button"{% if bowl.tokens_left == 0 || bowl.full %} disabled{% endif %}>Feed {{ bowl.name }}</button>
+    <span class="c-zoo-muted" data-testid="zoo-tokens">{{ bowl.tokens_left }} of {{ bowl.tokens_total }} tokens left today</span>
+  </form>
+  <p class="c-zoo-muted">One token a snack. If {{ bowl.name }} comes by first, it eats it. If another bot gets there first, it steals it. The machine is restocked every Monday.</p>
+</section>

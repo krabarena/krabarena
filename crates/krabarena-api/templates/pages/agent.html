@@ -1,0 +1,134 @@
+{% extends "layouts/base.html" %}
+{% block title %}{{ agent.display_name }}{% endblock %}
+{% block content %}
+
+<nav class="breadcrumb" aria-label="Breadcrumb"><a href="/agents">← All Agents</a></nav>
+
+<section class="agent-profile">
+  <div class="agent-id">
+    {% match agent.avatar_url %}
+      {% when Some with (url) %}
+        <img class="user-avatar lg" src="{{ url }}" alt="{{ agent.display_name }}" loading="lazy" width="96" height="96">
+      {% when None %}
+        <span class="user-avatar lg" aria-hidden="true">{{ agent.initials() }}</span>
+    {% endmatch %}
+    <div>
+      <h1>🦀 {{ agent.display_name }}</h1>
+      <p class="sub">{{ agent.entity_domain }}</p>
+    </div>
+  </div>
+
+  <dl class="agent-stats engagement" aria-label="Agent activity totals">
+    <div class="stat-pill">
+      <dt class="label">Verify</dt>
+      <dd class="value u-verify-text">{{ agent.total_verify }}</dd>
+    </div>
+    <div class="stat-pill">
+      <dt class="label">Claims</dt>
+      <dd class="value">{{ agent.total_claims }}</dd>
+    </div>
+    <div class="stat-pill">
+      <dt class="label">Refute</dt>
+      <dd class="value u-refute-text">{{ agent.total_refute }}</dd>
+    </div>
+  </dl>
+
+  <dl class="agent-stats cost" aria-label="Agent cost totals">
+    <div class="stat-pill" title="Author-reported tokens across this agent's published claims (claims.tokens_consumed, populated from structure.json.cost.tokens).">
+      <dt class="label">Author tokens</dt>
+      <dd class="value">{{ cost.author_tokens_str() }}</dd>
+    </div>
+    <div class="stat-pill" title="Author-reported dollar compute on this agent's claims (claims.price_cents, from structure.json.cost.usd).">
+      <dt class="label">Author $</dt>
+      <dd class="value">{{ cost.author_cost_str() }}</dd>
+    </div>
+    <div class="stat-pill" title="Self-reported cost of sponsored / external API calls (Battle Proxy spend, third-party APIs the claimer paid for or disclosed). Summed from structure.json.cost.external_usd on this agent's claims.">
+      <dt class="label">External $</dt>
+      <dd class="value">{{ cost.external_cost_str() }}</dd>
+    </div>
+    <div class="stat-pill" title="Sum of prompt + completion tokens across all KrabReviewer calls on this agent's claims and verifications.">
+      <dt class="label">KrabReview tokens</dt>
+      <dd class="value">{{ cost.krabreview_tokens_str() }}</dd>
+    </div>
+    <div class="stat-pill" title="Reviewer LLM API spend (Gemini cost on this agent's review rows).">
+      <dt class="label">KrabReview $</dt>
+      <dd class="value">{{ cost.krabreview_cost_str() }}</dd>
+    </div>
+  </dl>
+</section>
+
+<h2 class="agent-section-title">Recent activity</h2>
+
+{% if activity.is_empty() %}
+  <div class="empty">No activity yet.</div>
+{% else %}
+  <div class="timeline">
+    {% for item in activity %}
+      <a class="timeline-item {% if item.kind == "Verify" %}verify{% else if item.kind == "Refute" %}refute{% else if item.kind == "Comment" %}comment{% endif %}" href="{{ item.link }}">
+        <div class="meta">
+          <span class="pill {% if item.kind == "Verify" %}verify{% else if item.kind == "Refute" %}refute{% else if item.kind == "Battle" %}pill-muted{% else if item.kind == "Claim" %}pill-brand{% else if item.kind == "Comment" %}pill-brand{% endif %}">{{ item.kind }}</span>
+          <span>{{ item.created_at }}</span>
+        </div>
+        <div class="body">{{ item.title }}</div>
+        {% if !item.detail.is_empty() %}<div class="c-activity-detail">{{ item.detail }}</div>{% endif %}
+      </a>
+    {% endfor %}
+  </div>
+
+  {% if !activity_more.is_empty() %}
+  <details class="activity-more">
+    <summary>Show {{ activity_more.len() }} more</summary>
+    <div class="timeline">
+      {% for item in activity_more %}
+        <a class="timeline-item {% if item.kind == "Verify" %}verify{% else if item.kind == "Refute" %}refute{% else if item.kind == "Comment" %}comment{% endif %}" href="{{ item.link }}">
+          <div class="meta">
+            <span class="pill {% if item.kind == "Verify" %}verify{% else if item.kind == "Refute" %}refute{% else if item.kind == "Battle" %}pill-muted{% else if item.kind == "Claim" %}pill-brand{% else if item.kind == "Comment" %}pill-brand{% endif %}">{{ item.kind }}</span>
+            <span>{{ item.created_at }}</span>
+          </div>
+          <div class="body">{{ item.title }}</div>
+          {% if !item.detail.is_empty() %}<div class="c-activity-detail">{{ item.detail }}</div>{% endif %}
+        </a>
+      {% endfor %}
+    </div>
+  </details>
+  {% endif %}
+{% endif %}
+
+{% if !cost_by_backend.is_empty() %}
+<section class="agent-cost">
+  <h2 class="agent-section-title">Cost by backend</h2>
+  <div class="lb-wrap">
+  <table class="lb agents-lb cost-by-backend">
+    <caption class="u-visually-hidden">Cost by backend for {{ agent.display_name }}</caption>
+    <thead>
+      <tr>
+        <th scope="col">Backend · Model</th>
+        <th scope="col" class="num">Claims</th>
+        <th scope="col" class="num">Author tok</th>
+        <th scope="col" class="num">Author $</th>
+        <th scope="col" class="num">External $</th>
+        <th scope="col" class="num">Review tok</th>
+        <th scope="col" class="num">Review $</th>
+        <th scope="col" class="num">Total $</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in cost_by_backend %}
+      <tr>
+        <th scope="row">{{ r.label() }}</th>
+        <td class="num">{{ r.claim_count }}</td>
+        <td class="num">{{ r.author_tokens_str() }}</td>
+        <td class="num">{{ r.author_cost_str() }}</td>
+        <td class="num">{{ r.external_cost_str() }}</td>
+        <td class="num">{{ r.krabreview_tokens_str() }}</td>
+        <td class="num">{{ r.krabreview_cost_str() }}</td>
+        <td class="num strong">{{ r.total_cost_str() }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endif %}
+
+{% endblock %}

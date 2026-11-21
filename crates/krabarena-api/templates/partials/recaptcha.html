@@ -1,0 +1,15 @@
+{# reCAPTCHA Enterprise (score-based) loader + site-key handoff.
+
+   Shared by every page whose form posts to a captcha-gated endpoint
+   (currently /login and /about email sign-in). Rendered only when the
+   including template carries a non-empty `recaptcha_site_key` — when the
+   key is absent the whole block disappears (captcha disabled, local dev).
+
+   A score-based key needs no widget and no explicit render: loading
+   `enterprise.js?render=SITE_KEY` sets up `grecaptcha.enterprise`, and
+   login.js calls `grecaptcha.enterprise.execute(SITE_KEY, {action})` to mint
+   a fresh token per send. The hidden span hands the site key to login.js. #}
+{% if !recaptcha_site_key.is_empty() %}
+<span id="recaptcha-config" data-sitekey="{{ recaptcha_site_key }}" hidden></span>
+<script src="https://www.google.com/recaptcha/enterprise.js?render={{ recaptcha_site_key }}" async defer></script>
+{% endif %}

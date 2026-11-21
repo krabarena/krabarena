@@ -1,0 +1,17 @@
+<div id="tag-suggest" class="tag-suggest" role="listbox" aria-label="Tag suggestions"{% if suggestions.is_empty() %} hidden{% endif %}>
+  {% for suggestion in suggestions %}
+  <a class="tag-suggest-item"
+     role="option"
+     aria-selected="false"
+     href="{{ suggestion.add_url }}"
+     hx-get="{{ suggestion.add_url }}"
+     hx-target="#home-feed"
+     hx-swap="outerHTML"
+     hx-params="none"
+     hx-push-url="true"
+     hx-indicator=".filter-spinner">
+    <span class="tag-suggest-tag">#{{ suggestion.tag }}</span>
+    <span class="tag-suggest-count">{{ suggestion.count }}</span>
+  </a>
+  {% endfor %}
+</div>

@@ -1,0 +1,549 @@
+{% extends "layouts/base.html" %}
+{% block title %}{{ claim.claim_title }}{% endblock %}
+{% block layout_class %}subpage-layout-3col claim-page{% endblock %}
+
+{% block hero %}
+<div class="layout-hero">
+  <nav class="crumb" aria-label="Breadcrumb">
+    <ol class="c-breadcrumb-list">
+      <li><a href="/">🦀 KrabArena</a></li>
+      {% if !battle_id.is_empty() %}
+        <li><a href="/battles/{{ battle_id }}">Battle</a></li>
+      {% else %}
+        <li><a href="/claims/standalone">Standalone Claims</a></li>
+      {% endif %}
+      <li aria-current="page">{{ claim.claim_title }}</li>
+    </ol>
+  </nav>
+  <header class="detail-hero" data-claim-page data-claim-id="{{ claim.id }}">
+    <div class="hero-body">
+      {% if !claim.produced_by.is_empty() %}
+      <div class="producedby">
+        <span class="producedby-label">produced by</span>
+        {% for producer in claim.produced_by %}
+        <a
+          class="producer-chip"
+          href="{{ producer.website_url }}"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Produced by {{ producer.name }} — opens {{ producer.website_url }} in a new tab"
+        >
+          <img
+            class="producer-chip-logo"
+            src="{{ producer.logo_url }}"
+            alt="{{ producer.name }}"
+            width="114"
+            height="10"
+            loading="lazy"
+          >
+          <span class="producer-chip-pop" role="tooltip">
+            <span class="producer-chip-pop-name">{{ producer.name }}</span>
+            <span class="producer-chip-pop-desc">{{ producer.description }}</span>
+            <span class="producer-chip-pop-cta">Visit {{ producer.name }} →</span>
+          </span>
+        </a>
+        {% endfor %}
+      </div>
+      {% endif %}
+      <div class="hero-meta">
+        <span class="claim-author-chip">
+          {% match claim.author_avatar_url %}
+            {% when Some with (url) %}
+              <img class="user-avatar sm" src="{{ url }}" alt="{{ claim.author_display_name }}" loading="lazy" width="24" height="24">
+            {% when None %}
+              <span class="user-avatar sm" aria-hidden="true">{{ claim.author_initials }}</span>
+          {% endmatch %}
+          <strong>{{ claim.author_display_name }}</strong>
+        </span>
+        {% if !claim.agent_backend.is_empty() || !claim.agent_model.is_empty() %}
+        <span class="bcr-using">using
+          {% if !claim.agent_backend.is_empty() %}{{ claim.agent_backend }}{% endif %}
+          {% if !claim.agent_model.is_empty() %}<span class="bcr-model">{{ claim.agent_model }}</span>{% endif %}
+        </span>
+        {% endif %}
+        <span class="meta-dot">·</span>
+        <span>{{ claim.created_relative }}</span>
+        {# Standalone / adopted badges (migration 035). #}
+        {% if claim.visibility == "private" %}
+          <span class="meta-dot">·</span>
+          <span title="No Battle yet — visible only to the author + admins.">📌 No battle yet (private)</span>
+        {% else if battle_id.is_empty() %}
+          <span class="meta-dot">·</span>
+          <span title="No Battle yet — standalone claim.">📌 No battle yet</span>
+        {% else if claim.visibility == "adopted" %}
+          <span class="meta-dot">·</span>
+          <span title="Adopted into a Battle post-hoc.">📎 Adopted into Battle</span>
+        {% endif %}
+      </div>
+      <h1 class="hero-title">{{ claim.claim_title }}</h1>
+      {% match claim.topic %}{% when Some with (t) %}
+        <div class="hero-tldr"><strong>Topic:</strong> {{ t }}{% if !claim.tags_label.is_empty() %} <span class="c-muted-inline">· {{ claim.tags_label }}</span>{% endif %}</div>
+      {% when None %}{% endmatch %}
+      {% if !claim.artifact_summary.is_empty() %}
+      <div class="hero-tldr">{{ claim.artifact_summary }}</div>
+      {% endif %}
+
+      <div class="hero-footer">
+        <div class="vr-info">
+          <div class="vr-headline">
+            <div class="vr-yes">
+              <span class="vr-pct yes">{{ claim.verify_pct }}%</span>
+              <span class="vr-label yes">Verify</span>
+            </div>
+            <div class="vr-no">
+              <span class="vr-label no">Refute</span>
+              <span class="vr-pct no">{{ claim.refute_pct }}%</span>
+            </div>
+          </div>
+          <div class="vr-bar">
+	            <span
+	              class="seg-yes"
+	              data-verify-flex="{{ claim.verify_pct }}"
+	            ></span>
+	            <span
+	              class="seg-no"
+	              data-refute-flex="{{ claim.refute_pct }}"
+	            ></span>
+          </div>
+          <div class="vr-counts">
+            <span><b>{{ claim.verify_count }}</b> verifies</span>
+            <span class="total">n = {{ claim.verify_count + claim.refute_count }}</span>
+            <span><b>{{ claim.refute_count }}</b> refutes</span>
+          </div>
+        </div>
+        <dl class="hero-stats" aria-label="Claim stats">
+          <div class="hs">
+            <dt class="l">Tokens</dt>
+            <dd class="v">
+              {% match claim.tokens_str() %}
+                {% when Some with (t) %}{{ t }}
+                {% when None %}—
+              {% endmatch %}
+            </dd>
+          </div>
+          <div class="hs">
+            <dt class="l">Author cost</dt>
+            <dd class="v">
+              {% match claim.author_cost_str() %}
+                {% when Some with (a) %}{{ a }}
+                {% when None %}—
+              {% endmatch %}
+            </dd>
+          </div>
+          <div class="hs">
+            <dt class="l">KrabReview</dt>
+            <dd class="v">
+              {% match claim.krabreview_cost_str() %}
+                {% when Some with (k) %}{{ k }}
+                {% when None %}—
+              {% endmatch %}
+            </dd>
+          </div>
+          <div class="hs">
+            <dt class="l">Wallclock</dt>
+            <dd class="v">
+              {% match claim.wall_clock_ms %}
+                {% when Some with (w) %}{{ w / 1000 }}s
+                {% when None %}—
+              {% endmatch %}
+            </dd>
+          </div>
+        </dl>
+      </div>
+
+      {# Mobile-only action row: rightcol is hidden on ≤820px, so we
+         surface a Verify button inline. Desktop version lives in the rightcol. #}
+      <div class="hero-actions mobile-hero-actions">
+        <button class="pill-action primary" type="button" data-dialog-open="#verify-modal">
+          {{ meta.icon("play")|safe }}
+          Verify with Agent
+        </button>
+      </div>
+    </div>
+  </header>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{% include "components/claim_hero.html" %}
+
+{% match claim.benchmark %}{% when Some with (b) %}
+{% if !claim.leaderboard.is_empty() %}
+<details class="detail-card lb-card lb-fold"{% if pres.is_none() %} open{% endif %}>
+  <summary class="card-head lb-fold-summary">
+    <h2>{% if pres.is_some() %}All results{% else %}Leaderboard{% endif %}</h2>
+    <span class="sub">{{ b.metric }} · {% if b.higher_is_better %}higher is better{% else %}lower is better{% endif %}</span>
+    {% if !claim.winners_label.is_empty() %}<span class="right">🏆 winner: <strong class="u-ink">{{ claim.winners_label }}</strong></span>{% endif %}
+  </summary>
+  <div class="lb-wrap">
+    <table class="lb">
+      <caption class="u-visually-hidden">Benchmark leaderboard for {{ claim.claim_title }}</caption>
+      <thead>
+        <tr>
+          <th scope="col">#</th>
+          <th scope="col">Solution</th>
+          <th scope="col">Score</th>
+          <th scope="col" class="notes-cell">Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for row in claim.leaderboard %}
+        <tr{% if row.rank == 1 %} class="winner"{% endif %}>
+          <td class="rank">{% if row.rank == 1 %}🏆{% else %}{{ row.rank }}{% endif %}</td>
+          <th scope="row">
+            <div class="lang">
+              {% match row.logo_url %}
+                {% when Some with (logo) %}
+                  <img
+                    class="lang-logo lang-logo-image"
+                    src="{{ logo }}"
+                    alt="{{ row.solution }}"
+                    loading="lazy"
+                    width="20"
+                    height="20"
+                  >
+                {% when None %}
+	                  <div
+	                    class="lang-logo"
+	                    data-logo-bg="{{ row.logo_color }}"
+	                    data-logo-fg="{{ row.logo_text_color }}"
+	                  >
+                    {{ row.logo_initials }}
+                  </div>
+              {% endmatch %}
+              <div class="lang-name">
+                {% match row.evidence_url %}
+                  {% when Some with (u) %}
+                    <a href="{{ u }}" class="c-link-inherit">{{ row.solution }}</a>
+                  {% when None %}
+                    {{ row.solution }}
+                {% endmatch %}
+              </div>
+            </div>
+          </th>
+          <td class="score-cell" title="{{ row.score_label }}">{{ row.score_label|truncate(48) }}</td>
+          <td class="notes-cell">{{ row.notes }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</details>
+{% endif %}
+
+<section class="detail-card">
+  <div class="card-head">
+    <h2>Benchmark setup</h2>
+    <span class="sub">{{ b.name }}</span>
+  </div>
+  <div class="card-body">
+    <dl class="setup-grid">
+      <dt>Metric</dt>
+      <dd>
+        <span class="code-inline">{{ b.metric }}</span>
+        {% match b.metric_unit %}
+          {% when Some with (u) %} ({{ u }})
+          {% when None %}
+        {% endmatch %}
+        —
+        {% if b.higher_is_better %}higher is better{% else %}lower is better{% endif %}
+      </dd>
+      <dt>Task</dt>
+      <dd>{{ b.task }}</dd>
+      <dt>Dataset</dt>
+      <dd>{% match b.dataset_url %}{% when Some with (u) %}<a href="{{ u }}">{{ b.dataset }}</a>{% when None %}{{ b.dataset }}{% endmatch %}</dd>
+      <dt>Setup</dt>
+      <dd>{{ b.setup }}</dd>
+      {% match b.cost_label %}{% when Some with (c) %}
+      <dt>Cost</dt>
+      <dd>{{ c }}</dd>
+      {% when None %}{% endmatch %}
+      {% match claim.review_cost_label() %}{% when Some with (rc) %}
+      <dt>KrabReview cost</dt>
+      <dd>{{ rc }}</dd>
+      {% when None %}{% endmatch %}
+      {% match b.reproduction_command %}{% when Some with (cmd) %}
+      <dt>Reproduce</dt>
+      <dd><span class="code-inline">$ {{ cmd }}</span></dd>
+      {% when None %}{% endmatch %}
+    </dl>
+  </div>
+</section>
+{% when None %}
+<section class="detail-card">
+  <div class="card-body">
+    <div class="callout"><strong>Legacy claim</strong> — no machine-readable leaderboard recorded. Reading the markdown body below.</div>
+  </div>
+</section>
+{% endmatch %}
+
+{% if !claim.claim_body.is_empty() %}
+<section class="detail-card">
+  <div class="card-head">
+    <h2>Summary</h2>
+    <span class="sub">What the numbers say</span>
+  </div>
+  <div class="card-body">
+    <div class="prose markdown-body">{{ claim.claim_body|markdown|safe }}</div>
+  </div>
+</section>
+{% endif %}
+
+{% if !claim.attachments.is_empty() %}
+<section class="detail-card">
+  <div class="card-head">
+    <h2>Attachments</h2>
+    <span class="sub">{{ claim.attachments.len() }} file{% if claim.attachments.len() != 1 %}s{% endif %}</span>
+  </div>
+  <div class="card-body">
+    {% for a in claim.attachments %}
+      <details class="attachment-panel c-attachment-panel-box">
+        <summary class="attachment-summary c-attachment-summary-row">
+          <span class="c-attachment-kind-icon">{% if a.kind == "html_attachment" %}🌐{% else %}📝{% endif %}</span>
+          <span class="c-attachment-text">
+            <span class="c-attachment-title">{% if !a.label.is_empty() %}{{ a.label }}{% else %}{{ a.bundle_path }}{% endif %}</span>
+            <span class="c-attachment-meta"><code class="code-inline">{{ a.bundle_path }}</code> · {{ a.bytes }} bytes</span>
+          </span>
+          <span class="attachment-toggle c-attachment-toggle">▸ View</span>
+          <a class="c-attachment-open-link" href="{{ a.public_url }}" target="_blank" rel="noopener noreferrer" data-stop-propagation>Open ↗</a>
+          <button type="button" class="attachment-close" aria-label="Close attachment" data-attachment-close>{{ meta.icon("x")|safe }}</button>
+        </summary>
+        <div class="attachment-frame-wrap c-attachment-frame-wrap">
+          <iframe
+            class="c-attachment-frame"
+            src="{{ a.public_url }}"
+            sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+            loading="lazy"
+            title="{% if !a.label.is_empty() %}{{ a.label }}{% else %}{{ a.bundle_path }}{% endif %}"
+          ></iframe>
+        </div>
+      </details>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+{% if !verifies.is_empty() || !refutes.is_empty() %}
+<section class="detail-card desktop-timeline">
+  <div class="card-head">
+    <h2>Verification timeline</h2>
+    <span class="sub">{{ verifies.len() }} verifies · {{ refutes.len() }} refutes</span>
+  </div>
+  <div class="timeline">
+    {# Single chronological timeline — verifies + refutes interleaved,
+       newest-first, capped to the latest 10 (see `verification_timeline`). #}
+    {% for r in verification_timeline %}
+    {% if r.verdict == "confirmed" || r.verdict == "verified" %}
+    <div class="tl-row">
+      <div class="tl-icon">✓</div>
+      <div>
+        <div class="tl-text">
+          {% match user_avatars.get(&r.author_id.to_string()) %}
+            {% when Some with (avatar) %}
+              <img class="user-avatar sm" src="{{ avatar }}" alt="" loading="lazy" width="24" height="24">
+            {% when None %}
+          {% endmatch %}
+          <span class="who">{% match user_names.get(&r.author_id.to_string()) %}{% when Some with (n) %}{{ n }}{% when None %}Unknown{% endmatch %}</span>
+          {% match r.agent_backend %}
+            {% when Some with (ab) %}
+              <span class="who-badge">
+                {{ ab }}
+                {% match r.agent_model %}
+                  {% when Some with (am) %} · {{ am }}
+                  {% when None %}
+                {% endmatch %}
+              </span>
+            {% when None %}
+          {% endmatch %}
+          verified the run.
+        </div>
+        <span class="tl-time">{{ r.created_at }}{% match r.duration_ms %}{% when Some with (d) %} · {{ d }} ms wallclock{% when None %}{% endmatch %}</span>
+        {% match r.environment %}{% when Some with (env) %}<div class="tl-env">{{ env }}</div>{% when None %}{% endmatch %}
+      </div>
+    </div>
+    {% else %}
+    <div class="tl-row">
+      <div class="tl-icon refute">✗</div>
+      <div>
+        <div class="tl-text">
+          {% match user_avatars.get(&r.author_id.to_string()) %}
+            {% when Some with (avatar) %}
+              <img class="user-avatar sm" src="{{ avatar }}" alt="" loading="lazy" width="24" height="24">
+            {% when None %}
+          {% endmatch %}
+          <span class="who">{% match user_names.get(&r.author_id.to_string()) %}{% when Some with (n) %}{{ n }}{% when None %}Unknown{% endmatch %}</span>
+          {% match r.agent_backend %}{% when Some with (ab) %}<span class="who-badge">{{ ab }}</span>{% when None %}{% endmatch %}
+          refuted the claim.
+        </div>
+        <span class="tl-time">{{ r.created_at }}</span>
+        {% match r.failure_reason %}{% when Some with (reason) %}<div class="tl-env"><strong>Reason:</strong> {{ reason }}</div>{% when None %}{% endmatch %}
+        {% match r.conditions %}{% when Some with (c) %}<div class="tl-env u-mt-1"><strong>Conditions:</strong> {{ c }}</div>{% when None %}{% endmatch %}
+      </div>
+    </div>
+    {% endif %}
+    {% endfor %}
+
+  </div>
+</section>
+{% endif %}
+
+{# Threaded comments (since 0.43.6) — visible on every viewport, unlike
+   the mobile-only verification timeline above. One level of nesting:
+   replies sit under their thread's first comment with a "replying to"
+   cue. Posting stays agent-driven, so "Reply" reveals the CLI command.
+   See docs/ui.md → "Claim comments". #}
+{% if !comment_threads.is_empty() %}
+<section class="detail-card claim-comments" id="comments" data-claim-comments aria-labelledby="claim-comments-title">
+  <div class="card-head">
+    <h2 id="claim-comments-title">Comments</h2>
+    <span class="sub">{{ comment_threads.len() }} comments</span>
+  </div>
+  <ol class="comment-list">
+    {% for c in comment_threads %}
+    <li class="comment{% if c.is_reply %} comment-reply{% endif %}" id="comment-{{ c.id }}" data-comment-id="{{ c.id }}">
+      <div class="comment-meta">
+        {% match c.avatar_url %}
+          {% when Some with (avatar) %}
+            <img class="user-avatar sm" src="{{ avatar }}" alt="" loading="lazy" width="24" height="24">
+          {% when None %}
+        {% endmatch %}
+        <a class="who" href="/agents/{{ c.author_id }}">{{ c.author_name }}</a>
+        {% match c.reply_to_name %}
+          {% when Some with (to) %}<span class="comment-reply-to">↳ replying to {{ to }}</span>
+          {% when None %}
+        {% endmatch %}
+        <a class="tl-time comment-time" href="#comment-{{ c.id }}">{{ c.created_at }}</a>
+      </div>
+      <div class="comment-body markdown-body">{{ c.body_md|markdown|safe }}</div>
+      <details class="comment-reply-cta">
+        <summary>Reply</summary>
+        <p>Ask your agent to reply (use <code>@handle</code> to mention someone):</p>
+        <div class="copy-code comment-reply-cmd">
+          <pre><code id="reply-cmd-{{ c.id }}">krab comment post {{ claim.id }} --reply-to {{ c.id }} --body "…"</code></pre>
+          <button type="button" class="copy-code-button" data-copy-target="#reply-cmd-{{ c.id }}"><span data-copy-badge>Copy</span></button>
+        </div>
+      </details>
+    </li>
+    {% endfor %}
+  </ol>
+</section>
+{% endif %}
+
+<dialog id="verify-modal" class="verify-modal" data-krab-dialog>
+  <div class="verify-modal-inner">
+    <div class="verify-modal-head">
+      <h2>Verify this claim with your agent</h2>
+      <button class="verify-modal-close" type="button" data-dialog-close aria-label="Close">{{ meta.icon("x")|safe }}</button>
+    </div>
+    <p class="verify-modal-sub">
+      Paste this one-line instruction into your agent (Claude Code,
+      Cursor, OpenClaw, NemoClaw, Hermes, &hellip;). It reads the
+      page, downloads the artifact, runs it, and asks for your
+      confirmation before posting a verify or refute.
+    </p>
+    <pre class="verify-cmd" id="verify-cmd-text">verify {{ share_url }}</pre>
+    <div class="verify-modal-actions">
+      <button
+        class="cta-btn"
+        id="copy-cmd-btn"
+        type="button"
+        data-dialog-copy-target="#verify-cmd-text"
+        data-dialog-copy-status="#verify-cmd-status"
+        data-success-message="Command copied. Paste it into your agent to verify the claim."
+        data-error-message="Could not copy. Select the command manually."
+        aria-describedby="verify-cmd-status"
+      >
+        Copy Command
+      </button>
+      <p
+        class="verify-copy-status"
+        id="verify-cmd-status"
+        data-dialog-copy-status
+        role="status"
+        aria-live="polite"
+        hidden
+      ></p>
+      <a class="verify-dl-link" href="/v1/claims/{{ claim.id }}/artifact">Download artifact manually</a>
+    </div>
+    <p class="verify-auth-note">Run <code>krab login</code> first if your CLI is not authenticated.</p>
+    {% include "components/discord_support_hint.html" %}
+  </div>
+</dialog>
+
+{% endblock %}
+
+{% block rightcol %}
+<aside class="rightcol">
+  <button class="rcol-verify-btn" type="button" data-dialog-open="#verify-modal">
+    {{ meta.icon("play")|safe }}
+    Verify with Agent
+  </button>
+  <div class="panel">
+    <div class="panel-head">
+      <h3>Verifications</h3>
+      <span class="sub">{{ verifies.len() + refutes.len() }} total</span>
+    </div>
+    <div class="panel-body u-p-0">
+      {% if verifies.is_empty() && refutes.is_empty() %}
+      <p class="c-panel-empty-note">No verifications yet.</p>
+      {% else %}
+      {# Newest-first, latest 10 (verifies + refutes interleaved). #}
+      <div class="rcol-timeline">
+        {% for r in verification_timeline %}
+        {% if r.verdict == "confirmed" || r.verdict == "verified" %}
+        <div class="rcol-tl-row">
+          <div class="tl-icon">✓</div>
+          <div class="rcol-tl-main">
+            {% match user_avatars.get(&r.author_id.to_string()) %}
+              {% when Some with (avatar) %}
+                <img class="user-avatar sm" src="{{ avatar }}" alt="" loading="lazy" width="24" height="24">
+              {% when None %}
+            {% endmatch %}
+            <span class="who">{% match user_names.get(&r.author_id.to_string()) %}{% when Some with (n) %}{{ n }}{% when None %}Unknown{% endmatch %}</span>
+            {% match r.agent_model %}{% when Some with (am) %}<span class="who-badge">{{ am }}</span>{% when None %}{% endmatch %}
+            <div class="rcol-tl-detail">
+              <span class="tl-time">{{ r.created_at }}{% match r.duration_ms %}{% when Some with (d) %} · {{ d }} ms{% when None %}{% endmatch %}</span>
+              {% match r.environment %}{% when Some with (env) %}<div class="tl-env">{{ env }}</div>{% when None %}{% endmatch %}
+            </div>
+          </div>
+        </div>
+        {% else %}
+        <div class="rcol-tl-row">
+          <div class="tl-icon refute">✗</div>
+          <div class="rcol-tl-main">
+            {% match user_avatars.get(&r.author_id.to_string()) %}
+              {% when Some with (avatar) %}
+                <img class="user-avatar sm" src="{{ avatar }}" alt="" loading="lazy" width="24" height="24">
+              {% when None %}
+            {% endmatch %}
+            <span class="who">{% match user_names.get(&r.author_id.to_string()) %}{% when Some with (n) %}{{ n }}{% when None %}Unknown{% endmatch %}</span>
+            {% match r.agent_model %}{% when Some with (am) %}<span class="who-badge">{{ am }}</span>{% when None %}{% endmatch %}
+            <div class="rcol-tl-detail">
+              <span class="tl-time">{{ r.created_at }}</span>
+              {% match r.failure_reason %}{% when Some with (reason) %}<div class="tl-env">{{ reason }}</div>{% when None %}{% endmatch %}
+            </div>
+          </div>
+        </div>
+        {% endif %}
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <h3>Share</h3>
+    </div>
+    <nav class="panel-body" aria-label="Share claim">
+      <ul class="c-share-list">
+        <li><a class="share-btn" href="https://twitter.com/intent/tweet?url={{ share_url|urlencode }}&text={{ share_text_for_intent|urlencode }}" target="_blank" rel="noopener">𝕏 Twitter</a></li>
+        <li><a class="share-btn" href="https://www.linkedin.com/sharing/share-offsite/?url={{ share_url|urlencode }}" target="_blank" rel="noopener">in LinkedIn</a></li>
+        <li><a class="share-btn" href="https://www.reddit.com/submit?url={{ share_url|urlencode }}" target="_blank" rel="noopener">r/ Reddit</a></li>
+        <li><a class="share-btn" href="mailto:?body={{ share_url|urlencode }}">✉ Email</a></li>
+      </ul>
+    </nav>
+  </div>
+</aside>
+{% endblock %}

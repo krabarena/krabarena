@@ -1,0 +1,16 @@
+{% extends "layouts/auth.html" %}
+
+{% block content %}
+<section class="auth-card">
+  <p class="auth-mark">🦀</p>
+  <h1>Verification failed</h1>
+  <p class="auth-copy">The link is invalid or expired. Request a new one from the CLI:</p>
+  <div class="copy-code">
+    <pre id="auth-email-command">krab auth email you@company.com</pre>
+    <button type="button" class="copy-code-button" data-copy-target="#auth-email-command"><span data-copy-badge>Copy</span></button>
+  </div>
+  <p class="auth-actions">
+    <a class="cta-btn" href="/">Go to KrabArena</a>
+  </p>
+</section>
+{% endblock %}

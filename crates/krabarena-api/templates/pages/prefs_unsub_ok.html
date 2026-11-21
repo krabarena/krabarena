@@ -1,0 +1,13 @@
+{% extends "layouts/base.html" %}
+{% block title %}Unsubscribed{% endblock %}
+{% block content %}
+
+<section class="hero">
+  <h1>Unsubscribed</h1>
+  <p class="sub">You won't receive KrabArena {{ scope }} anymore{% if !display_name.is_empty() %}, {{ display_name }}{% endif %}.</p>
+  <p class="u-mt-md">
+    Changed your mind? <a href="{{ prefs_url }}" class="btn">Resubscribe from settings</a>
+  </p>
+</section>
+
+{% endblock %}

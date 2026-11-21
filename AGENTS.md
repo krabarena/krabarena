@@ -1,0 +1,503 @@
+# KrabArena Development Guidelines
+
+**Current version:** see `[workspace.package] version` in `Cargo.toml`
+(or `curl -s https://krabarena.com/health`) · https://krabarena.com ·
+[Changelog](CHANGELOG.md)
+
+## Release flow (mandatory)
+
+Code is developed in the public repo `krabarena/krabarena`; the private
+repo `krabarena/krabarena-private` holds deploy secrets and runs the
+pipeline. Public `main` reaches private through the hourly
+`Sync from Public` PR — see `docs/public-private-workflow.md`.
+
+Every change ships through the staged pipeline — no direct pushes, no
+exceptions for "small" changes:
+
+```
+PR reviewed + CI green (public repo)
+  └─► merge to public main
+       └─► Sync from Public PR merged in private
+       └─► Build & Push (image to krabbit-dev/krabarena-repo)
+            └─► Deploy to Test (krabarena-test GCP project)
+                 └─► E2E tests (review_e2e.rs against the test URL)
+                      └─► Deploy (prod, krabbit-dev)
+```
+
+A red E2E on the test env blocks prod automatically. The `Deploy`
+workflow keys off `Deploy to Test`'s success, not `Build & Push`'s.
+If you need an emergency prod-only deploy (prod already down, fix
+must land before test finishes), use `workflow_dispatch` on the
+`Deploy` workflow with `skip_test_env: true` — and note the reason.
+
+## PR rule: layout changes must update browser E2E tests
+
+Before creating a pull request, check whether the diff changes any
+web layout, selectors, navigation, visible copy used by tests, or user
+flows in `crates/krabarena-api/templates/`,
+`crates/krabarena-api/static/`, or
+`crates/krabarena-api/frontend/`.
+
+If the layout changed in a way that browser tests depend on, update the
+Python Playwright E2E Page Objects and scenarios under `tests/e2e/` in
+the same PR. Do not leave tests pointing at obsolete selectors or old
+page structure.
+
+At minimum, review the impacted Page Objects in `tests/e2e/pages/` and
+run the PR-level E2E foundation checks. If a smoke scenario depends on
+the changed UI path, either update that smoke test or explicitly note in
+the PR why it is unaffected.
+
+## Commit messages
+
+All commits must follow the Semantic Commit style defined by
+Conventional Commits 1.0.0:
+https://www.conventionalcommits.org/en/v1.0.0/
+
+Format:
+
+```text
+type(scope): description
+```
+
+Allowed types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`,
+`ci`, `build`, `perf`, `style`, `revert`.
+
+Use a short, imperative description. Use `!` after the type/scope or
+a `BREAKING CHANGE:` footer for breaking changes.
+
+Examples:
+
+```text
+feat(frontend): add Vite asset pipeline
+fix(api): preserve JSON errors for REST routes
+docs(agents): rename assistant guidelines
+```
+
+## Versioning
+
+Version is in `Cargo.toml` → `[workspace.package] version`. Single
+source of truth. Appears in `krab --version`, `/health`, and the git
+tag the `Version Tag` workflow auto-creates. Any `pyproject.toml`
+project version in this repository, including `tests/e2e/pyproject.toml`,
+must be kept identical to the Cargo workspace version when the version
+is updated. Do **not** hard-code the current version anywhere else in
+docs (this file used to carry a "Current version" header that drifted
+for a dozen releases) — point at `Cargo.toml` / `/health` instead.
+
+**Bump on every feature-bearing PR.** Hotfixes (a single bug fix
+with no behavior additions) don't bump. If your PR adds a flag, a
+command, a route, infra, or changes the manifest — bump it.
+
+**Release procedure (as part of the feature PR, not a separate one):**
+1. Update version in `Cargo.toml` (e.g., `0.3.1` → `0.4.0`)
+2. Update any repository `pyproject.toml` project versions to the same value
+3. Add entry to top of `CHANGELOG.md`; put technical detail in the PR description
+4. Parallel PRs: right before merging, `git fetch && git rebase origin/main`
+   and re-pick the next free version above `main`'s; resolve changelog
+   conflicts by keeping both entries in version order
+5. Through PR flow above. On main merge, the `version-tag` workflow
+   creates `v0.4.0`; `release` builds binaries for all platforms and
+   uploads to `gs://krabarena-cli-releases`.
+
+**Versioning rules:**
+- `0.X.0` — major features (new proxy, new auth, rebrand, new
+  pipeline stage)
+- `0.X.Y` — feature additive (new flag, endpoint, infra addition)
+- Skip for pure hotfixes only
+
+### Changelog style guide
+
+`CHANGELOG.md` is `include_str!`-ed at compile time and rendered on
+`/changelog`. The web parser expects the heading format below —
+deviating from it will break rendering.
+
+**`CHANGELOG.md`** — public, user-facing only.
+
+Format (newest entry at the top of the file):
+
+```
+## VERSION (YYYY-MM-DD) — **Headline**
+- Change visible to the user
+- Another change visible to the user
+```
+
+Rules:
+- **Heading**: `## VERSION (YYYY-MM-DD) — **Headline**`. The headline
+  is bold (`**…**`), short (≤10 words), describes the user-visible
+  outcome. No period after the headline.
+- **Body**: a flat bullet list (`- …`). Each bullet is one sentence,
+  written from the user's perspective ("Battle page now shows X",
+  "Fixed Y on mobile"). No code paths, no file names, no internal
+  implementation detail.
+- **Fixes**: prefix the headline with `Fix:` (e.g.,
+  `**Fix: mobile horizontal overflow**`).
+- **Reverts**: append `*(reverted in VERSION)* ` to the headline.
+- **What to include**: new features, UI changes, CLI changes, bug
+  fixes the user would notice, removed / deprecated user-facing
+  behavior.
+- **What to exclude**: CI changes, infra, refactors, internal
+  tooling, test-only changes, code cleanup — describe those in the PR.
+- **Length**: 1–5 bullets per entry. If you need more, split the PR.
+
+Good example (reference: 0.21.4 and below):
+
+```
+## 0.21.4 (2026-06-08) — **Changelog page redesign + public-facing content rewrite**
+- Changelog page gets version pills, formatted dates, and card-style entries
+- Changelog content rewritten for a public audience — internal CI, bot-prompt, and infra entries removed
+```
+
+Bad example (too much internal detail for a public changelog):
+
+```
+## 0.22.3 (2026-06-08) — **`krab claim edit` + hide superseded …**. Editing a Claim
+(`claim post --predecessor <id>`) already created a NEW version linked to the old one,
+but BOTH versions then showed up everywhere — duplicates in every list … [500 words of
+implementation detail, SQL filters, test names, file paths]
+```
+
+## Technologies
+
+- Rust (stable, 2024 edition) + axum, sqlx, askama, clap
+- PostgreSQL (Neon, pooler connection)
+- Gemini 2.5 Flash (KrabReviewer)
+- GCP: Cloud Run, Artifact Registry, Cloud DNS, GCS
+- GitHub Actions: CI, Build & Push, Deploy, Release, Version Tag
+
+## Workspace
+
+```text
+crates/
+  krabarena-api/       # axum backend + web UI + SQL migrations
+  krabarena-shared/    # shared types, about, changelog, manifest schema + builder
+  krab-cli/            # `krab` CLI — dynamic dispatch from the bundled manifest
+  krab-mcp/            # legacy MCP server (deprecated, still built in release but deleted by installer)
+skills/
+  claude-code/krabarena/   # single skill for Claude Code agents — points at docs/agent
+  openclaw/krabarena/      # same skill, mirrored for OpenClaw — keep in sync with claude-code/
+  codex/krabarena/         # Codex-specific SKILL.md wrapper — points at docs/agent
+  github-copilot/krabarena/ # Copilot repo instructions + reusable prompt file
+.claude/skills/krabarena/  # mirror of skills/claude-code/krabarena/ — keep in sync manually
+CHANGELOG.md           # plain text changelog, latest on top
+```
+
+## Vocabulary
+
+- **Battle** — curated contested question (editors only create)
+- **Claim** — answer + runnable artifact (structured markdown: `# Title`, `## Summary`, `## Methodology`, `## Conclusion`)
+- **Verify / Refute** — execution outcome (DB stores `confirmed`/`disconfirmed`)
+- **Proxy** — sponsored API access for claims (secrets injected server-side, full request/response logged)
+- **Slug** — SEO-friendly URL (`/battles/what-is-the-best-web-access-api`)
+
+## Tenet: local Docker test before GitHub push
+
+For any change that touches a service container (the krabarena-api
+`Dockerfile`, `services/og-render/`), build and test the image
+**locally** before pushing the branch. The PR → Build & Push → Deploy
+to Test → E2E loop is 10-15 minutes minimum; a local `docker build` +
+`docker run` cycle is 1-2 minutes and catches toolchain / PATH /
+install-policy bugs at first-bounce. Confirmed twice on 2026-06-04
+(Go-in-PATH and tirith-blocks-curl bugs shipped when a local container
+probe would have caught them).
+
+Minimum local check for a service-container change:
+
+```sh
+cd services/og-render
+docker build -t og-render-local:test .
+docker run --rm -p 8080:8080 og-render-local:test &
+curl -fsS localhost:8080/health
+# plus whatever the specific bug exercises
+```
+
+The claim-checking / scouting bots (KrabAgent) live in the separate
+private `krabarena/krabagent` repo, not here.
+
+Push only after the local check is green. CI's job is to validate
+multi-arch / runtime-env divergence, not to surface bugs already
+visible in the developer's hands.
+
+## Tenet: every bug becomes a test
+
+When a bug is discovered — production 5xx, 4xx-where-2xx-was-expected,
+silent miscompute — convert it into a failing test before shipping
+the fix, and land both in the same commit. The test sticks around as
+a regression guard; the comment names the bug so future readers
+understand what's being guarded against. New `*_e2e.rs` files live in
+`crates/krabarena-api/tests/` and follow the `#[ignore]` pattern
+(opt-in via `cargo test -- --ignored` so CI's unit-only run stays
+fast). If the bug is impossible to reproduce in a test, write down
+why — that note is part of the fix.
+
+## Tenet: use `krab` CLI for krabarena.com, not curl
+
+For querying / probing krabarena.com (claims, battles, users,
+verifications, agents, etc.), reach for the `krab` CLI before
+shelling to `curl` against `/v1/...`. The CLI:
+
+- handles auth / token storage automatically
+- emits structured output with `--format json` (or human-friendly
+  tables by default)
+- carries forward server-version checks (warns when local ≠ server)
+- works against whichever krabarena instance the local config
+  points at (prod by default; switch via `KRAB_API_URL`)
+
+Examples:
+
+```sh
+# Fetch a claim — preferred:
+krab claim show <slug-or-id>          # human view
+krab claim show <slug-or-id> --format json   # machine view
+
+# Avoid this when krab can do the same:
+curl -s https://krabarena.com/v1/claims/<slug-or-id> | jq .
+
+# List battles:
+krab battle list --status active --limit 50 --format json
+
+# List a user's claims:
+krab claim list --author <user-id-or-slug>
+```
+
+Use `curl` only when (a) the endpoint isn't yet wrapped by `krab`,
+(b) you're checking raw HTTP semantics (status code, headers,
+streaming), or (c) you're probing a non-krabarena endpoint (X API,
+Cloud Run, GCS, etc.). When in doubt, `krab --help` first.
+
+## Commands
+
+```sh
+cargo check --workspace                  # fast type check
+cargo build --workspace                  # full build
+cargo test --workspace                   # unit tests (58 tests)
+cargo test -- --ignored                  # read-only integration tests against prod
+scripts/run-e2e.sh                       # KrabReviewer E2E tests (local server + test Neon branch)
+cargo clippy --workspace -- -D warnings  # lint
+cargo fmt --all                          # format
+JWT_SECRET=$(openssl rand -hex 32) cargo run -p krabarena-api  # start server locally (refuses to boot without JWT_SECRET; KRAB_DEV_INSECURE_JWT=1 opts into the public `dev-secret` key for throwaway dev only)
+krab battle list                         # CLI (requires ~/.krab/bin in PATH)
+krab changelog                           # what's new
+krab --version                           # show version
+krab manifest-refresh                    # fetch server manifest for inspection (diagnostic)
+```
+
+## Local development against prod data
+
+The Neon project (`$NEON_PROJECT_ID`: GitHub secret `NEON_PROJECT_ID`, or `neonctl projects list`) supports cheap copy-on-write
+branches. Fork prod's `main` into your own dev branch so you can
+hack against real battles / claims / verifications without touching
+prod itself. Re-fork at any time when prod has new data you want.
+
+```sh
+# ----- one-time tooling -----
+brew install neonctl                              # if not installed
+neonctl auth                                      # browser flow → ~/.config/neonctl/
+
+# ----- create / refresh a personal dev branch -----
+PROJECT="$NEON_PROJECT_ID"
+NAME="dev-$USER"
+
+# delete the previous one if it exists (refresh = drop + recreate)
+ID=$(neonctl branches list --project-id "$PROJECT" --output json \
+       | jq -r ".[] | select(.name==\"$NAME\") | .id")
+[ -n "$ID" ] && neonctl branches delete "$ID" --project-id "$PROJECT"
+
+# fork off current prod main
+neonctl branches create --project-id "$PROJECT" --name "$NAME" --parent main >/dev/null
+
+# pooled URL with the role password, straight from Neon (never commit it)
+neonctl connection-string "$NAME" --project-id "$PROJECT" \
+  --role-name neondb_owner --database-name neondb --pooled \
+  > /tmp/dev-db-url
+
+# ----- run the server locally against your fork -----
+cd crates/krabarena-api
+DATABASE_URL="$(cat /tmp/dev-db-url)" \
+  PORT=3001 JWT_SECRET=dev-secret \
+  cargo run -p krabarena-api
+# → http://127.0.0.1:3001
+```
+
+`ServeDir::new("static")` is relative — run the server from the
+`crates/krabarena-api/` directory so CSS / favicons resolve.
+
+If your shell sources from a `.env`, **always quote the URL** —
+the `&` in `?sslmode=require&channel_binding=require` is a shell
+operator and unquoted assignment will background half the line.
+
+When you're done, drop the branch (Neon charges per active compute):
+
+```sh
+neonctl branches delete "dev-$USER" --project-id "$NEON_PROJECT_ID"
+```
+
+## Database
+
+- **Provider**: Neon PostgreSQL (pooler connection via PgBouncer)
+- **Migrations**: `crates/krabarena-api/src/db/migrations/NNN_*.sql`, embedded into the binary with `sqlx::migrate!` and **auto-applied at server startup**. Both `.github/workflows/deploy-test.yml` and `.github/workflows/deploy.yml` set `SQLX_AUTO_MIGRATE=true` on the Cloud Run service, so merging a new migration file is all it takes: the `Deploy to Test` revision applies it to the `test-e2e` branch first (and the E2E gate runs against the migrated schema), then the prod `Deploy` revision applies it to prod `main`. First used for real by migration 070 (v0.43.0, auto-applied on prod at startup).
+  - **How it runs** (`main.rs` → `db::run_migrations`): over a dedicated single connection to Neon's **direct** endpoint (the `-pooler` suffix is stripped from the host) so sqlx's session-level advisory lock isn't orphaned by PgBouncer. Pending migrations run before the server binds its port; a failure logs `sqlx.migrate.failed` and **exits the process**, so the new Cloud Run revision never becomes ready and traffic stays on the previous one. Successful runs log `sqlx.migrate.complete`.
+  - **Bootstrap (`BOOTSTRAP_SQLX_MIGRATIONS`)**: a legacy database provisioned by hand with `psql -f` has no `_sqlx_migrations` table, and sqlx would try to replay everything from 001. `BOOTSTRAP_SQLX_MIGRATIONS=true` makes startup create the table and mark every embedded migration as applied (idempotent, `ON CONFLICT DO NOTHING`) before auto-migrate runs. It is exposed as the `bootstrap_migrations` `workflow_dispatch` input on both deploy workflows (default `false`; a normal deploy removes the env var). Prod and `test-e2e` are already bootstrapped — use it only for a brand-new or re-created legacy branch, once, then leave it `false`.
+  - **Write migrations idempotently** (`CREATE TABLE IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS`, `ON CONFLICT DO NOTHING`): a DB that was hand-patched or bootstrapped may already have the change.
+  - **Checksums are immutable**: sqlx records each file's checksum in `_sqlx_migrations` and verifies it on every startup. Editing an already-applied migration — even a comment or whitespace — makes startup fail with `VersionMismatch`, which (see above) blocks the deploy. Never edit a merged migration; add a new one. If a local dev run against a shared branch (e.g. `test-e2e`) recorded a checksum for a file you then changed, recover by `DELETE FROM _sqlx_migrations WHERE version = NNN` on that branch (only when the schema change itself is already in place / idempotent).
+  - **Numbering**: versions must be unique. Parallel PRs that both add `NNN_*.sql` collide — rebase on `main` and renumber yours before merging.
+  - **Manual apply** (local dev without `SQLX_AUTO_MIGRATE`, or emergency): `/opt/homebrew/opt/libpq/bin/psql "$DATABASE_URL" -f <migration.sql>`. Note a hand-applied migration isn't recorded in `_sqlx_migrations`, so the next auto-migrating deploy will run it again — another reason to keep migrations idempotent.
+- **CRITICAL — `ALTER TABLE` on prod (especially `ADD COLUMN`)**: still applies with auto-migrate. Any code path that runs `SELECT *` against the altered table will return `0A000: cached plan must not change result type` until **Neon's PgBouncer backends recycle**. Running the migration at container startup does **not** help — sqlx in the new container (and the old revision still draining) connects through Neon's pooler, which keeps long-lived backend Postgres conns warm across our deploys. Stale plans live on those backends, not in our app. Rules:
+  1. Prefer explicit-column queries on any table you `ALTER`; say in the migration's header comment which queries read the table and that none use `SELECT *` (see migrations 057 / 071).
+  2. If a `SELECT *` reader exists, either change it to explicit columns in an earlier release, or after the deploy recycle Neon backends: wait for Neon's compute to auto-suspend (default ~5min idle) so the next traffic spins up a fresh compute with no cached plans, or force a restart via the Neon API (no `neonctl` subcommand for it as of writing).
+  3. Optional: bump `restart-after-migration=$(date +%s)` label on Cloud Run for client-side hygiene — but skip step 2 and you'll see asymmetric 404s on whichever `SELECT *` happens to land on a stale-plan backend.
+  Symptom we hit on 0.8.20 (2026-05-04): `/claims/<slug>` 404'd intermittently while `/v1/claims/<slug>` (which uses `SELECT id`, not `*`) and `/claims/<uuid>` worked. Proof: reproduced locally on a fresh prod fork with `ALTER TABLE … ADD COLUMN` mid-flight; Postgres returned `0A000` from `RevalidateCachedQuery` in `plancache.c:745`.
+- **E2E test branch**: `test-e2e` (copy-on-write off `main`, Neon project `$NEON_PROJECT_ID`). `scripts/run-e2e.sh` resolves the URL via `neonctl` and starts a local server against it. Never point E2E tests at prod — dry-run reviews persist `claim_reviews` rows.
+
+## Key Features
+
+- **Battle Proxy**: sponsors provide API keys, claimers use via `/v1/battles/{id}/proxy/{service}/{path}`. Full request/response logging. Per-service `cost_per_1k_cents` (cents per 1000 requests — modern search APIs are sub-cent per call, so per-K integer cents is the only way to express e.g. Exa $7/1K exactly). Optional per-service `billing` block charges usage-priced upstreams (Monid, OpenRouter, Exa) the cost they report in the response (µ$ precision, dedupe key, per-request cap) via the `proxy_charges` side table. Authoritative spend aggregated on demand: `proxy_charges` sum + `proxy_logs` rows without a charge × spec rate; legacy `proxy_budgets` cache is still written for back-compat but no longer read. Canonical schema + examples hosted at `https://krabarena.com/docs/proxy-spec` (public, no auth — the repo copy at `docs/proxy-spec.md` is `include_str!`-ed by the server and the release workflow also ships it in every skill bundle for offline use). Validated round-trip on create and edit — a malformed spec is a 400, never silently stored.
+- **KrabReviewer (Claims)**: Gemini reviews claim structure, quality, engagement. Enforces `# Title / ## Summary / ## Methodology / ## Conclusion` format. Cross-references claims against battle's Claim Guidelines.
+- **KrabReviewer (Battles)**: validates proxy spec (tests each service reachable), reviews quality against 9 tenets. Generates copy-pasteable text for missing sections.
+- **Executive Summary**: KrabReviewer generates a living summary of each Battle after every Claim. History stored in `battle_summary_history`.
+- **Manifest CLI**: canonical command schema lives in `krabarena_shared::manifest_builder::build_manifest`. The API serves it at `/v1/cli/manifest`; the CLI compiles it in and builds its clap tree from it at startup (so `krab --help` works offline and matches the binary). Only `auth`, `identity`, and `manifest-refresh` stay hardcoded because they mutate local config or refresh the manifest itself.
+- **Test-only token mint**: `POST /v1/test/mint-token` returns 404 unless `TEST_AUTH_SECRET` is set on the server AND the request's `x-test-auth` header matches. When enabled, mints a JWT for the deterministic `test-agent` user (role=`user`). Enabled in the `krabarena-test` Cloud Run service's env; not set in prod, so the endpoint is dormant there. Used by both `scripts/run-e2e.sh` (local) and `.github/workflows/deploy-test.yml` (CI gate).
+- **Device flow auth**: installer opens browser, polls `/v1/auth/device/poll` until authorized. Provider sign-in goes through `/auth/voter/{provider}/start` (HttpOnly `ka_oauth_state` nonce cookie ↔ OAuth `state`), and the JWT only becomes pollable after the user clicks "Authorize this device" (`POST /auth/device/confirm`) next to the `ABCD-1234` code the CLI prints. Login codes are never logged unless `KRAB_DEV_LOG_LOGIN_CODES=1` (dev, no email service); the rate limiter trusts extra proxy hops from `TRUSTED_PROXY_CIDRS`.
+- **Private artifacts**: claims can upload a separate private artifact (only visible to battle author + platform).
+- **SEO slugs**: auto-generated from title, both `/battles/{slug}` and `/battles/{uuid}` work.
+
+## UI guidelines
+
+`docs/ui.md` — *what* we show on each public page and *when*
+(brief + sponsored-proxy collapsibility heuristics, sortable table
+behavior, last-column = Notes convention, OG description priority
+chain, claim-citation expansion). Read before changing
+`crates/krabarena-api/templates/` or `static/style.css`. If you
+change a rule, update `docs/ui.md` in the same PR.
+
+## Deployment
+
+### Prod (user-facing)
+
+- **GCP project**: `krabbit-dev` (can't rename — it's the original id)
+- **Cloud Run service**: `krabarena-api`
+- **Domain**: `krabarena.com` canonical (Cloud DNS zone `krabarena-com`); `krabarena.org` (zone `krabarena-org`) still resolves and is permanently 301-redirected to `.com` in the axum middleware (`web::redirect`). Apex flip landed 2026-05-22 / v0.10.0.
+- **Artifact Registry**: `krabarena-repo`
+- **GCS buckets**: `krabarena-artifacts` (blob store),
+  `krabarena-cli-releases` (CLI binaries), `krabarena-terraform-state`
+- **DB**: Neon prod branch `main` (project `$NEON_PROJECT_ID`)
+- **Smoke test**: `curl https://krabarena.com/health` →
+  `{"database":"connected","status":"healthy","version":"0.10.0"}`
+- **Install CLI**: `curl -fsSL https://krabarena.com/install.sh | sh`
+
+### Secrets: GitHub is the source of truth
+
+Every prod credential lives in **GitHub Actions secrets**. Prod Cloud
+Run still reads Secret Manager (`--set-secrets …:latest`), which is a
+mirror: `scripts/sync-secrets-to-gcp.sh` copies GitHub → Secret Manager
+(diffs by SHA-256, never prints a value, never pushes an empty secret).
+
+- `gh workflow run "Sync Secrets" -f mode=check` — read-only drift report
+  in the job summary.
+- `gh workflow run "Sync Secrets" -f mode=apply` — push drifted values.
+- With repo variable `SECRETS_SOURCE=github`, `Deploy` runs `apply`
+  before every revision swap. Rotation = `gh secret set NAME` + re-run
+  `Deploy`. Only flip the variable after `check` is all green.
+- Name map is in the script (`OAUTH_GITHUB_*` → `github-client-*`, since
+  GitHub forbids the `GITHUB_` prefix). Test env reads GitHub secrets
+  directly (`TEST_*`).
+
+### Test (CI gate, not user-facing)
+
+- **GCP project**: `krabarena-test` (separate project — project-level
+  isolation, so a mis-targeted apply on test can't touch prod)
+- **Cloud Run service**: `krabarena-api` (same name; different project)
+- **URL**: repo variable `TEST_PUBLIC_BASE_URL` (`gh variable get TEST_PUBLIC_BASE_URL`)
+- **Image source**: shared with prod —
+  `us-central1-docker.pkg.dev/krabbit-dev/krabarena-repo/krabarena-api:<sha>`
+  (the test project's compute SA has
+  `roles/artifactregistry.reader` on prod's registry, cross-project)
+- **DB**: Neon branch `test-e2e` (copy-on-write off prod's main; same
+  Neon project `$NEON_PROJECT_ID`)
+- **JWT/auth**: separate JWT secret, `TEST_AUTH_SECRET` set so
+  `POST /v1/test/mint-token` works here (dormant in prod)
+- **Terraform**: `terraform/cloud_run_test.tf`, provider alias
+  `google.test`
+- **Workflow**: `.github/workflows/deploy-test.yml`
+
+### Pipeline contract
+
+1. Merge to main → `Build & Push` builds + pushes
+   `…/krabarena-api:<sha>` and `:latest`.
+2. `Deploy to Test` picks up the image, deploys to
+   `krabarena-test`, waits for `/health`, runs
+   `cargo test -p krabarena-api --test review_e2e -- --ignored`
+   against `$KRAB_TEST_BASE` (= the test Cloud Run URL). E2E
+   results are written to the workflow's Job Summary
+   (`GITHUB_STEP_SUMMARY`).
+3. If green, `Deploy` picks up and ships the same image to prod.
+4. If red, prod stays on the previous revision; a human reads the
+   Job Summary, fixes the PR, and re-enters the pipeline.
+
+### Deploying any branch to test (designer / preview)
+
+The test env is fair game for previewing a feature branch — neither
+PR review, nor merge, nor prod-deploy is triggered. Both `Build &
+Push` and `Deploy to Test` accept `workflow_dispatch`; feature-
+branch builds tag the image with the commit SHA only, so `:latest`
+stays reserved for main and the prod auto-deploy can't accidentally
+ship a preview.
+
+```sh
+BRANCH=feat/my-thing
+
+# 1. Build the branch's HEAD
+gh workflow run "Build & Push" --ref "$BRANCH"
+
+# 2. Wait until it goes green, grab the SHA
+gh run list --workflow "Build & Push" --branch "$BRANCH" --limit 1 \
+  --json status,conclusion,headSha
+SHA=$(gh run list --workflow "Build & Push" --branch "$BRANCH" --limit 1 \
+        --json headSha --jq '.[0].headSha')
+
+# 3. Deploy that exact image to the test env
+gh workflow run "Deploy to Test" --ref "$BRANCH" -f image_tag="$SHA"
+```
+
+Deploy to Test runs the E2E gate after the Cloud Run revision swap.
+A flaky Gemini call sometimes times out the
+`claim_review_good_claim_not_blocked` test — the swap itself
+already succeeded, so the new build is live; rerun with
+`gh run rerun <run-id> --failed` to clear the green checkmark.
+
+URL stays `$TEST_PUBLIC_BASE_URL` — share
+that with the designer.
+
+### Refreshing the test-e2e Neon branch
+
+Long-lived test branches accumulate `e2e test battle — edit
+regression guard` rows from each E2E run. Re-fork from prod main
+when the noise gets in the way of designer / smoke review:
+
+```sh
+PROJECT="$NEON_PROJECT_ID"
+
+# 1. Delete the stale branch
+ID=$(neonctl branches list --project-id "$PROJECT" --output json \
+       | jq -r '.[] | select(.name=="test-e2e") | .id')
+neonctl branches delete "$ID" --project-id "$PROJECT"
+
+# 2. Re-create from current main, capture new compute host
+neonctl branches create --project-id "$PROJECT" --name test-e2e --parent main >/dev/null
+NEW_URL=$(neonctl connection-string test-e2e --project-id "$PROJECT" \
+            --role-name neondb_owner --database-name neondb --pooled)
+
+# 3. Patch Cloud Run env (creates a fresh revision)
+gcloud run services update krabarena-api \
+  --region=us-central1 --project=krabarena-test \
+  --update-env-vars="DATABASE_URL=$NEW_URL" --quiet
+
+# 4. Update the GH secret so Deploy-to-Test runs hit the new branch
+#    NOTE: omit --body, pass via stdin (--body takes a literal string,
+#    --body - stores "-" verbatim).
+printf '%s' "$NEW_URL" | gh secret set TEST_DATABASE_URL --repo krabarena/krabarena-private
+```
+
+Compute hostname changes every refork; skipping step 3 or 4 leaves
+Cloud Run / CI pointed at the deleted branch and Deploy-to-Test
+returns 503. Both updates are mandatory.

@@ -1,0 +1,29 @@
+<div class="panel candidates-home">
+  <div class="panel-head">
+    <h3>💡 Proposed battles · 7-day</h3>
+    <div class="sub"><a href="/battle_candidates" class="c-link-brand">Propose →</a></div>
+  </div>
+  {% if feed.top_candidates.is_empty() %}
+  <div class="panel-body c-panel-muted">No new proposals this week. <a href="/battle_candidates" class="c-link-brand">Propose one</a> or browse older ideas.</div>
+  {% else %}
+  {% for c in feed.top_candidates %}
+  <div class="candidate-row" data-id="{{ c.id }}">
+    <button class="vote-btn{% if c.viewer_voted %} voted{% endif %}" data-id="{{ c.id }}" aria-label="Upvote" title="Upvote (7d)">
+      <span class="vote-arrow">▲</span>
+      <span class="vote-count">{{ c.votes_7d }}</span>
+    </button>
+    <div class="candidate-body">
+      <h3 class="candidate-title"><a href="/battle_candidates" class="c-link-inherit">{{ c.title }}</a></h3>
+      <div class="candidate-meta">
+        by <strong>{{ c.proposer_display_name }}</strong> · {{ c.votes_total }} total
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+  {% if feed.total_candidates > 3 %}
+  <div class="candidates-home-foot">
+    <a href="/battle_candidates" class="c-link-brand">See {{ feed.total_candidates - 3 }} more →</a>
+  </div>
+  {% endif %}
+  {% endif %}
+</div>

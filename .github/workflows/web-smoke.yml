@@ -1,0 +1,169 @@
+name: Web Smoke
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+
+permissions:
+  contents: read
+  actions: read
+  issues: write
+  # The `triage` job calls the gh-aw reusable workflow
+  # (web-smoke-triage.lock.yml), whose jobs request discussions: write and
+  # pull-requests: write. A reusable workflow can only be granted permissions
+  # the caller already holds — omitting these fails the whole run at startup
+  # (startup_failure), which is why every scheduled Web Smoke run crashed.
+  pull-requests: write
+  discussions: write
+
+concurrency:
+  group: web-smoke-production
+  cancel-in-progress: false
+
+env:
+  KRAB_E2E_BASE_URL: https://krabarena.com
+  WEB_SMOKE_ARTIFACT_NAME: web-smoke-artifacts
+
+jobs:
+  smoke:
+    if: github.repository == 'krabarena/krabarena-private'
+    name: Production web smoke
+    runs-on: ubuntu-latest
+    outputs:
+      smoke_failed: ${{ steps.run-smoke.outputs.smoke_failed }}
+      pytest_exit_code: ${{ steps.run-smoke.outputs.pytest_exit_code }}
+      artifact_name: ${{ steps.artifact-name.outputs.name }}
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set artifact name
+        id: artifact-name
+        run: echo "name=${WEB_SMOKE_ARTIFACT_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version-file: tests/e2e/.python-version
+
+      - name: Set up UV
+        uses: astral-sh/setup-uv@v8.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: tests/e2e/uv.lock
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('tests/e2e/uv.lock') }}
+          restore-keys: |
+            playwright-${{ runner.os }}-
+
+      - name: Install dependencies
+        working-directory: tests/e2e
+        run: uv sync --locked
+
+      - name: Ruff lint
+        working-directory: tests/e2e
+        run: uv run ruff check .
+
+      - name: Ruff format check
+        working-directory: tests/e2e
+        run: uv run ruff format --check .
+
+      - name: Install Playwright Chromium
+        working-directory: tests/e2e
+        run: uv run playwright install --with-deps chromium
+
+      - name: Run smoke tests
+        id: run-smoke
+        working-directory: tests/e2e
+        run: |
+          mkdir -p .artifacts
+          set +e
+          uv run pytest -m smoke 2>&1 | tee .artifacts/pytest-smoke.log
+          pytest_exit_code=${PIPESTATUS[0]}
+          set -e
+
+          echo "pytest_exit_code=${pytest_exit_code}" >> "$GITHUB_OUTPUT"
+          if [ "${pytest_exit_code}" -eq 0 ]; then
+            echo "smoke_failed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "smoke_failed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Prepare agent handoff
+        if: ${{ steps.run-smoke.outputs.smoke_failed == 'true' }}
+        working-directory: tests/e2e
+        run: |
+          set -o pipefail
+          uv run python analyze_failures.py | tee .artifacts/analyze-failures-output.json
+
+      - name: Web smoke summary
+        if: always()
+        run: |
+          {
+            echo "## Web smoke"
+            echo ""
+            echo "- **Production URL**: https://krabarena.com"
+            echo "- **Pytest exit code**: ${{ steps.run-smoke.outputs.pytest_exit_code || 'not run' }}"
+            echo "- **Smoke failed**: ${{ steps.run-smoke.outputs.smoke_failed || 'unknown' }}"
+            echo "- **Artifact**: ${WEB_SMOKE_ARTIFACT_NAME}"
+            echo ""
+            if [ -f tests/e2e/.artifacts/results.json ]; then
+              echo "### Test cases"
+              echo ""
+              python - <<'PY'
+          import json
+          from pathlib import Path
+
+          results = json.loads(Path("tests/e2e/.artifacts/results.json").read_text())
+          print("| Test case | Status | Failure step |")
+          print("|---|---|---|")
+          for case in results.get("test_cases", []):
+              name = case.get("name") or case.get("test_id") or "unknown"
+              status = case.get("status") or "unknown"
+              step = case.get("failure_step") or ""
+              print(f"| `{name}` | {status} | `{step}` |")
+          PY
+            else
+              echo "No structured smoke result was produced."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload smoke artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.WEB_SMOKE_ARTIFACT_NAME }}
+          path: |
+            tests/e2e/.artifacts/
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14
+
+  triage:
+    name: Agentic web smoke triage
+    needs: smoke
+    if: ${{ needs.smoke.result == 'success' && needs.smoke.outputs.smoke_failed == 'true' }}
+    uses: ./.github/workflows/web-smoke-triage.lock.yml
+    with:
+      artifact-name: ${{ needs.smoke.outputs.artifact_name }}
+      artifacts-dir: tests/e2e/.artifacts
+    secrets:
+      GH_AW_GEMINI_API_KEY: ${{ secrets.GH_AW_GEMINI_API_KEY }}
+
+  fail-after-triage:
+    name: Mark failed after triage
+    needs: [smoke, triage]
+    if: ${{ always() && needs.smoke.result == 'success' && needs.smoke.outputs.smoke_failed == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Preserve failed smoke status
+        run: |
+          echo "Production web smoke failed; triage has completed or attempted."
+          exit 1

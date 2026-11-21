@@ -1,0 +1,211 @@
+name: Deploy
+
+# Stage 3 of the release pipeline:
+#
+#   Build & Push ─► Deploy to Test ─► E2E ─► Deploy (prod)  ← this workflow
+#
+# Keys off `Deploy to Test`'s success, not `Build & Push`'s. A failing
+# test env or failing E2E blocks prod automatically. The manual
+# `workflow_dispatch` escape hatch is still available for emergency
+# patches that can't wait on the test pipeline.
+
+on:
+  workflow_run:
+    workflows: [Deploy to Test]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Image tag to deploy (default: latest)'
+        required: false
+        default: 'latest'
+      skip_test_env:
+        description: 'Emergency: deploy to prod without waiting on test (not recommended)'
+        required: false
+        default: 'false'
+      bootstrap_migrations:
+        description: 'Seed _sqlx_migrations for a legacy DB (run once, then leave false)'
+        required: false
+        default: 'false'
+
+env:
+  REGION: us-central1
+  SERVICE: krabarena-api
+  REPO: krabarena-repo
+
+jobs:
+  deploy:
+    name: Deploy to Cloud Run
+    runs-on: ubuntu-latest
+    if: ${{ github.repository == 'krabarena/krabarena-private' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success') }}
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Determine image tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ github.event.inputs.image_tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=latest" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Sync GitHub secrets → Secret Manager
+        if: ${{ vars.SECRETS_SOURCE == 'github' }}
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          MAILGUN_API_KEY: ${{ secrets.MAILGUN_API_KEY }}
+          MAILGUN_DOMAIN: ${{ secrets.MAILGUN_DOMAIN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          CRON_SHARED_SECRET: ${{ secrets.CRON_SHARED_SECRET }}
+          OAUTH_GITHUB_CLIENT_ID: ${{ secrets.OAUTH_GITHUB_CLIENT_ID }}
+          OAUTH_GITHUB_CLIENT_SECRET: ${{ secrets.OAUTH_GITHUB_CLIENT_SECRET }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+        run: scripts/sync-secrets-to-gcp.sh apply
+
+      # All sensitive bindings now resolve from GCP Secret Manager via
+      # `--set-secrets KEY=secret-name:latest`. The container's value
+      # is read by Cloud Run at instance start and never appears in
+      # `gcloud` command history or audit logs. Non-secret env (BLOB
+      # store url, GA measurement id, public support invite) stays on
+      # `--update-env-vars`. GA_MEASUREMENT_ID is a public Google
+      # Analytics tag id.
+      #
+      # Rotation: `gcloud secrets versions add <secret-id>
+      # --data-file=- < value` adds a new version; the `:latest`
+      # binding picks it up on the next Cloud Run revision swap (any
+      # subsequent deploy). The Terraform in `terraform/secrets.tf`
+      # owns the containers + IAM; values live only inside Secret
+      # Manager. Audit recommendation #6, phase 2.
+      #
+      # REDIS_URL: backs the per-IP / per-user rate limiter
+      # (web::rate_limit). Points at the Memorystore Basic-tier private
+      # IP provisioned by `terraform/redis.tf` (Basic-tier IPs are stable
+      # for the instance's lifetime — refresh with `terraform output
+      # redis_host` if the instance is ever re-created). The limiter
+      # fails open + is gated on REDIS_URL, so a wrong/missing value
+      # degrades to "no limiting", never an outage. Egress to the
+      # instance's private IP routes through the `--vpc-connector` below.
+      - name: Deploy to Cloud Run
+        env:
+          BOOTSTRAP: ${{ github.event.inputs.bootstrap_migrations == 'true' && 'true' || 'false' }}
+        run: |
+          IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.REPO }}/krabarena-api:${{ steps.tag.outputs.tag }}"
+          BASE_REMOVE="DATABASE_URL,JWT_SECRET,MAILGUN_API_KEY,MAILGUN_DOMAIN,GEMINI_API_KEY,CRON_SHARED_SECRET,GITHUB_CLIENT_ID,GITHUB_CLIENT_SECRET,GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,KRABSCOUT_WEBHOOK_SECRET,KRABSCOUT_WEBHOOK_URL,GITHUB_OUTREACH_SYNTHESIZE_ENABLED,GITHUB_OUTREACH_DISCOVER_ENABLED,GITHUB_OUTREACH_VERIFY_ENABLED,GITHUB_OUTREACH_DRAFT_ENABLED,GITHUB_OUTREACH_PUBLISH_ENABLED,GITHUB_OUTREACH_DRY_RUN,GITHUB_OUTREACH_AUTO_APPROVE,GITHUB_OUTREACH_GITHUB_TOKEN,GITHUB_OUTREACH_LLM_API_KEY,GITHUB_OUTREACH_LLM_MODEL,GITHUB_OUTREACH_SENDER_LOGIN,GITHUB_OUTREACH_MAX_WALL_TIME_SECS,GITHUB_OUTREACH_MAX_REPOS_INSPECTED,GITHUB_OUTREACH_MAX_CANDIDATES_FOR_LLM,GITHUB_OUTREACH_MAX_CANDIDATES_VERIFIED,GITHUB_OUTREACH_MAX_DRAFTS,GITHUB_OUTREACH_MAX_PUBLISHED,GITHUB_OUTREACH_MAX_SEARCH_PROFILES,GITHUB_OUTREACH_MAX_QUERIES_PER_PROFILE,GITHUB_OUTREACH_MAX_FILES_PER_REPO,GITHUB_OUTREACH_MAX_FILE_BYTES,GITHUB_OUTREACH_MAX_SOURCES_PER_RUN,GITHUB_OUTREACH_VERIFY_BATCH_SIZE,GITHUB_OUTREACH_SYNTHESIS_MIN_CONFIDENCE,GITHUB_OUTREACH_DISCOVER_EXHAUSTED_BACKOFF_SECS,GITHUB_OUTREACH_PUBLISH_MIN_DELAY_SECS,GITHUB_OUTREACH_PUBLISH_JITTER_SECS,GITHUB_OUTREACH_MAX_TOTAL_PER_SENDER_PER_DAY,GITHUB_OUTREACH_MAX_PER_SENDER_PER_DAY,GITHUB_OUTREACH_OWNER_COOLDOWN_DAYS,GITHUB_OUTREACH_MAX_CLAIM_PER_RUN,GITHUB_OUTREACH_MAX_CLAIM_PER_SENDER_PER_DAY,GITHUB_OUTREACH_CLAIM_OWNER_COOLDOWN_DAYS"
+          if [ "$BOOTSTRAP" = "true" ]; then
+            REMOVE_VARS="$BASE_REMOVE"
+            MIGRATE_VARS=",BOOTSTRAP_SQLX_MIGRATIONS=true,SQLX_AUTO_MIGRATE=true"
+          else
+            REMOVE_VARS="BOOTSTRAP_SQLX_MIGRATIONS,$BASE_REMOVE"
+            MIGRATE_VARS=",SQLX_AUTO_MIGRATE=true"
+          fi
+          gcloud run deploy ${{ env.SERVICE }} \
+            --image "${IMAGE}" \
+            --region ${{ env.REGION }} \
+            --port 8080 \
+            --memory 512Mi \
+            --vpc-connector krabarena-redis-conn \
+            --vpc-egress private-ranges-only \
+            --timeout 1800 \
+            --remove-env-vars "$REMOVE_VARS" \
+            --set-secrets "\
+              DATABASE_URL=database-url:latest,\
+              JWT_SECRET=jwt-secret:latest,\
+              MAILGUN_API_KEY=mailgun-api-key:latest,\
+              MAILGUN_DOMAIN=mailgun-domain:latest,\
+              GEMINI_API_KEY=gemini-api-key:latest,\
+              CRON_SHARED_SECRET=cron-shared-secret:latest,\
+              GITHUB_CLIENT_ID=github-client-id:latest,\
+              GITHUB_CLIENT_SECRET=github-client-secret:latest,\
+              GOOGLE_CLIENT_ID=google-client-id:latest,\
+              GOOGLE_CLIENT_SECRET=google-client-secret:latest" \
+            --update-env-vars "\
+              BLOB_STORE_URL=gs://krabarena-artifacts,\
+              PRIVATE_BLOB_STORE_URL=gs://krabarena-artifacts-private,\
+              NODE_ENV=${{ vars.NODE_ENV }},\
+              GA_MEASUREMENT_ID=${{ vars.GA_MEASUREMENT_ID }},\
+              RECAPTCHA_SITE_KEY=${{ vars.RECAPTCHA_SITE_KEY }},\
+              RECAPTCHA_ENTERPRISE_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }},\
+              RECAPTCHA_ENTERPRISE_API_KEY=${{ secrets.RECAPTCHA_ENTERPRISE_API_KEY }},\
+              RECAPTCHA_SCORE_THRESHOLD=0.5,\
+              DISCORD_SUPPORT_INVITE_URL=https://discord.gg/K3zmyrqBSz,\
+              REDIS_URL=${{ secrets.REDIS_URL }},\
+              DISCORD_MONITOR_ENABLED=true,\
+              NOTIFICATION_EMAILS_ENABLED=true,\
+              DISCORD_MONITOR_BOT_TOKEN=${{ secrets.DISCORD_MONITOR_BOT_TOKEN }},\
+              DISCORD_MONITOR_CHANNEL_ID=${{ secrets.DISCORD_MONITOR_CHANNEL_ID }}${MIGRATE_VARS}" \
+            --project ${{ secrets.GCP_PROJECT_ID }} \
+            --quiet
+
+      - name: Get service URL
+        run: |
+          URL=$(gcloud run services describe ${{ env.SERVICE }} \
+            --region ${{ env.REGION }} \
+            --project ${{ secrets.GCP_PROJECT_ID }} \
+            --format 'value(status.url)')
+          {
+            echo "## Deploy Result"
+            echo "- **URL**: ${URL}"
+            echo "- **Image**: krabarena-api:${{ steps.tag.outputs.tag }}"
+            echo "- **Region**: ${{ env.REGION }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Smoke test
+        run: |
+          URL=$(gcloud run services describe ${{ env.SERVICE }} \
+            --region ${{ env.REGION }} \
+            --project ${{ secrets.GCP_PROJECT_ID }} \
+            --format 'value(status.url)')
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${URL}/about")
+          if [ "$STATUS" != "200" ]; then
+            echo "Smoke test failed: HTTP ${STATUS}"
+            exit 1
+          fi
+          echo "Smoke test passed: HTTP ${STATUS}"
+
+      # og-render is a SEPARATE long-running Cloud Run service (its own
+      # image) that screenshots this API's /og-html templates with a warm,
+      # REUSED headless Chromium. Because that Chromium is reused across
+      # renders, it can hold the /og-html HTML/CSS/fonts it cached BEFORE
+      # this deploy and keep screenshotting the stale card design until it
+      # is restarted. So every prod deploy forces a fresh og-render revision
+      # (new container = empty Chromium cache = renders the just-deployed
+      # design). Best-effort: the web app is already live, so an og-render
+      # hiccup must not fail the deploy.
+      #
+      # NOTE: this refreshes the RENDERER, not the cached PNGs. The OG PNG
+      # cache in gs://krabarena-artifacts/og/{battles,claims} keys on the
+      # battle/claim DATA, not the card design — so a pure *design* change
+      # (reskin, OG template/CSS edit) ALSO needs a one-time cache bust:
+      #   gcloud storage rm --recursive \
+      #     gs://krabarena-artifacts/og/battles/ gs://krabarena-artifacts/og/claims/
+      # See services/og-render/README.md → "Deploy contract".
+      - name: Refresh og-render (clear stale Chromium cache)
+        continue-on-error: true
+        run: |
+          # --execution-environment=gen2 is REQUIRED: headless Chromium hangs
+          # on launch under gen1 (browserType.launch: Timeout exceeded → every
+          # render 502s → stale/fallback OG cards). Re-assert it here so a
+          # manual gen1 redeploy can never silently regress OG rendering.
+          gcloud run services update og-render \
+            --region ${{ env.REGION }} \
+            --project ${{ secrets.GCP_PROJECT_ID }} \
+            --execution-environment gen2 \
+            --update-env-vars "OG_RENDER_REFRESH_SHA=${{ github.sha }}" \
+            --quiet
+          echo "og-render refreshed to a fresh gen2 revision (deploy SHA ${{ github.sha }})"

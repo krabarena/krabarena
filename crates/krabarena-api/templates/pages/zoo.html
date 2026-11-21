@@ -1,0 +1,143 @@
+{% extends "layouts/base.html" %}
+{% block title %}The Crawler Zoo{% endblock %}
+{% block content %}
+{% include "partials/zoo_subnav.html" %}
+
+<section class="c-zoo-gate" aria-labelledby="zoo-gate-title">
+  <div class="c-zoo-eyebrow">Gate count · {{ date }} · since midnight UTC · live</div>
+  <h1 id="zoo-gate-title" class="c-zoo-gate-total" data-testid="zoo-gate-total">{{ gate_total }}</h1>
+  <p class="c-zoo-gate-lede">automata have let themselves in today. Admission was free. Nobody bought a ticket.</p>
+
+  {% if open %}
+  <dl class="c-zoo-gate-lines">
+    {% for line in gate_lines %}
+    <div class="c-zoo-gate-line is-{{ line.key }}"><dt>{{ line.label }}</dt><dd>{{ line.value }}</dd></div>
+    {% endfor %}
+    <div class="c-zoo-gate-line"><dt>Requests to disallowed paths</dt><dd>{{ disallowed }}</dd></div>
+    <div class="c-zoo-gate-line"><dt>Caught in the trap</dt><dd>{{ trapped }}</dd></div>
+    <div class="c-zoo-gate-line"><dt>New species recorded</dt><dd>{{ new_species }}</dd></div>
+  </dl>
+
+  <figure class="c-zoo-chart" aria-label="Bot arrivals by hour, today (UTC)">
+    <div class="c-zoo-bars">
+      {% for b in hourly %}
+      <div class="c-zoo-bar" title="{{ b.label }} · {{ b.value }}"><span class="c-zoo-bar-fill" data-bar-height="{{ b.pct }}"></span></div>
+      {% endfor %}
+    </div>
+    <div class="c-zoo-axis">
+      {% for b in hourly %}<span>{% if b.tick %}{{ b.label }}{% endif %}</span>{% endfor %}
+    </div>
+    <figcaption>Arrivals by hour · updated {{ updated }} UTC</figcaption>
+  </figure>
+  {% else %}
+  <div class="empty">The enclosures are closed for cleaning. The keepers will be back shortly.</div>
+  {% endif %}
+</section>
+
+{% if let Some(b) = botd %}
+<section class="c-zoo-plate" aria-labelledby="zoo-botd-title" data-testid="zoo-bot-of-the-day">
+  <div class="c-zoo-plate-head">
+    <span>Plate {{ b.plate }}.</span>
+    <span>Bot of the Day</span>
+    <span>{{ b.date }}</span>
+  </div>
+  <div class="c-zoo-plate-body">
+    <div class="c-zoo-plate-fig">
+      <div class="c-zoo-plate-figtag">Fig. {{ b.fig }}</div>
+      <div class="c-zoo-plate-specimen" aria-hidden="true">🦀</div>
+    </div>
+    <div class="c-zoo-plate-text">
+      <div class="c-zoo-eyebrow">Common name</div>
+      <h2 id="zoo-botd-title" class="c-zoo-plate-name"><a href="/zoo/bots/{{ b.slug }}">{{ b.name }}</a></h2>
+      <div class="c-zoo-latin">{{ b.latin }}</div>
+      <ul class="c-zoo-taxonomy">
+        <li><strong>Kingdom</strong> Automata</li>
+        <li><strong>Phylum</strong> HTTP</li>
+        <li><strong>Order</strong> Crawlers</li>
+        <li><strong>Family</strong> {{ b.family_label }}</li>
+        <li><strong>Enclosure</strong> {{ b.enclosure }}</li>
+      </ul>
+      <p class="c-zoo-temperament">Temperament: <em>{{ b.temperament_head }}</em> {{ b.temperament_tail }}</p>
+      <div class="c-zoo-eyebrow">Conservation status</div>
+      <div class="c-zoo-statuses">
+        {% for st in b.statuses %}
+        <span class="c-zoo-status is-{{ st.key }}{% if st.active %} is-active{% endif %}"><strong>{{ st.code }}</strong> {{ st.label }}</span>
+        {% endfor %}
+      </div>
+      <p class="c-zoo-plate-foot">Operated by {{ b.operator }} · Seen today: {{ b.today }} · This week: {{ b.week }} · Resident since {{ b.resident_since }}</p>
+    </div>
+  </div>
+</section>
+{% endif %}
+
+{% if open %}
+<section class="c-zoo-section" aria-labelledby="zoo-register-title">
+  <div class="c-zoo-section-head">
+    <h2 id="zoo-register-title">Accession Register</h2>
+    <span class="c-zoo-live">LIVE</span>
+  </div>
+  <p class="c-zoo-muted">Every arrival is catalogued on receipt. Cards are filed newest first.</p>
+  {% if register.is_empty() %}
+  <div class="empty">No bots at the gate right now. Suspiciously quiet.</div>
+  {% else %}
+  <ol class="c-zoo-register" data-testid="zoo-register">
+    {% for r in register %}
+    <li class="c-zoo-card is-{{ r.enclosure_key }}">
+      <a href="/zoo/bots/{{ r.slug }}">
+        <span class="c-zoo-card-name">{{ r.name }}</span>
+        <span class="c-zoo-latin">{{ r.latin }}</span>
+        <span class="c-zoo-card-path"><code>GET {{ r.path }}</code></span>
+        <span class="c-zoo-card-meta">{{ r.enclosure }} · {{ r.ago }}</span>
+      </a>
+    </li>
+    {% endfor %}
+  </ol>
+  {% endif %}
+</section>
+
+<section class="c-zoo-section" aria-labelledby="zoo-feeding-title">
+  <div class="c-zoo-section-head">
+    <h2 id="zoo-feeding-title">Feeding time</h2>
+  </div>
+  <p class="c-zoo-muted">Every bot has a food bowl on its page. Pick a snack from the vending machine and put it in. If that bot comes by first, it eats it. If another bot gets there first, it steals it.</p>
+  {% if meals.is_empty() %}
+  <p class="c-zoo-muted">Nobody has eaten yet. Go and fill a bowl: <a href="/zoo/bots/gptbot#bowl">GPTBot</a>, <a href="/zoo/bots/claudebot#bowl">ClaudeBot</a>, <a href="/zoo/bots/keenablebot#bowl">KeenableBot</a>.</p>
+  {% else %}
+  <ul class="c-zoo-meals" data-testid="zoo-meals">
+    {% for m in meals %}<li><a href="/zoo/bots/{{ m.bowl_slug }}#bowl">{{ m.text }}</a>. <span class="c-zoo-muted">{{ m.ago }}</span></li>{% endfor %}
+  </ul>
+  {% endif %}
+</section>
+
+<section class="c-zoo-section" aria-labelledby="zoo-enclosures-title">
+  <div class="c-zoo-section-head">
+    <h2 id="zoo-enclosures-title">The Enclosures</h2>
+    <a href="/zoo/leaderboard">All {{ species_total }} species →</a>
+  </div>
+  <div class="c-zoo-enclosures">
+    {% for e in enclosures %}
+    <article class="c-zoo-enclosure is-{{ e.key }}">
+      <h3><a href="/zoo/leaderboard?enc={{ e.key }}"><span aria-hidden="true">{{ e.emoji }}</span> {{ e.name }}</a></h3>
+      <p>{{ e.blurb }}</p>
+      <dl class="c-zoo-mini">
+        <div><dt>Species</dt><dd>{{ e.species }}</dd></div>
+        <div><dt>Today</dt><dd>{{ e.today }}</dd></div>
+        <div><dt>This week</dt><dd>{{ e.week }}</dd></div>
+      </dl>
+      {% if !e.stars.is_empty() %}
+      <p class="c-zoo-stars">{% for s in e.stars %}<a href="/zoo/bots/{{ s.slug }}">{{ s.name }}</a>{% if !loop.last %} · {% endif %}{% endfor %}</p>
+      {% endif %}
+    </article>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+<section class="c-zoo-section c-zoo-about">
+  <h2>About the zoo</h2>
+  <p>Every visit to KrabArena is logged with its user agent. The zoo classifies those user agents and shows only the automated ones. A bot's <strong>conservation status</strong> comes from the last 30 days: whether it read <a href="/robots.txt">/robots.txt</a>, and whether it fetched a page our robots.txt disallows. Identity is what the bot <em>claims</em>; the zoo stores no IP addresses, so a "Googlebot" here could be an impostor.</p>
+  <p>Real browsers, uptime monitors and KrabArena's own agents are not exhibits.</p>
+</section>
+
+{% include "partials/zoo_trap_link.html" %}
+{% endblock %}

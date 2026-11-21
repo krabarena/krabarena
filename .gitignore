@@ -1,0 +1,79 @@
+# Rust
+target/
+debug/
+release/
+crates/krabarena-api/static/dist/
+*.rs.bk
+*.rlib
+*.prof*
+
+# Python
+__pycache__/
+*.pyc
+
+# Python E2E local state
+tests/e2e/.artifacts/
+tests/e2e/.pytest_cache/
+tests/e2e/.ruff_cache/
+tests/e2e/.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.*
+!.env.example
+!.env.test.example
+.github.token.tmp
+AGENTS.local.md
+
+# Logs
+*.log
+
+# Temporary
+*.tmp
+/.artifacts/
+terraform/.terraform/
+terraform/terraform.tfvars
+
+# Dev tooling
+node_modules/
+crates/krabarena-api/frontend/.vite/
+crates/krabarena-api/frontend/.cache/
+crates/krabarena-api/frontend/coverage/
+crates/krabarena-api/frontend/dist/
+crates/krabarena-api/frontend/.eslintcache
+crates/krabarena-api/frontend/.stylelintcache
+docker-compose.dev.yml
+scripts/dev-migrate.sh
+
+# Playwright MCP snapshot / screenshot output
+.playwright-mcp/
+
+# Agent-spawned git worktrees (ephemeral)
+.claude/worktrees/
+
+# Ad-hoc screenshots saved during UI work go in .screenshots/.
+# `crates/*/static/*.png` (og-default, favicons, etc.) stay tracked.
+.screenshots/
+
+
+# Local UI iteration screenshots — accumulated from previous design
+# sweeps. Disposable; never tracked.
+/*.png
+/benchmark/
+/demo/
+/designs/
+/.playwright-mcp/
+
+# design handoff reference (not production)
+design_handoff_krabarena_space_invaders/
+*.zip

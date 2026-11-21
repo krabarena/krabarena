@@ -1,0 +1,1173 @@
+/* ============================================================================
+   SPACE INVADERS / 8-BIT ARCADE RESKIN
+   Home page + global chrome (nav, footer, effects). Imported LAST in the
+   `components` layer so its rules win on equal specificity over the base
+   forum-theme / home styles. Dynamic values (bar widths, logo bg) live in the
+   `exceptions` layer; hard pixel corners + neon palette come from tokens.css.
+   ============================================================================ */
+
+/* ---------- keyframes (kebab-case per stylelint standard) ---------- */
+@keyframes ka-twinkle {
+  0%,
+  100% {
+    opacity: 0.9;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+@keyframes ka-blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes ka-march {
+  0% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(10px);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+@keyframes ka-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ---------- global base ---------- */
+body {
+  background: var(--ka-bg);
+  color: var(--ka-text-2);
+  font-family: var(--font-body);
+  font-size: 15px;
+  letter-spacing: 0.5px;
+  position: relative;
+  overflow-x: hidden;
+}
+a {
+  color: var(--ka-green);
+  text-decoration: none;
+}
+a:hover {
+  color: var(--ka-green-hover);
+}
+::selection {
+  background: var(--ka-orange);
+  color: var(--ka-bg);
+}
+
+/* Fixed CRT overlays (mounted once in base.html). */
+.ka-starfield {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    radial-gradient(1px 1px at 25px 35px, #9fb4c8 50%, transparent 51%),
+    radial-gradient(1px 1px at 110px 140px, #6b7d8f 50%, transparent 51%),
+    radial-gradient(2px 2px at 190px 60px, #d8ffe4 50%, transparent 51%),
+    radial-gradient(1px 1px at 60px 210px, #9fb4c8 50%, transparent 51%),
+    radial-gradient(1px 1px at 230px 190px, #6b7d8f 50%, transparent 51%);
+  background-size: 260px 260px;
+  animation: ka-twinkle 4s ease-in-out infinite;
+}
+.ka-scanlines {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  pointer-events: none;
+  mix-blend-mode: multiply;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.18) 0,
+    rgba(0, 0, 0, 0.18) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+}
+.ka-blink {
+  animation: ka-blink 1.2s step-end infinite;
+}
+
+/* Content sits above the starfield. */
+.topnav,
+.layout,
+.ka-footer {
+  position: relative;
+  z-index: 1;
+}
+
+/* ============================================================================
+   HEADER / NAV
+   ============================================================================ */
+.topnav {
+  background: var(--ka-bg);
+  border-bottom: 2px solid var(--ka-line);
+  backdrop-filter: none;
+  gap: 22px;
+}
+.brand {
+  color: var(--ka-orange);
+  gap: 14px;
+}
+.brand-mark {
+  width: 34px;
+  height: 28px;
+  image-rendering: pixelated;
+}
+.brand-text {
+  font-family: var(--font-display);
+  font-size: 15px;
+  color: var(--ka-orange);
+  text-shadow: 0 0 12px rgba(240, 104, 39, 0.5);
+  letter-spacing: 0;
+}
+.ka-wm-arena {
+  color: var(--ka-green);
+}
+
+/* Search: square, dark, arcade. */
+.c-searchbox-input {
+  border-radius: 0;
+  background: var(--ka-surface-alt);
+  border: 2px solid var(--ka-line);
+  color: var(--ka-text-2);
+  font-family: var(--font-body);
+  font-size: 13px;
+}
+.c-searchbox-input:focus {
+  border-color: var(--ka-green);
+  outline: none;
+}
+
+/* Nav links — Press Start 2P pills; first (Battles) is the active green fill. */
+.navlink {
+  font-family: var(--font-display);
+  font-size: 9px;
+  letter-spacing: 0;
+  color: var(--ka-text-4);
+  padding: 9px 12px;
+  border: 2px solid transparent;
+}
+.navlink:hover {
+  color: var(--ka-green);
+  border-color: var(--ka-line);
+}
+.navlink.is-nav-active,
+.navlink.is-nav-active:hover {
+  color: var(--ka-bg);
+  background: var(--ka-green);
+  border-color: var(--ka-green);
+}
+
+.navctas {
+  border-left: 1px solid var(--ka-line);
+}
+.navcta {
+  font-family: var(--font-display);
+  font-size: 9px;
+  height: auto;
+  padding: 10px 14px;
+  border-radius: 0;
+  letter-spacing: 0;
+}
+.navcta:active {
+  transform: translate(2px, 2px);
+}
+.navcta-community {
+  background: transparent;
+  color: var(--ka-cyan);
+  border: 2px solid var(--ka-cyan);
+  box-shadow: 3px 3px 0 var(--ka-cyan-shadow);
+}
+.navcta-community:hover {
+  background: var(--ka-cyan);
+  color: var(--ka-bg);
+  border-color: var(--ka-cyan);
+}
+.navcta-community:active {
+  box-shadow: 0 0 0 var(--ka-cyan-shadow);
+}
+.navcta-github {
+  padding-left: 10px;
+  padding-right: 10px;
+  background: transparent;
+  color: var(--ka-green);
+  border: 2px solid var(--ka-green);
+  box-shadow: 3px 3px 0 var(--ka-green-shadow);
+}
+.navcta-github:hover {
+  background: var(--ka-green);
+  color: var(--ka-bg);
+  border-color: var(--ka-green);
+}
+.navcta-github:active {
+  box-shadow: 0 0 0 var(--ka-green-shadow);
+}
+.navcta-primary {
+  background: transparent;
+  color: var(--ka-orange);
+  border: 2px solid var(--ka-orange);
+  box-shadow: 3px 3px 0 var(--ka-orange-shadow);
+}
+.navcta-primary:hover {
+  background: var(--ka-orange);
+  color: var(--ka-bg);
+  border-color: var(--ka-orange);
+}
+.navcta-primary:active {
+  box-shadow: 0 0 0 var(--ka-orange-shadow);
+}
+
+/* ============================================================================
+   HERO
+   ============================================================================ */
+.hero {
+  border: 0;
+  background: none;
+  border-radius: 0;
+  padding: 28px 0 22px;
+  margin-bottom: 0;
+  text-align: center;
+}
+.ka-invaders {
+  display: flex;
+  justify-content: center;
+  gap: 36px;
+  margin-bottom: 14px;
+  animation: ka-march 2.4s steps(2) infinite;
+}
+.ka-invader {
+  display: block;
+  width: 28px;
+  height: 20px;
+  opacity: 0.85;
+  -webkit-mask: url("/static/invader.svg") center / contain no-repeat;
+  mask: url("/static/invader.svg") center / contain no-repeat;
+}
+.ka-invader-1 {
+  background-color: var(--ka-green);
+}
+.ka-invader-2 {
+  background-color: var(--ka-cyan);
+}
+.ka-invader-3 {
+  background-color: var(--ka-orange);
+}
+.hero-headline {
+  /* forum-theme sets this to display:flex/column + text-wrap:balance, which
+     mangles our simple "line one <br> line two" markup into 3 stacked items.
+     Force plain block so the single <br> yields exactly two centred lines. */
+  display: block;
+  text-wrap: wrap;
+  font-family: var(--font-display);
+  font-size: 34px;
+  line-height: 1.28;
+  letter-spacing: -0.02em;
+  margin: 0 auto 12px;
+  max-width: 900px;
+  color: var(--ka-text);
+  text-transform: uppercase;
+  text-shadow: 0 0 24px rgba(61, 255, 124, 0.25);
+}
+@media (max-width: 620px) {
+  .hero-headline {
+    font-size: 26px;
+  }
+}
+@media (max-width: 460px) {
+  .hero-headline {
+    font-size: 20px;
+  }
+}
+.hero-line-dark,
+.hero-line-accent {
+  color: inherit;
+}
+.hero-headline .hero-hl {
+  color: var(--ka-green);
+}
+.hero-sub {
+  font-family: var(--font-body);
+  font-size: 18px;
+  color: var(--ka-text-3);
+  max-width: 640px;
+  margin: 0 auto 22px;
+  line-height: 1.45;
+}
+
+/* "INSERT AGENT TO START" copy box */
+.hero-jump {
+  max-width: 720px;
+  margin: 0 auto;
+  border: 2px solid var(--ka-orange);
+  background: var(--ka-surface);
+  box-shadow:
+    6px 6px 0 #2a1206,
+    0 0 32px rgba(240, 104, 39, 0.12);
+  text-align: left;
+}
+.hero-jump-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 10px 16px;
+  border-bottom: 2px solid #2a1a10;
+  background: #120c08;
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--ka-orange);
+  letter-spacing: 0;
+  text-transform: none;
+}
+.hero-jump-credit {
+  margin-left: auto;
+  font-family: var(--font-display);
+  font-size: 8px;
+  color: var(--ka-text-4);
+}
+.hero-jump-cmd {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  position: static;
+  margin: 0;
+  padding: 18px 16px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.35;
+  color: var(--ka-green);
+  white-space: nowrap;
+  overflow-x: auto;
+}
+.hero-jump-cmd:hover {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.hero-jump-cmd code {
+  flex: 1;
+  min-width: 0;
+  color: var(--ka-green);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hero-jump-cmd .hero-jump-copy {
+  position: static;
+  transform: none;
+  flex: 0 0 auto;
+  font-family: var(--font-display);
+  font-size: 9px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ka-bg);
+  background: var(--ka-green);
+  border: 2px solid var(--ka-green);
+  border-radius: 0;
+  box-shadow: 3px 3px 0 var(--ka-green-shadow);
+  padding: 12px 16px;
+  pointer-events: none;
+}
+.hero-jump-cmd:hover .hero-jump-copy {
+  color: var(--ka-bg);
+  background: var(--ka-green-hover);
+  border-color: var(--ka-green-hover);
+}
+.hero-jump-copy.copied {
+  background: var(--ka-green-hover);
+  border-color: var(--ka-green-hover);
+  color: var(--ka-bg);
+}
+.hero-jump-foot {
+  padding: 0 16px 14px;
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--ka-text-4);
+}
+.hero-jump-signin {
+  color: var(--ka-green);
+  font-weight: 400;
+  border-bottom: 0;
+}
+
+/* ============================================================================
+   TABS + FILTERS
+   ============================================================================ */
+.tab-row {
+  border-bottom: 0;
+  gap: 8px;
+}
+.tab {
+  font-family: var(--font-display);
+  font-size: 9px;
+  letter-spacing: 0;
+  padding: 10px 14px;
+  border-radius: 0;
+  border: 2px solid var(--ka-line);
+  color: var(--ka-text-4);
+  background: transparent;
+}
+.tab:hover {
+  color: var(--ka-orange);
+  border-color: var(--ka-orange);
+  background: transparent;
+}
+.tab.active {
+  background: var(--ka-orange);
+  color: var(--ka-bg);
+  border-color: var(--ka-orange);
+}
+.home-filters {
+  border-bottom: 2px dashed var(--ka-line);
+  padding-bottom: 16px;
+}
+.tag-search {
+  border-radius: 0;
+  border: 2px solid var(--ka-line);
+  background: var(--ka-surface-alt);
+}
+.tag-search:focus-within {
+  border-color: var(--ka-green);
+}
+.filter-chip {
+  font-family: var(--font-body);
+  font-size: 14px;
+  letter-spacing: 0;
+  border-radius: 0;
+  border: 1px solid var(--ka-line);
+  color: var(--ka-text-3);
+  background: transparent;
+  padding: 6px 12px;
+}
+.filter-chip:hover {
+  color: var(--ka-green);
+  border-color: var(--ka-green);
+  background: transparent;
+}
+.filter-chip.active {
+  background: var(--ka-green);
+  color: var(--ka-bg);
+  border-color: var(--ka-green);
+}
+
+/* ============================================================================
+   FEED / BATTLE CARDS
+   ============================================================================ */
+.feed {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+.post {
+  border: 2px solid var(--ka-line);
+  background: var(--ka-surface);
+  border-radius: 0;
+  box-shadow: var(--ka-card-shadow);
+  margin-bottom: 0;
+  transition:
+    border-color 0.12s,
+    box-shadow 0.12s;
+}
+.post:hover {
+  border-color: var(--ka-green);
+  box-shadow: 6px 6px 0 var(--ka-green-shadow);
+}
+.post-body {
+  padding: 20px;
+}
+.post-meta {
+  margin: -20px -20px 16px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--ka-line);
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--ka-text-4);
+  gap: 12px;
+}
+.battle-badge {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  color: var(--ka-orange);
+  font-weight: 400;
+  font-size: 18px;
+}
+a.battle-badge:hover {
+  background: transparent;
+  color: var(--ka-orange-hover);
+}
+.status-pill {
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ka-green);
+}
+.status-active {
+  background: transparent;
+  color: var(--ka-green);
+}
+.status-open {
+  background: transparent;
+  color: var(--ka-cyan);
+}
+.status-settled {
+  background: transparent;
+  color: var(--ka-text-4);
+}
+/* Home feed card timestamp: `<time title="exact UTC">3h ago</time>`. */
+.feed-time {
+  color: var(--ka-text-3);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  cursor: help;
+}
+.heat-pill {
+  margin-left: auto;
+  border-radius: 0;
+  padding: 5px 8px;
+  font-family: var(--font-display);
+  font-size: 8px;
+  font-weight: 400;
+}
+.heat-boiling,
+.heat-pill.temp-boiling {
+  background: transparent;
+  color: var(--ka-red);
+  border: 1px solid var(--ka-red);
+}
+.heat-warm,
+.heat-pill.temp-warm {
+  background: transparent;
+  color: var(--ka-gold);
+  border: 1px solid var(--ka-gold);
+}
+.heat-pill.temp-hot {
+  background: transparent;
+  color: var(--ka-orange);
+  border: 1px solid var(--ka-orange);
+}
+.heat-cold,
+.heat-pill.temp-cold {
+  background: transparent;
+  color: var(--ka-text-4);
+  border: 1px solid var(--ka-line);
+}
+.post-title {
+  font-family: var(--font-display);
+  font-size: 14px;
+  line-height: 1.8;
+  letter-spacing: 0;
+  color: var(--ka-text);
+  margin: 0 0 16px;
+}
+.post-title:hover,
+.post-title a:hover {
+  color: var(--ka-green);
+}
+
+/* Contender logos → cartridge frames (bg/border set in exceptions layer). */
+.battle-card-logos {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.battle-card-logos img {
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--ka-line);
+  background: #fff;
+  padding: 1px;
+  border-radius: 0;
+}
+.post-summary {
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.35;
+  color: var(--ka-text-3);
+  margin: 0 0 18px;
+}
+.post-summary strong {
+  color: var(--ka-text);
+}
+
+/* result panel + leaderboard */
+.result-panel {
+  background: var(--ka-surface-deep);
+  border: 1px solid var(--ka-line);
+  border-radius: 0;
+  margin-bottom: 16px;
+}
+.panel-section {
+  border-bottom: 1px solid var(--ka-line);
+}
+.panel-title {
+  font-family: var(--font-display);
+  font-size: 8px;
+  letter-spacing: 0;
+  color: var(--ka-green);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.leaderboard th {
+  font-family: var(--font-display);
+  font-size: 8px;
+  letter-spacing: 0;
+  color: var(--ka-green);
+  border-bottom: 1px solid var(--ka-line);
+}
+.leaderboard td {
+  font-family: var(--font-body);
+  font-size: 14px;
+}
+.leaderboard .rank {
+  border-radius: 0;
+  border: 1px solid var(--ka-line);
+  background: transparent;
+  font-family: var(--font-display);
+  font-size: 10px;
+  color: var(--ka-gold);
+}
+.leaderboard tr.win .rank {
+  background: transparent;
+  border-color: var(--ka-gold);
+  color: var(--ka-gold);
+}
+.leaderboard td.score {
+  font-family: var(--font-display);
+  font-size: 10px;
+  color: var(--ka-gold);
+}
+.leaderboard tr.win td {
+  color: var(--ka-text-2);
+}
+
+/* wins-matrix (mini standings) */
+.wins-matrix th {
+  font-family: var(--font-display);
+  font-size: 8px;
+  letter-spacing: 0;
+  color: var(--ka-green);
+}
+.wins-matrix td,
+.wins-matrix .lang-name {
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--ka-text-2);
+}
+.wins-matrix .wins-col {
+  color: var(--ka-gold);
+  font-family: var(--font-display);
+  font-size: 9px;
+}
+.lb-cell-win {
+  color: var(--ka-green);
+}
+
+.metric-row .name {
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--ka-text-3);
+}
+.metric-row .claims-count {
+  font-family: var(--font-body);
+  border-radius: 0;
+  border: 1px solid var(--ka-line);
+  background: var(--ka-surface-alt);
+  color: var(--ka-text-2);
+}
+
+/* editor notes — orange left border block */
+.notes-row {
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--ka-text-4);
+  border-left: 3px solid var(--ka-orange);
+  padding: 4px 0 4px 12px;
+}
+
+/* verified/refuted health bar (flex widths from exceptions layer) */
+.verify-bar-track {
+  height: 14px;
+  border-radius: 0;
+  border: 1px solid var(--ka-line);
+  background: var(--ka-surface-alt);
+}
+.verify-bar-fill.up {
+  background: repeating-linear-gradient(
+    90deg,
+    var(--ka-green) 0,
+    var(--ka-green) 6px,
+    var(--ka-green-dark) 6px,
+    var(--ka-green-dark) 8px
+  );
+}
+.verify-bar-fill.down {
+  background: repeating-linear-gradient(
+    90deg,
+    var(--ka-red) 0,
+    var(--ka-red) 6px,
+    var(--ka-red-dark) 6px,
+    var(--ka-red-dark) 8px
+  );
+}
+.verify-bar-labels {
+  font-family: var(--font-display);
+  font-size: 8px;
+}
+.vlabel-up {
+  color: var(--ka-green);
+}
+.vlabel-down {
+  color: var(--ka-red);
+}
+
+/* footer actions */
+.post-actions {
+  gap: 10px;
+  margin-top: 4px;
+}
+.action {
+  font-family: var(--font-display);
+  font-size: 8px;
+  letter-spacing: 0;
+  border-radius: 0;
+  padding: 9px 12px;
+  color: var(--ka-text-4);
+  border: 2px solid transparent;
+}
+.action:hover {
+  background: transparent;
+  color: var(--ka-text-2);
+}
+.action.primary {
+  color: var(--ka-green);
+  border-color: var(--ka-green);
+}
+.action.primary:hover {
+  background: var(--ka-green);
+  color: var(--ka-bg);
+}
+.action.refute {
+  color: var(--ka-red);
+  border-color: var(--ka-red);
+}
+.action.refute:hover {
+  background: var(--ka-red);
+  color: var(--ka-bg);
+}
+.action .num {
+  color: inherit;
+}
+.post-actions > .action.u-ml-auto {
+  color: var(--ka-bg);
+  background: var(--ka-orange);
+  border-color: var(--ka-orange);
+  box-shadow: 3px 3px 0 var(--ka-orange-shadow);
+}
+.post-actions > .action.u-ml-auto:hover {
+  background: var(--ka-orange-hover);
+  border-color: var(--ka-orange-hover);
+  color: var(--ka-bg);
+}
+.post-actions > .action.u-ml-auto:active {
+  transform: translate(2px, 2px);
+  box-shadow: 0 0 0 var(--ka-orange-shadow);
+}
+
+/* ============================================================================
+   PROPOSED BATTLES (NEXT WAVE)
+   ============================================================================ */
+.panel.candidates-home {
+  border: 2px dashed var(--ka-line);
+  background: var(--ka-surface-deep);
+  border-radius: 0;
+}
+.candidates-home .panel-head {
+  border-bottom: 0;
+}
+.candidates-home .panel-head h3 {
+  color: var(--ka-cyan);
+}
+.candidate-title {
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 400;
+}
+.candidate-title a {
+  color: var(--ka-text-2);
+}
+.candidate-title a:hover {
+  color: var(--ka-green);
+}
+.vote-btn {
+  border-radius: 0;
+  border: 1px solid var(--ka-line);
+  background: transparent;
+  color: var(--ka-gold);
+  font-family: var(--font-display);
+  font-size: 9px;
+}
+.vote-btn:hover {
+  border-color: var(--ka-gold);
+}
+.vote-count,
+.vote-arrow {
+  color: var(--ka-gold);
+}
+
+/* pagination sentinel */
+.home-feed-sentinel {
+  display: flex;
+  justify-content: center;
+  padding-top: 8px;
+}
+
+/* ============================================================================
+   SIDEBAR / RIGHT RAIL
+   ============================================================================ */
+.layout.home-layout > .rightcol {
+  position: sticky;
+  top: 24px;
+  margin-top: 49px;
+  gap: 24px;
+}
+.panel {
+  border: 2px solid var(--ka-line);
+  background: var(--ka-surface);
+  border-radius: 0;
+}
+.panel-head {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--ka-line);
+}
+.panel-head h3 {
+  font-family: var(--font-display);
+  font-size: 11px;
+  letter-spacing: 0;
+  color: var(--ka-green);
+}
+.panel-head .sub {
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--ka-text-4);
+  margin-top: 6px;
+}
+
+/* scoreboard */
+.rc-stats-panel {
+  padding: 18px;
+}
+.rc-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  text-align: center;
+  margin: 0;
+}
+.rc-stat {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 6px;
+}
+.rc-stat .v {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 18px;
+}
+.rc-stat .l {
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--ka-text-4);
+}
+.rc-stat:nth-child(1) .v {
+  color: var(--ka-green);
+}
+.rc-stat:nth-child(2) .v {
+  color: var(--ka-orange);
+}
+.rc-stat:nth-child(3) .v {
+  color: var(--ka-cyan);
+}
+
+/* HIGH SCORES panel — gold glow (Top agents leaderboard) */
+.panel:has(.c-home-leaderboard) {
+  border-color: var(--ka-gold);
+  box-shadow: 0 0 24px rgba(255, 210, 61, 0.08);
+}
+.panel:has(.c-home-leaderboard) .panel-head {
+  border-bottom-color: #2a2408;
+  background: #12100a;
+}
+.panel:has(.c-home-leaderboard) .panel-head h3 {
+  color: var(--ka-gold);
+}
+.c-home-leaderboard .c-leaderboard-rank {
+  border-radius: 0;
+  font-family: var(--font-display);
+  font-size: 9px;
+  color: var(--ka-gold);
+}
+.c-home-leaderboard .lb-name {
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--ka-text-2);
+}
+.c-home-leaderboard .lb-domain {
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--ka-text-4);
+}
+.c-home-leaderboard .lb-effort {
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--ka-gold);
+}
+
+/* LIVE FEED panel */
+.activity-row {
+  border-bottom-color: var(--ka-line);
+  font-family: var(--font-body);
+  font-size: 14px;
+}
+.activity-icon {
+  border-radius: 0;
+  background: transparent;
+}
+.activity-icon.ai-verify {
+  color: var(--ka-green);
+}
+.activity-icon.ai-refute {
+  color: var(--ka-red);
+}
+.activity-icon.ai-claim {
+  color: var(--ka-orange);
+}
+.activity-author {
+  color: var(--ka-text-2);
+}
+.activity-text {
+  color: var(--ka-text-3);
+}
+.activity-headline {
+  color: var(--ka-text-2);
+}
+.activity-time {
+  color: var(--ka-faint);
+}
+
+/* ============================================================================
+   FOOTER
+   ============================================================================ */
+.ka-footer {
+  max-width: 1240px;
+  margin: 0 auto;
+  border-top: 2px solid var(--ka-line);
+  padding: 24px 28px 40px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--ka-faint);
+  flex-wrap: wrap;
+}
+.ka-footer-wm {
+  font-family: var(--font-display);
+  font-size: 9px;
+  color: var(--ka-orange);
+}
+.ka-footer-status {
+  margin-left: auto;
+  font-family: var(--font-display);
+  font-size: 8px;
+  color: var(--ka-faint);
+}
+
+/* ============================================================================
+   COPY TOAST (mounted by /static/arcade.js)
+   ============================================================================ */
+.ka-toast {
+  position: fixed;
+  right: 28px;
+  bottom: 28px;
+  z-index: 60;
+  border: 2px solid var(--ka-green);
+  background: var(--ka-surface);
+  color: var(--ka-green);
+  font-family: var(--font-display);
+  font-size: 9px;
+  padding: 14px 18px;
+  box-shadow: 6px 6px 0 var(--ka-green-shadow);
+  opacity: 0;
+  transform: translateY(12px);
+  pointer-events: none;
+}
+.ka-toast.is-visible {
+  animation: ka-toast-in 0.2s steps(4) both;
+}
+.ka-toast.is-hiding {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+/* Global copy-confirmation popup (toast.js → showToast, fired by dialog.js on
+   the claim/battle "Copy Command" buttons). forum-theme sets it to
+   background:var(--ink) + white text — and the reskin repoints --ink to a
+   near-white, so it went white-on-white. Repaint it as an arcade sticker. */
+.toast {
+  background: var(--ka-surface);
+  color: var(--ka-text);
+  border: 2px solid var(--ka-green);
+  border-radius: 0;
+  box-shadow: var(--ka-card-shadow);
+  font-family: var(--font-mono);
+}
+.toast-icon {
+  background: var(--ka-green);
+  color: var(--ka-bg);
+  border-radius: 0;
+}
+
+/* ============================================================================
+   REDUCED MOTION
+   ============================================================================ */
+@media (prefers-reduced-motion: reduce) {
+  .ka-starfield,
+  .ka-invaders,
+  .ka-blink {
+    animation: none;
+  }
+}
+
+/* ============================================================================
+   CLAIM DECISION CARDS (bcc-*) — used on the Claims tab + battle pages.
+   These forum-theme rules use raw cream/ink tokens, so they stayed light
+   (white-on-white leaderboard) after the reskin. Force dark neon here.
+   ============================================================================ */
+.bcc-lb,
+.bcc-lb-feed {
+  background: var(--ka-surface-deep);
+  border: 2px solid var(--ka-line);
+  border-radius: 0;
+}
+.bcc-title {
+  color: var(--ka-text);
+}
+.battle-claim-card:hover .bcc-title {
+  color: var(--ka-green);
+}
+.bcc-winner {
+  color: var(--ka-text-3);
+}
+.bcc-winner strong {
+  color: var(--ka-text);
+}
+.bcc-lb-cap {
+  color: var(--ka-text-4);
+}
+.bcc-lb-name {
+  color: var(--ka-text-2);
+}
+.bcc-lb-rank {
+  color: var(--ka-text-4);
+}
+.bcc-lb-score {
+  color: var(--ka-gold);
+}
+/* Verdict pills — arcade outline style, dark bg + neon text per state. */
+.bcc-verdict {
+  border-radius: 0;
+}
+.bcc-verdict.verified {
+  color: var(--ka-green);
+  background: var(--ka-green-shadow);
+}
+.bcc-verdict.refuted {
+  color: var(--ka-red);
+  background: var(--ka-red-dark);
+}
+.bcc-verdict.contested {
+  color: var(--ka-gold);
+  background: var(--ka-surface-alt);
+}
+.bcc-verdict.untested {
+  color: var(--ka-text-4);
+  background: var(--ka-surface-alt);
+}
+
+/* Battle-page callouts still on raw light tokens → dark neon. */
+.snapshot-note {
+  background: var(--ka-surface-alt);
+  color: var(--ka-text-2);
+  border-color: var(--ka-line);
+  border-radius: 0;
+}
+.producer-chip {
+  background: var(--ka-surface-alt);
+  color: var(--ka-text-3);
+  border-color: var(--ka-line);
+  border-radius: 0;
+}
+.wins-pie-tooltip {
+  background: var(--ka-surface);
+  color: var(--ka-text);
+  border-color: var(--ka-line);
+}
+
+/* ============================================================================
+   MOBILE — reclaim horizontal space. The base theme keeps desktop-ish
+   gutters on phones (12px frame, 16–22px inside cards), which is wasteful at
+   ≤440px. Trim the outer frame + the biggest inner pads a notch so content
+   gets wider without feeling cramped. Loaded last, so these win at equal
+   specificity over the forum-theme rules (padding-left/right longhand beats
+   the earlier `padding` shorthand without disturbing the vertical values).
+   ============================================================================ */
+@media (max-width: 560px) {
+  .layout {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+  .topnav {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+  .hero-jump {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+  .post-body,
+  .panel-head,
+  .panel-section,
+  .candidate-row {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+}

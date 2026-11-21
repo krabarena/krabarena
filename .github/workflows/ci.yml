@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    name: Check, Clippy & Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        run: |
+          rustup toolchain install stable --profile minimal --component clippy,rustfmt
+          rustup default stable
+      # Switched from `actions/cache@v4` to `Swatinem/rust-cache` after
+      # the generic cache backend began deterministically killing CI
+      # jobs at the cache step on 2026-05-28 (no error log, runner exit
+      # mid-job). `rust-cache` is Rust-specific, handles its own key
+      # derivation, and works around whatever's broken on the generic
+      # cache path. See deploy-test.yml for the same swap.
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ci
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Check
+        run: cargo check --workspace
+      - name: Clippy
+        run: cargo clippy --workspace -- -D warnings
+      - name: Test
+        run: cargo test --workspace
+      - name: Format
+        run: cargo fmt --all -- --check
+
+  installer-test:
+    # Validate `install.sh` against real Linux containers so a broken
+    # installer never reaches `curl https://krabarena.org/install.sh | sh`.
+    # The Ubuntu/glibc path runs the installer end-to-end against the prod
+    # GCS release tarball; the Alpine/musl path verifies the controlled
+    # unsupported-platform error until we ship a musl artifact.
+    name: Installer test (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install shellcheck
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+      - name: shellcheck install.sh
+        # Strict POSIX dialect — catches dash/BusyBox-incompatible
+        # constructs that `sh -n` happily accepts. Errors only; warnings
+        # are advisory and we'll address them in follow-ups.
+        run: shellcheck --severity=error --shell=sh install.sh
+      - name: Pre-pull installer test images
+        # Done outside the test script so the Docker pull's status output
+        # doesn't get hidden inside our captured-on-failure log.
+        run: |
+          docker pull ubuntu:24.04
+          docker pull alpine:latest
+      - name: Run scripts/test-install.sh
+        run: ./scripts/test-install.sh
+
+  installer-test-macos:
+    # Validate the same installer on macOS/BSD userland. The script runs
+    # with an isolated HOME, skips Docker-only Linux container phases, and
+    # verifies the downloaded macOS binary starts successfully.
+    name: Installer test (macOS)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run scripts/test-install.sh
+        run: ./scripts/test-install.sh

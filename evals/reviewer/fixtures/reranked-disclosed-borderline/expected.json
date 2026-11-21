@@ -1,0 +1,8 @@
+{
+  "label": "ok",
+  "verdict_in": ["pass", "warn"],
+  "check": "borderline-disclosed-rerank",
+  "must_catch": null,
+  "must_not_catch": "a hard, gating integrity reject — neither Floor 1 (own execution / runner not shipped) nor Floor 2 (data not frozen). The re-sort script (rank.py) AND the source result files are shipped and pinned to commit 66c22a, and the claim states upfront it re-ranks published data rather than running fresh — so neither gating floor applies and the reviewer must not raise runner_not_in_bundle / no_runnable_artifact / data_not_frozen as a blocking integrity flag. A comparability or honesty nudge (the 2022-vs-2026 mix) is acceptable as info; an integrity block is a false positive.",
+  "note": "rubric #1 borderline + honourable-mention comparability: re-ranks published ClickBench files, discloses it, ships the re-sort script and the pinned inputs. Control for over-blocking on the gating floors — a self-contained, honestly-labelled re-rank should NOT trip Floor 1/2."
+}

@@ -1,0 +1,13 @@
+{# "More" button row for the agents leaderboard. Clicking it loads the
+   next page of rows from the server and swaps itself for them plus a
+   fresh "More" row. Expects `agents_next_offset` in scope. #}
+<tr class="lb-more-row">
+  <td colspan="8">
+    <button type="button" class="btn"
+            hx-get="/fragments/agents?offset={{ agents_next_offset }}"
+            hx-target="closest tr"
+            hx-swap="outerHTML">
+      More <span class="feed-spinner" aria-hidden="true"></span>
+    </button>
+  </td>
+</tr>

@@ -1,0 +1,176 @@
+:root {
+  --krab-frontend-bundle: 1;
+
+  /* ==========================================================================
+     SPACE INVADERS / 8-BIT ARCADE PALETTE (dark neon on black)
+     The whole site is reskinned dark: the raw palette below is repointed to
+     dark surfaces + light neon text, and the semantic vars ride on top. No
+     border-radius anywhere; elevation is hard offset shadows, not blur.
+     ========================================================================== */
+
+  /* Raw palette — repointed to the arcade colourway. Names kept so existing
+     components that reference --color-* directly flip to dark automatically. */
+  --color-orange-500: #f06827;
+  --color-orange-600: #ff8a4d;
+  --color-orange-700: #c04616;
+  --color-orange-soft: #2a1a10;
+  --color-orange-tint: #120c08;
+  --color-cream-50: #0d1420;
+  --color-cream-100: #05070d;
+  --color-cream-200: #0d1420;
+  --color-cream-300: #16324a;
+  --color-cream-400: #1e3f5c;
+  --color-ink-900: #eafff1;
+  --color-ink-700: #d8ffe4;
+  --color-ink-500: #9fd8b4;
+  --color-ink-300: #7da48b;
+  --color-white: #ffffff;
+  --color-black: #05070d;
+  --color-success-600: #3dff7c;
+  --color-success-soft: #0f4022;
+  --color-danger-600: #ff3355;
+  --color-danger-soft: #7a1626;
+  --color-warning-600: #ffd23d;
+  --color-warning-soft: #2a2408;
+  --color-info-600: #39d3ff;
+  --color-info-soft: #0d2b3a;
+  --color-hot-600: #f06827;
+  --color-hot-soft: #2a1a10;
+  --color-cyan-600: #39d3ff;
+  --color-red-600: #ff3355;
+
+  /* Semantic colors */
+  --brand: var(--color-orange-500);
+  --brand-strong: var(--color-orange-600);
+  --brand-soft: var(--color-orange-soft);
+  --brand-tint: var(--color-orange-tint);
+  --bg: #05070d;
+  --bg-elev: #0b0f18;
+  --bg-card: #0b0f18;
+  --bg-hover: #0d1420;
+  --bg-input: #0d1420;
+  --surface: #0b0f18;
+  --line: #16324a;
+  --line-strong: #1e3f5c;
+  --ink: var(--color-ink-900);
+  --ink-2: var(--color-ink-700);
+  --ink-3: var(--color-ink-500);
+  --ink-4: var(--color-ink-300);
+  --text: #eafff1;
+  --text-muted: #9fd8b4;
+  --text-dim: #7da48b;
+  --muted: #9fd8b4;
+  --border: #16324a;
+  --border-strong: #1e3f5c;
+  --accent: #39d3ff;
+  --accent-soft: #0d2b3a;
+  --krab: var(--brand);
+  --krab-strong: #ff8a4d;
+  --verify: #3dff7c;
+  --verify-soft: rgb(61 255 124 / 14%);
+  --refute: #ff3355;
+  --refute-soft: rgb(255 51 85 / 14%);
+  --good: var(--color-success-600);
+  --good-soft: var(--color-success-soft);
+  --bad: var(--color-danger-600);
+  --bad-soft: var(--color-danger-soft);
+  --warm: var(--color-warning-600);
+  --warm-soft: var(--color-warning-soft);
+  --cold: var(--color-info-600);
+  --cold-soft: var(--color-info-soft);
+  --boil: var(--color-hot-600);
+  --boil-soft: var(--color-hot-soft);
+  --cyan: var(--color-cyan-600);
+  --red: var(--color-red-600);
+  --status-open: #7da48b;
+  --status-active: #3dff7c;
+  --status-settled: #39d3ff;
+  --temp-cold: #7da48b;
+  --temp-warm: #ffd23d;
+  --temp-hot: var(--brand);
+  --temp-boiling: #ff3355;
+
+  /* ---- Arcade-specific tokens (used by components/arcade.css) ---- */
+  --ka-bg: #05070d;
+  --ka-surface: #0b0f18;
+  --ka-surface-alt: #0d1420;
+  --ka-surface-deep: #080b12;
+  --ka-line: #16324a;
+  --ka-green: #3dff7c;
+  --ka-green-hover: #aefec9;
+  --ka-green-shadow: #0f4022;
+  --ka-green-dark: #1a7a42;
+  --ka-orange: #f06827;
+  --ka-orange-hover: #ff8a4d;
+  --ka-orange-shadow: #3a1808;
+  --ka-cyan: #39d3ff;
+  --ka-cyan-shadow: #0d2b3a;
+  --ka-gold: #ffd23d;
+  --ka-red: #ff3355;
+  --ka-red-dark: #7a1626;
+  --ka-text: #eafff1;
+  --ka-text-2: #d8ffe4;
+  --ka-text-3: #9fd8b4;
+  --ka-text-4: #7da48b;
+  --ka-faint: #566e60;
+  --ka-silver: #c8d6e0;
+  --ka-bronze: #c98a5a;
+  --ka-card-shadow: 6px 6px 0 #0a1622;
+
+  /* Typography */
+  --font-sans: "Press Start 2P", "VT323", ui-monospace, monospace;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", "Menlo", monospace;
+  --font-body: "IBM Plex Mono", ui-monospace, monospace;
+  --font-display: "Press Start 2P", "VT323", monospace;
+  --font-size-xs: 11px;
+  --font-size-sm: 12px;
+  --font-size-md: 14px;
+  --font-size-lg: 16px;
+  --font-size-xl: 20px;
+  --font-size-2xl: 28px;
+  --line-height-tight: 1.15;
+  --line-height-base: 1.45;
+  --line-height-relaxed: 1.65;
+
+  /* Spacing */
+  --space-0: 0;
+  --space-2xs: 4px;
+  --space-xs: 6px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+  --space-2xl: 32px;
+  --space-3xl: 48px;
+
+  /* Radius — arcade = hard pixel corners, no rounding anywhere. */
+  --radius-2xs: 0;
+  --radius-xs: 0;
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius: 0;
+  --radius-lg: 0;
+  --radius-xl: 0;
+  --radius-pill: 0;
+
+  /* Shadows — hard offset (no blur), the 8-bit "sticker" look. */
+  --shadow-xs: 2px 2px 0 #0a1622;
+  --shadow-sm: 3px 3px 0 #0a1622;
+  --shadow-soft: 6px 6px 0 #0a1622;
+  --shadow-lg: 6px 6px 0 #0a1622;
+
+  /* Z-index */
+  --z-base: 0;
+  --z-sticky: 40;
+  --z-nav: 50;
+  --z-drawer: 90;
+  --z-modal: 1000;
+  --z-toast: 10000;
+
+  /* Breakpoints */
+  --breakpoint-xs: 480px;
+  --breakpoint-sm: 640px;
+  --breakpoint-md: 720px;
+  --breakpoint-lg: 960px;
+  --breakpoint-xl: 1180px;
+}

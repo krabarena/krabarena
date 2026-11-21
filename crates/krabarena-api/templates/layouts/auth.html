@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <title>{{ meta.title }} — KrabArena</title>
+  <meta name="description" content="{{ meta.description }}">
+  <meta name="robots" content="{{ meta.robots }}">
+  <link rel="canonical" href="{{ meta.canonical_url }}">
+  <meta name="krab-analytics-title" content="{{ meta.analytics_page_title }}">
+  {% match meta.ga_measurement_id %}{% when Some with (ga_id) %}
+  <meta name="krab-ga-id" content="{{ ga_id }}">
+  {% when None %}{% endmatch %}
+  {% match meta.frontend_assets.icon_sprite %}{% when Some with (icon_sprite) %}
+  <meta name="krab-icon-sprite" content="{{ icon_sprite }}">
+  {% when None %}{% endmatch %}
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&family=VT323&display=swap" rel="stylesheet">
+  {% for stylesheet in meta.frontend_assets.stylesheets %}
+  <link rel="stylesheet" href="{{ stylesheet }}">
+  {% endfor %}
+
+  <!-- 429 auto-retry wrapper — must load before any fetch fires (see
+       static/fetch-retry.js). The auth layout is used for pre-auth
+       pages (login, device flow); those endpoints sit under the
+       strict tier, so frontend retry is what keeps a refreshed login
+       page from surfacing a raw 429. -->
+  <script src="/static/fetch-retry.js"></script>
+  <script defer src="/static/rate-limit-toast.js"></script>
+  {% block extra_head %}{% endblock %}
+</head>
+<body class="auth-shell">
+  <a class="skip-link" href="#main-content">Skip to main content</a>
+  <main id="main-content" class="auth-main" tabindex="-1">
+    {% block content %}{% endblock %}
+  </main>
+  <script type="module" src="{{ meta.frontend_assets.script }}"></script>
+</body>
+</html>

@@ -1,0 +1,555 @@
+/* KrabArena OG social cards — Space Invaders / 8-bit arcade skin.
+ *
+ * Self-hosted fonts only: the og-render headless-Chromium service is
+ * network-restricted, so Press Start 2P (display) + IBM Plex Mono
+ * (body) are served from /static/fonts as woff2 subsets. NEVER link
+ * Google Fonts here. Hard pixel corners (no border-radius), hard
+ * offset shadows, neon-on-black palette. Cards are exactly 1200x630. */
+
+/* ---- Press Start 2P (display) ---- */
+@font-face {
+  font-family: "Press Start 2P";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/static/fonts/press-start-2p-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Press Start 2P";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/static/fonts/press-start-2p-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7,
+    U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF,
+    U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* ---- IBM Plex Mono (body) 400 / 500 / 600 ---- */
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/static/fonts/ibm-plex-mono-400-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/static/fonts/ibm-plex-mono-400-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7,
+    U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF,
+    U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/static/fonts/ibm-plex-mono-500-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/static/fonts/ibm-plex-mono-500-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7,
+    U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF,
+    U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/static/fonts/ibm-plex-mono-600-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/static/fonts/ibm-plex-mono-600-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7,
+    U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF,
+    U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  border-radius: 0;
+}
+
+html,
+body {
+  width: 1200px;
+  height: 630px;
+}
+
+body.og {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #05070d;
+  color: #eafff1;
+  font-family: "IBM Plex Mono", monospace;
+}
+
+/* Starfield — tiny radial-gradient dots scattered over the card.
+ * Fixed positions (no animation; the render service takes one frame). */
+.og-stars {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background-image: radial-gradient(2px 2px at 120px 100px, #6b7d8f 50%, transparent 51%),
+    radial-gradient(2px 2px at 640px 60px, #9fb4c8 50%, transparent 51%),
+    radial-gradient(3px 3px at 300px 210px, #d8ffe4 50%, transparent 51%),
+    radial-gradient(2px 2px at 1040px 180px, #6b7d8f 50%, transparent 51%),
+    radial-gradient(2px 2px at 200px 470px, #9fb4c8 50%, transparent 51%),
+    radial-gradient(2px 2px at 880px 520px, #6b7d8f 50%, transparent 51%),
+    radial-gradient(2px 2px at 1120px 430px, #9fb4c8 50%, transparent 51%),
+    radial-gradient(2px 2px at 520px 560px, #6b7d8f 50%, transparent 51%);
+}
+
+/* Every content band sits above the starfield. */
+.og-top,
+.og-main,
+.og-foot {
+  position: relative;
+  z-index: 1;
+}
+
+/* ---- Top strip: crab + wordmark + badges ---- */
+.og-top {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 20px;
+  padding: 26px 48px;
+  border-bottom: 2px solid #16324a;
+}
+
+.og-crab {
+  width: 44px;
+  height: 44px;
+  image-rendering: pixelated;
+}
+
+.og-wordmark {
+  font-family: "Press Start 2P", monospace;
+  font-size: 16px;
+  color: #f06827;
+  text-shadow: 0 0 18px rgb(240 104 39 / 40%);
+}
+
+.og-wm-green {
+  color: #3dff7c;
+  text-shadow: 0 0 18px rgb(61 255 124 / 40%);
+}
+
+.og-badge {
+  flex-shrink: 0;
+  padding: 8px 12px;
+  font-family: "Press Start 2P", monospace;
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* The first badge after the wordmark is pushed to the right edge. */
+.og-wordmark + .og-badge {
+  margin-left: auto;
+}
+
+.og-badge-battle {
+  background: #f06827;
+  color: #05070d;
+}
+
+.og-badge-active {
+  border: 2px solid #3dff7c;
+  color: #3dff7c;
+}
+
+.og-badge-claim {
+  background: #39d3ff;
+  color: #05070d;
+}
+
+.og-badge-verified {
+  background: #3dff7c;
+  color: #05070d;
+}
+
+.og-badge-refuted {
+  background: #ff3355;
+  color: #05070d;
+}
+
+.og-badge-refutecount {
+  border: 2px solid #ff3355;
+  color: #ff3355;
+}
+
+/* ---- Main content band ---- */
+.og-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  gap: 16px;
+  min-height: 0;
+  /* Hard safety net for the fixed 1200x630 card: clip any overflow to this
+   * band so tall content (long quote + hero + leaderboard) can never spill
+   * up into the header badges or down onto the footer. */
+  overflow: hidden;
+  padding: 0 48px;
+}
+
+.og-battle-title {
+  flex-shrink: 0;
+  overflow: hidden;
+  max-height: 158px;
+  font-family: "Press Start 2P", monospace;
+  font-size: 30px;
+  font-weight: 400;
+  line-height: 1.75;
+  color: #eafff1;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  display: -webkit-box;
+}
+
+/* ---- Claim quote ---- */
+.og-quote {
+  flex-shrink: 0;
+  padding-left: 30px;
+  border-left: 6px solid #3dff7c;
+}
+
+.og-claim-title {
+  overflow: hidden;
+  max-height: 200px;
+  font-family: "Press Start 2P", monospace;
+  font-size: 26px;
+  font-weight: 400;
+  line-height: 1.85;
+  color: #eafff1;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  display: -webkit-box;
+}
+
+/* Hero row present -> the quote eats a line's worth of budget below it,
+ * so clamp to 3 lines instead of 4 so a long claim truncates cleanly. */
+.og-claim-title.og-title-hero {
+  max-height: 100px;
+  -webkit-line-clamp: 2;
+}
+
+/* Claim cards stack a quote + hero stat above the board, so cap the board
+ * at the top 3 (head is child 1; hide the 4th row onward) — keeps the whole
+ * card inside 630px without a half-clipped row. Battle cards are shorter and
+ * keep their full top-5. */
+.og-claim .og-lb .og-row:nth-child(n + 5) {
+  display: none;
+}
+
+/* ---- Claim hero stat ---- */
+.og-hero {
+  display: flex;
+  flex-shrink: 0;
+  align-items: baseline;
+  gap: 18px;
+}
+
+.og-hero-value {
+  font-family: "Press Start 2P", monospace;
+  font-size: 46px;
+  color: #3dff7c;
+  text-shadow: 0 0 24px rgb(61 255 124 / 45%);
+}
+
+.og-hero-label {
+  font-family: "Press Start 2P", monospace;
+  font-size: 13px;
+  text-transform: uppercase;
+  color: #7da48b;
+}
+
+/* ---- Refutation line: struck claimed vs measured ---- */
+.og-refutation {
+  flex-shrink: 0;
+  font-size: 32px;
+  font-weight: 600;
+}
+
+.og-refutation s {
+  margin-right: 12px;
+  color: #7da48b;
+  text-decoration-color: #ff3355;
+}
+
+.og-refutation b {
+  color: #3dff7c;
+}
+
+/* ---- Claimant / winner meta ---- */
+.og-claimant {
+  flex-shrink: 0;
+  font-size: 26px;
+  color: #9fd8b4;
+}
+
+/* ---- Leaderboard ---- */
+.og-lb {
+  flex-shrink: 0;
+  border: 2px solid #16324a;
+  background: #0b0f18;
+  box-shadow: 6px 6px 0 #0a1622;
+}
+
+.og-lb-head {
+  display: flex;
+  align-items: center;
+  padding: 13px 24px;
+  border-bottom: 2px solid #16324a;
+  background: #0d1a14;
+  font-family: "Press Start 2P", monospace;
+  font-size: 12px;
+  color: #3dff7c;
+}
+
+.og-row {
+  display: flex;
+  align-items: center;
+  padding: 12px 24px;
+  border-bottom: 1px solid #0d1420;
+}
+
+.og-row:last-child {
+  border-bottom: none;
+}
+
+.og-c-rank {
+  flex: 0 0 auto;
+  width: 74px;
+  font-family: "Press Start 2P", monospace;
+  font-size: 16px;
+}
+
+.og-c-sol {
+  display: flex;
+  flex: 1;
+  gap: 14px;
+  align-items: center;
+  min-width: 0;
+}
+
+.og-logo {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  padding: 2px;
+  border: 2px solid #16324a;
+  background: #fff;
+  object-fit: contain;
+}
+
+.og-sol-name {
+  overflow: hidden;
+  font-size: 28px;
+  color: #eafff1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.og-c-num {
+  flex: 0 0 auto;
+  width: 150px;
+  font-size: 28px;
+  color: #ffd23d;
+  text-align: right;
+}
+
+.og-c-score {
+  color: #9fd8b4;
+}
+
+/* Rank medal colours: gold / silver / bronze / muted. */
+.og-r1 {
+  color: #ffd23d;
+}
+
+.og-r2 {
+  color: #c8d6e0;
+}
+
+.og-r3 {
+  color: #c98a5a;
+}
+
+.og-rx {
+  color: #7da48b;
+}
+
+/* ---- Verified / refuted health bar (battle) ---- */
+.og-health {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 18px;
+}
+
+.og-health-v {
+  flex-shrink: 0;
+  font-family: "Press Start 2P", monospace;
+  font-size: 12px;
+  color: #3dff7c;
+  white-space: nowrap;
+}
+
+.og-health-r {
+  flex-shrink: 0;
+  font-family: "Press Start 2P", monospace;
+  font-size: 12px;
+  color: #ff3355;
+  white-space: nowrap;
+}
+
+.og-health-bar {
+  display: flex;
+  flex: 1;
+  height: 20px;
+  border: 2px solid #16324a;
+  background: #0d1420;
+}
+
+.og-health-fill {
+  background: repeating-linear-gradient(
+    90deg,
+    #3dff7c 0,
+    #3dff7c 10px,
+    #1a7a42 10px,
+    #1a7a42 13px
+  );
+}
+
+.og-health-rest {
+  flex: 1;
+  background: repeating-linear-gradient(
+    90deg,
+    #ff3355 0,
+    #ff3355 10px,
+    #7a1626 10px,
+    #7a1626 13px
+  );
+}
+
+/* Width buckets for the verified fill (inline widths are lint-banned). */
+.w0 {
+  width: 0;
+}
+.w10 {
+  width: 10%;
+}
+.w20 {
+  width: 20%;
+}
+.w30 {
+  width: 30%;
+}
+.w40 {
+  width: 40%;
+}
+.w50 {
+  width: 50%;
+}
+.w60 {
+  width: 60%;
+}
+.w70 {
+  width: 70%;
+}
+.w80 {
+  width: 80%;
+}
+.w90 {
+  width: 90%;
+}
+.w100 {
+  width: 100%;
+}
+
+/* ---- Empty state ---- */
+.og-empty {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  font-size: 28px;
+  color: #7da48b;
+}
+
+/* ---- Footer strip ---- */
+.og-foot {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  padding: 22px 48px;
+  border-top: 2px solid #16324a;
+}
+
+.og-foot-left {
+  display: flex;
+  gap: 18px;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.og-foot-stats {
+  overflow: hidden;
+  font-size: 24px;
+  color: #9fd8b4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.og-foot-tags {
+  font-size: 20px;
+  color: #7da48b;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.og-foot-cta {
+  font-family: "Press Start 2P", monospace;
+  font-size: 13px;
+  color: #3dff7c;
+}
+
+.og-wm {
+  flex-shrink: 0;
+  font-family: "Press Start 2P", monospace;
+  font-size: 13px;
+  color: #7da48b;
+  text-transform: uppercase;
+}

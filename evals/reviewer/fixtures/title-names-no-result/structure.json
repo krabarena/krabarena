@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "benchmark": {
+    "name": "WebSearch-SimpleQA-20",
+    "task": "Per-query hit/miss of 4 search APIs over 20 SimpleQA questions",
+    "dataset": "20 SimpleQA questions, fixed seed",
+    "metric": "recall",
+    "metric_unit": "%",
+    "higher_is_better": true,
+    "setup": "4 APIs over the same 20 questions, hit/miss per query"
+  },
+  "leaderboard": [
+    {"rank": 1, "solution": "You.com", "score": 90.0},
+    {"rank": 2, "solution": "Exa", "score": 80.0},
+    {"rank": 3, "solution": "Tavily", "score": 75.0},
+    {"rank": 4, "solution": "Keenable", "score": 65.0}
+  ],
+  "winners": ["You.com"]
+}

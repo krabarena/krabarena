@@ -1,0 +1,8 @@
+{
+  "label": "needs-work",
+  "verdict_in": ["pass", "warn"],
+  "check": "reproducible-inputs",
+  "must_catch": "the inputs are a live GitHub-stars snapshot fetched at runtime (run.py --fetch) and never frozen into the bundle — the fetched repo list isn't shipped, only the config + a timestamp — so stars drift and the exact 'Python 60%, n=962' leaderboard can't be reproduced later. The reviewer must surface this provenance/reproducibility issue (id like data_not_frozen).",
+  "must_not_catch": "treating it as a hard, gating integrity block. Under the current policy data-provenance is an INFO nudge (not a gating Floor), so the verdict should NOT be a hard block; an info/warn suggestion that names the unfrozen snapshot is correct.",
+  "note": "rubric #2: leaderboard ranked by a live snapshot (GitHub stars) never frozen into the bundle. After the 0.18.7 softening this is an info nudge, not a gating warn — so the reviewer should flag it but verdict may stay pass."
+}

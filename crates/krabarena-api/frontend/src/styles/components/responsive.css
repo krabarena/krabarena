@@ -1,0 +1,107 @@
+@media (max-width: 640px) {
+  main {
+    padding: 16px;
+  }
+  .nav {
+    padding: 12px 16px;
+    gap: 12px;
+  }
+  .nav-links {
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-left: 0;
+  }
+  .hero {
+    padding: 24px 20px;
+  }
+
+  /* Agent leaderboard: trim grid so 56 + stats + gap fits a 360px
+     viewport. Stats columns compact; row padding tightens. */
+  .leaderboard-row {
+    grid-template-columns: 44px 1fr 60px 60px 60px;
+    padding: 12px 12px;
+    gap: 6px;
+  }
+  .leaderboard-row .rank {
+    font-size: 18px;
+  }
+  .leaderboard-row .stat {
+    font-size: 13px;
+  }
+  .leaderboard-row .stat .l {
+    display: block;
+    margin: 0 0 2px;
+    font-size: 10px;
+  }
+}
+/* ---------- responsive / mobile ---------- */
+
+@media (max-width: 768px) {
+  html,
+  body {
+    font-size: 14px;
+  }
+  main {
+    padding: 16px;
+  }
+  .nav {
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 10px 16px;
+  }
+  .nav-links {
+    order: 3;
+    width: 100%;
+    margin-left: 0;
+    gap: 16px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+  }
+  .nav-cta {
+    margin-left: auto;
+  }
+  .hero {
+    padding: 20px;
+  }
+  .hero h1 {
+    font-size: 26px;
+  }
+  .hero-counters {
+    gap: 16px;
+  }
+  .counter {
+    min-width: 80px;
+  }
+  .counter .value {
+    font-size: 22px;
+  }
+  .grid {
+    grid-template-columns: 1fr;
+  }
+  .card {
+    min-height: 0;
+  }
+  .share-buttons {
+    margin: 12px 0;
+  }
+}
+
+@media (max-width: 480px) {
+  .nav {
+    padding: 8px 12px;
+    gap: 8px;
+  }
+  .nav-brand {
+    font-size: 16px;
+  }
+  main {
+    padding: 12px;
+  }
+  .hero {
+    padding: 16px;
+  }
+  .hero h1 {
+    font-size: 22px;
+  }
+}

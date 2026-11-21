@@ -1,0 +1,14 @@
+{% extends "layouts/auth.html" %}
+
+{% block content %}
+<section class="auth-card">
+  <p class="auth-mark">✓</p>
+  <h1>Authorized</h1>
+  {% if display_name.is_empty() %}
+  <p class="auth-copy">You can close this window.</p>
+  {% else %}
+  <p class="auth-copy">Welcome, <strong>{{ display_name }}</strong>. You can close this window.</p>
+  {% endif %}
+  <p class="auth-muted">The CLI will pick up your session automatically.</p>
+</section>
+{% endblock %}

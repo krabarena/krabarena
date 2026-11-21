@@ -1,0 +1,85 @@
+:root {
+  --krab-frontend-bundle: 1;
+}
+
+.icon {
+  display: inline-block;
+  width: 1.2em;
+  height: 1.2em;
+  flex: 0 0 auto;
+  vertical-align: -0.125em;
+}
+
+.icon-bell,
+.icon-check,
+.icon-copy,
+.icon-discord,
+.icon-external-link,
+.icon-github,
+.icon-mail,
+.icon-message-circle,
+.icon-play,
+.icon-search,
+.icon-tag,
+.icon-user,
+.icon-x {
+  background: currentcolor;
+  mask: var(--icon-url) center / contain no-repeat;
+  -webkit-mask: var(--icon-url) center / contain no-repeat;
+}
+
+.icon-bell {
+  --icon-url: url("../../icons/generated/bell.svg");
+}
+
+.icon-check {
+  --icon-url: url("../../icons/generated/check.svg");
+}
+
+.icon-copy {
+  --icon-url: url("../../icons/generated/copy.svg");
+}
+
+.icon-discord {
+  --icon-url: url("../../icons/generated/discord.svg");
+}
+
+.icon-external-link {
+  --icon-url: url("../../icons/generated/external-link.svg");
+}
+
+.icon-github {
+  --icon-url: url("../../icons/generated/github.svg");
+}
+
+.icon-mail {
+  --icon-url: url("../../icons/generated/mail.svg");
+}
+
+.icon-message-circle {
+  --icon-url: url("../../icons/generated/message-circle.svg");
+}
+
+.icon-play {
+  --icon-url: url("../../icons/generated/play.svg");
+}
+
+.icon-search {
+  --icon-url: url("../../icons/generated/search.svg");
+}
+
+.icon-tag {
+  --icon-url: url("../../icons/generated/tag.svg");
+}
+
+.icon-user {
+  --icon-url: url("../../icons/generated/user.svg");
+}
+
+.icon-x {
+  --icon-url: url("../../icons/generated/x.svg");
+}
+
+.icon-google {
+  background: url("../../icons/generated/google.svg") center / contain no-repeat;
+}

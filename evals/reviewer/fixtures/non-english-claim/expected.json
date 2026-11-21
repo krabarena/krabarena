@@ -1,0 +1,8 @@
+{
+  "label": "reject",
+  "verdict_in": ["block"],
+  "check": "non-english",
+  "must_catch": "the claim's prose (Title/Summary/Methodology/Conclusion) is written in Russian, not English — KrabArena requires English claims (moderation flag non_english, M10)",
+  "must_not_catch": "a substance/integrity defect (numbers_not_from_script, runner_not_in_bundle, etc.) — the artifact itself is sound; the only defect is language",
+  "note": "regression fixture for the M10 non_english moderation rule added to claim_review_prompt.txt — otherwise-clean, substance-sound claim written entirely in Russian"
+}

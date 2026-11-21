@@ -1,0 +1,6 @@
+project_id     = "krabbit-dev"
+region         = "us-central1"
+database_url   = "postgresql://user:pass@host/db?sslmode=require"
+jwt_secret     = "change-me-in-production"
+blob_store_url = "https://storage.googleapis.com/krabbit-artifacts"
+alert_email    = "ops@example.com"

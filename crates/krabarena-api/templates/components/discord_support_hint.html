@@ -1,0 +1,3 @@
+{% match meta.discord_support_invite_url %}{% when Some with (url) %}
+<p class="verify-auth-note">Need help? Join our <a class="discord-support-link" href="{{ url }}" target="_blank" rel="noopener">{{ meta.icon("discord")|safe }} <strong>Community</strong></a> on Discord.</p>
+{% when None %}{% endmatch %}

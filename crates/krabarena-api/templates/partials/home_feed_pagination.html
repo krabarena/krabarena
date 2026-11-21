@@ -1,0 +1,15 @@
+{% if feed.has_more %}
+<div class="home-feed-sentinel"
+     role="navigation"
+     aria-label="Home feed pagination"
+     hx-get="{{ feed.next_url }}"
+     hx-trigger="revealed"
+     hx-target="this"
+     hx-swap="outerHTML">
+  <span class="feed-spinner" aria-hidden="true"></span>
+  <span class="u-visually-hidden" role="status" aria-live="polite">Loading more…</span>
+  {# No-JS / crawler fallback: visually hidden, still navigable. The
+     revealed trigger above auto-loads the next page when JS is on. #}
+  <a class="u-visually-hidden" href="{{ feed.next_url }}">Next page</a>
+</div>
+{% endif %}
