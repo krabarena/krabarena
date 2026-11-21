@@ -40,10 +40,22 @@ if gh pr view "$branch" --repo "$PRIVATE_REPO" --json state -q .state 2>/dev/nul
 fi
 
 commits=$(git log --no-merges --format='- %s (%h)' "origin/$BASE..public/main" | head -50)
-gh pr create --repo "$PRIVATE_REPO" --base "$BASE" --head "$branch" \
-  --title "chore(sync): merge public main ($short)" \
-  --body "Brings these public commits into the deploy repo:
+title="chore(sync): merge public main ($short)"
+body="Brings these public commits into the deploy repo:
 
 $commits
 
 Merging ships them through Build & Push → Deploy to Test → Deploy."
+
+if gh pr create --repo "$PRIVATE_REPO" --base "$BASE" --head "$branch" --title "$title" --body "$body"; then
+  exit 0
+fi
+
+compare="https://github.com/$PRIVATE_REPO/compare/$BASE...$branch?expand=1"
+echo "Could not open the PR (Actions may not be allowed to create PRs). Open it here: $compare" >&2
+if ! gh issue list --repo "$PRIVATE_REPO" --state open --search "\"$branch\" in:title" --json number -q '.[0].number' | grep -q .; then
+  gh issue create --repo "$PRIVATE_REPO" --title "Sync from public pending: $branch" \
+    --body "Public main has new commits. Open the sync PR: $compare
+
+$commits"
+fi

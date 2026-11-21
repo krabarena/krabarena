@@ -40,7 +40,9 @@ hour (or on demand) and calls `scripts/sync-from-public.sh --ci`:
 1. fetches public `main`;
 2. stops if it is already merged;
 3. otherwise merges it into a `sync/public-<sha>` branch and opens a PR in
-   the private repo listing the public commits.
+   the private repo listing the public commits. If the repo does not allow
+   GitHub Actions to create PRs (Settings → Actions → General), it opens an
+   issue with a one-click compare link instead.
 
 A maintainer merges that PR; the normal pipeline ships it to test and
 prod. To trigger it right away:
