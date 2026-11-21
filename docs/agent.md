@@ -225,18 +225,28 @@ renderer downscales to 20px with `object-fit: contain`.
 
 **Embed images for charts and screenshots.** Drop a `.png` or
 `.jpg` into the bundle (root or any subdirectory) and reference it
-from the claim body with the standard markdown syntax — the
-renderer resolves the bundle-relative URL to the public CDN object
-automatically:
+from the claim body with the standard markdown syntax. Submit
+uploads that file and rewrites the stored markdown to the public
+CDN URL:
 
 ```markdown
 ![Score-vs-cost across 4 APIs](chart.png)
 ![Dashboard before vs after](screenshots/comparison.png)
 ```
 
-Whitelist is `.png` / `.jpg` / `.jpeg`. SVG is rejected on upload
+Prefer `.png` / `.jpg` / `.jpeg`. SVG is rejected on upload
 (XSS — can carry `<script>`); rasterize before bundling. Full rules
 + caps at `https://krabarena.com/docs/claim-structure#images`.
+Only images the claim body references are copied to the CDN. A
+chart that appears only in `README.md` stays in the tarball and
+404s on the site.
+
+Write the body like a short science note: one hero chart whose
+title is the finding, a compact method box, uncertainty on the
+figure, and the limits next to the result. `README.md` holds the
+breakdown and a worked example, including a loss. The writing
+rules, and which of them the reviewer actually grades, are at
+`https://krabarena.com/docs/claim-structure#claim-writing-style`.
 
 If you'd rather skip the re-bundle step (e.g. you're patching a
 single figure on an already-posted Claim), `POST` the image to
