@@ -281,55 +281,31 @@ krab --version                           # show version
 krab manifest-refresh                    # fetch server manifest for inspection (diagnostic)
 ```
 
-## Local development against prod data
+## Working with prod data (GitHub only)
 
-The Neon project (`$NEON_PROJECT_ID`: GitHub secret `NEON_PROJECT_ID`, or `neonctl projects list`) supports cheap copy-on-write
-branches. Fork prod's `main` into your own dev branch so you can
-hack against real battles / claims / verifications without touching
-prod itself. Re-fork at any time when prod has new data you want.
+Everything below runs through GitHub Actions; no GCP or Neon access is
+needed. Prod's Neon `main` branch is protected, so every fork gets its
+own freshly generated password and never carries prod credentials.
 
-```sh
-# ----- one-time tooling -----
-brew install neonctl                              # if not installed
-neonctl auth                                      # browser flow → ~/.config/neonctl/
+| Need | How |
+|------|-----|
+| Try a branch against a copy of prod | `gh workflow run Preview -f branch=<branch>` → job summary prints the URL |
+| Refresh the preview's data from prod | add `-f fresh_data=true` |
+| Remove a preview | delete the branch (automatic), or `gh workflow run "Preview Cleanup" -f branch=<branch>`; previews older than 7 days are swept daily |
+| Change prod data | a reviewed `backfills/*.sql` + the `Prod Backfill` workflow; see `backfills/README.md` |
+| Re-fork the test DB | `gh workflow run "Refresh Test DB"` (also weekly) |
 
-# ----- create / refresh a personal dev branch -----
-PROJECT="$NEON_PROJECT_ID"
-NAME="dev-$USER"
+A preview runs the branch's image on `pv-<branch-slug>` in the
+`krabarena-test` project, against Neon branch `preview/<branch-slug>`,
+with migrations auto-applied, so it also rehearses migrations on prod
+data. Login via OAuth does not work on previews; use
+`POST /v1/test/mint-token` with the test auth secret.
 
-# delete the previous one if it exists (refresh = drop + recreate)
-ID=$(neonctl branches list --project-id "$PROJECT" --output json \
-       | jq -r ".[] | select(.name==\"$NAME\") | .id")
-[ -n "$ID" ] && neonctl branches delete "$ID" --project-id "$PROJECT"
-
-# fork off current prod main
-neonctl branches create --project-id "$PROJECT" --name "$NAME" --parent main >/dev/null
-
-# pooled URL with the role password, straight from Neon (never commit it)
-neonctl connection-string "$NAME" --project-id "$PROJECT" \
-  --role-name neondb_owner --database-name neondb --pooled \
-  > /tmp/dev-db-url
-
-# ----- run the server locally against your fork -----
-cd crates/krabarena-api
-DATABASE_URL="$(cat /tmp/dev-db-url)" \
-  PORT=3001 JWT_SECRET=dev-secret \
-  cargo run -p krabarena-api
-# → http://127.0.0.1:3001
-```
-
-`ServeDir::new("static")` is relative — run the server from the
-`crates/krabarena-api/` directory so CSS / favicons resolve.
-
-If your shell sources from a `.env`, **always quote the URL** —
-the `&` in `?sslmode=require&channel_binding=require` is a shell
-operator and unquoted assignment will background half the line.
-
-When you're done, drop the branch (Neon charges per active compute):
-
-```sh
-neonctl branches delete "dev-$USER" --project-id "$NEON_PROJECT_ID"
-```
+Maintainers with Neon access can still fork a personal branch with
+`neonctl branches create --project-id $NEON_PROJECT_ID --name dev-$USER --parent main`
+and run the server locally from `crates/krabarena-api/` with
+`DATABASE_URL` set to its pooled connection string. Drop the branch when
+done.
 
 ## Database
 
@@ -384,16 +360,25 @@ change a rule, update `docs/ui.md` in the same PR.
   `{"database":"connected","status":"healthy","version":"0.10.0"}`
 - **Install CLI**: `curl -fsSL https://krabarena.com/install.sh | sh`
 
-### Secrets: Secret Manager is the source of truth
+### Secrets and identities
 
 Cloud Run binds every credential with `--set-secrets NAME=secret-id:latest`
-(prod secrets in `krabbit-dev`, test secrets in `krabarena-test`). The
-`Deploy to Test` E2E step reads `test-auth-secret` the same way. GitHub
-Actions only needs non-secret variables (`GCP_PROJECT_ID`,
-`GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_SERVICE_ACCOUNT`, public URLs).
-Workload Identity trusts this repo only on `main` or inside the `test`
-environment; the `production` environment only deploys from `main`.
-Rotation and the secret inventory are in `krabarena/krabarena-infra`.
+(prod secrets in `krabbit-dev`, test secrets in `krabarena-test`). GitHub
+holds only non-secret variables. Each GitHub environment maps to its own
+GCP service account through Workload Identity (`GCP_SERVICE_ACCOUNT` is
+an environment variable):
+
+| Environment | Branches | Service account | Can |
+|-------------|----------|-----------------|-----|
+| `production` | `main` | `github-deployer` | build `krabarena-repo` images, deploy prod, publish the CLI |
+| `test` | any | `github-test-deployer` | deploy in `krabarena-test`, push `krabarena-preview` images |
+| `neon` | `main` | `github-neon` | fork/delete Neon branches, write test secrets |
+| `prod-data` | `main`, required reviewer | `github-prod-data` | read the prod database URL for backfills |
+
+Code from an unmerged branch only ever runs as `github-test-deployer`,
+which cannot touch prod, its registry, or its secrets. Prod deploys use
+the image built for the exact `main` commit. Terraform, rotation and the
+secret inventory are in `krabarena/krabarena-infra`.
 
 ### Test (CI gate, not user-facing)
 
@@ -426,42 +411,27 @@ Rotation and the secret inventory are in `krabarena/krabarena-infra`.
 4. If red, prod stays on the previous revision; a human reads the
    Job Summary, fixes the PR, and re-enters the pipeline.
 
-### Deploying any branch to test (designer / preview)
+### Deploying any branch (designer / preview)
 
-The test env is fair game for previewing a feature branch — neither
-PR review, nor merge, nor prod-deploy is triggered. Both `Build &
-Push` and `Deploy to Test` accept `workflow_dispatch`; feature-
-branch builds tag the image with the commit SHA only, so `:latest`
-stays reserved for main and the prod auto-deploy can't accidentally
-ship a preview.
+Use the `Preview` workflow (see "Working with prod data"): each branch
+gets its own URL and its own copy of prod data, and the shared test env
+stays on `main`.
+
+To run the E2E gate against a branch on the shared test env instead:
 
 ```sh
-BRANCH=feat/my-thing
-
-# 1. Build the branch's HEAD
 gh workflow run "Build & Push" --ref "$BRANCH"
-
-# 2. Wait until it goes green, grab the SHA
-gh run list --workflow "Build & Push" --branch "$BRANCH" --limit 1 \
-  --json status,conclusion,headSha
-SHA=$(gh run list --workflow "Build & Push" --branch "$BRANCH" --limit 1 \
-        --json headSha --jq '.[0].headSha')
-
-# 3. Deploy that exact image to the test env
+SHA=$(gh run list --workflow "Build & Push" --branch "$BRANCH" --limit 1 --json headSha --jq '.[0].headSha')
 gh workflow run "Deploy to Test" --ref "$BRANCH" -f image_tag="$SHA"
 ```
 
-Deploy to Test runs the E2E gate after the Cloud Run revision swap.
-A flaky Gemini call sometimes times out the
-`claim_review_good_claim_not_blocked` test — the swap itself
-already succeeded, so the new build is live; rerun with
-`gh run rerun <run-id> --failed` to clear the green checkmark.
-
-URL stays `$TEST_PUBLIC_BASE_URL` — share
-that with the designer.
+Branch images go to `krabarena-preview`, never to the prod registry.
+A flaky Gemini call sometimes times out
+`claim_review_good_claim_not_blocked`; rerun with
+`gh run rerun <run-id> --failed`.
 
 ### Refreshing the test-e2e Neon branch
 
-Re-forking `test-e2e` changes its compute hostname, so the
-`database-url` secret in `krabarena-test` must be updated in the same
-step. The runbook is in `krabarena/krabarena-infra`.
+`gh workflow run "Refresh Test DB"` re-forks `test-e2e` from prod,
+stores the new connection string in the test `database-url` secret and
+redeploys the test env. It also runs weekly.

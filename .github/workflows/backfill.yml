@@ -1,0 +1,108 @@
+name: Prod Backfill
+
+on:
+  workflow_dispatch:
+    inputs:
+      script:
+        description: "Backfill to run, e.g. backfills/2026-11-22_fill_claim_slugs.sql"
+        required: true
+      apply:
+        description: "Apply to prod after a green dry run (requires prod-data approval)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: prod-backfill
+  cancel-in-progress: false
+
+jobs:
+  dry-run:
+    name: Dry run on a fresh copy of prod
+    if: github.repository == 'krabarena/krabarena' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: neon
+    outputs:
+      sha256: ${{ steps.check.outputs.sha256 }}
+      name: ${{ steps.check.outputs.name }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - id: check
+        env:
+          SCRIPT: ${{ inputs.script }}
+        run: |
+          [[ "$SCRIPT" =~ ^backfills/[0-9]{4}-[0-9]{2}-[0-9]{2}_[a-z0-9_]+\.sql$ ]] \
+            || { echo "::error::Script must be backfills/YYYY-MM-DD_name.sql"; exit 1; }
+          [ -f "$SCRIPT" ] || { echo "::error::$SCRIPT is not on main"; exit 1; }
+          echo "name=$(basename "$SCRIPT" .sql)" >> "$GITHUB_OUTPUT"
+          echo "sha256=$(sha256sum "$SCRIPT" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@e427ad8a34f8676edf47cf7d7925499adf3eb74f # v2
+
+      - name: Run against a Neon branch of prod
+        env:
+          NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+          SCRIPT: ${{ inputs.script }}
+          NAME: ${{ steps.check.outputs.name }}
+        run: |
+          NEON_API_KEY=$(gcloud secrets versions access latest --secret neon-api-key --project "${{ vars.GCP_PROJECT_ID }}")
+          echo "::add-mask::$NEON_API_KEY"
+          export NEON_API_KEY
+          BRANCH="backfill/${GITHUB_RUN_ID}"
+          trap 'scripts/ci/neon.sh delete "$BRANCH"' EXIT
+          DB=$(scripts/ci/neon.sh ensure "$BRANCH" true false)
+          echo "::add-mask::$DB"
+          scripts/ci/backfill.sh "$DB" "$SCRIPT" "$NAME" dry-run | tee /tmp/backfill.log
+          {
+            echo "## Dry run of \`$SCRIPT\` on a fresh copy of prod"
+            echo '```'
+            tail -100 /tmp/backfill.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  apply:
+    name: Apply to prod
+    needs: dry-run
+    if: inputs.apply
+    runs-on: ubuntu-latest
+    environment: prod-data
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Script unchanged since dry run
+        env:
+          SCRIPT: ${{ inputs.script }}
+          EXPECTED: ${{ needs.dry-run.outputs.sha256 }}
+        run: |
+          [ "$(sha256sum "$SCRIPT" | cut -d' ' -f1)" = "$EXPECTED" ] || { echo "::error::Script changed after the dry run"; exit 1; }
+
+      - uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@e427ad8a34f8676edf47cf7d7925499adf3eb74f # v2
+
+      - name: Apply in one transaction
+        env:
+          SCRIPT: ${{ inputs.script }}
+          NAME: ${{ needs.dry-run.outputs.name }}
+        run: |
+          DB=$(gcloud secrets versions access latest --secret database-url --project "${{ vars.GCP_PROJECT_ID }}" | sed 's/-pooler\././')
+          echo "::add-mask::$DB"
+          scripts/ci/backfill.sh "$DB" "$SCRIPT" "$NAME" apply | tee /tmp/backfill.log
+          {
+            echo "## Applied \`$SCRIPT\` to prod"
+            echo '```'
+            tail -100 /tmp/backfill.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
