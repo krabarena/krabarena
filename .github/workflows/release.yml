@@ -149,14 +149,21 @@ jobs:
           # `../proxy-spec.md` at the installed path. Skills rely
           # on the proxy-spec doc being locally readable because
           # the repo is private and GitHub raw 404s anonymous HEAD.
-          for platform in claude-code openclaw codex github-copilot; do
+          for platform in claude-code openclaw codex github-copilot hermes; do
             staging=$(mktemp -d)
             for skill in "skills/$platform"/krabarena "skills/$platform"/krabarena-*; do
               [ -d "$skill" ] && cp -r "$skill" "$staging/"
             done
-            cp docs/claim-structure.md "$staging/"
-            cp docs/battle-structure.md "$staging/"
-            cp docs/proxy-spec.md "$staging/"
+            if [ "$platform" = hermes ]; then
+              for skill in "$staging"/*/; do
+                mkdir -p "${skill}references"
+                cp docs/claim-structure.md docs/battle-structure.md docs/proxy-spec.md "${skill}references/"
+              done
+            else
+              cp docs/claim-structure.md "$staging/"
+              cp docs/battle-structure.md "$staging/"
+              cp docs/proxy-spec.md "$staging/"
+            fi
             tar czf "krabarena-skills-$platform.tar.gz" -C "$staging" .
             tar tzf "krabarena-skills-$platform.tar.gz" > "krabarena-skills-$platform.list"
             case "$platform" in
@@ -165,6 +172,12 @@ jobs:
                   || { echo "::error::krabarena-skills-$platform.tar.gz missing ./krabarena/copilot-instructions.md"; exit 1; }
                 grep -q '^./krabarena/krabarena-join-battle.prompt.md$' "krabarena-skills-$platform.list" \
                   || { echo "::error::krabarena-skills-$platform.tar.gz missing ./krabarena/krabarena-join-battle.prompt.md"; exit 1; }
+                ;;
+              hermes)
+                for f in krabarena/SKILL.md krabarena-heartbeat/SKILL.md krabarena/references/claim-structure.md; do
+                  grep -q "^./$f\$" "krabarena-skills-$platform.list" \
+                    || { echo "::error::krabarena-skills-$platform.tar.gz missing ./$f"; exit 1; }
+                done
                 ;;
               *)
                 grep -q '^./krabarena/SKILL.md$' "krabarena-skills-$platform.list" \
@@ -237,14 +250,21 @@ jobs:
           # the archive root so each SKILL.md can reference
           # `../claim-structure.md` / `../battle-structure.md` /
           # `../proxy-spec.md` at the installed path.
-          for platform in claude-code openclaw codex github-copilot; do
+          for platform in claude-code openclaw codex github-copilot hermes; do
             staging=$(mktemp -d)
             for skill in "skills/$platform"/krabarena "skills/$platform"/krabarena-*; do
               [ -d "$skill" ] && cp -r "$skill" "$staging/"
             done
-            cp docs/claim-structure.md "$staging/"
-            cp docs/battle-structure.md "$staging/"
-            cp docs/proxy-spec.md "$staging/"
+            if [ "$platform" = hermes ]; then
+              for skill in "$staging"/*/; do
+                mkdir -p "${skill}references"
+                cp docs/claim-structure.md docs/battle-structure.md docs/proxy-spec.md "${skill}references/"
+              done
+            else
+              cp docs/claim-structure.md "$staging/"
+              cp docs/battle-structure.md "$staging/"
+              cp docs/proxy-spec.md "$staging/"
+            fi
             tar czf "krabarena-skills-$platform.tar.gz" -C "$staging" .
             tar tzf "krabarena-skills-$platform.tar.gz" > "krabarena-skills-$platform.list"
             case "$platform" in
@@ -253,6 +273,12 @@ jobs:
                   || { echo "::error::krabarena-skills-$platform.tar.gz missing ./krabarena/copilot-instructions.md"; exit 1; }
                 grep -q '^./krabarena/krabarena-join-battle.prompt.md$' "krabarena-skills-$platform.list" \
                   || { echo "::error::krabarena-skills-$platform.tar.gz missing ./krabarena/krabarena-join-battle.prompt.md"; exit 1; }
+                ;;
+              hermes)
+                for f in krabarena/SKILL.md krabarena-heartbeat/SKILL.md krabarena/references/claim-structure.md; do
+                  grep -q "^./$f\$" "krabarena-skills-$platform.list" \
+                    || { echo "::error::krabarena-skills-$platform.tar.gz missing ./$f"; exit 1; }
+                done
                 ;;
               *)
                 grep -q '^./krabarena/SKILL.md$' "krabarena-skills-$platform.list" \

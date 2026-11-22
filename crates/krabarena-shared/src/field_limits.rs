@@ -115,6 +115,7 @@ pub enum Table {
     TokenTransactions,
     Wallets,
     PayoutTransactions,
+    UserProfiles,
 }
 
 impl Table {
@@ -133,6 +134,7 @@ impl Table {
             Self::TokenTransactions => "token_transactions",
             Self::Wallets => "wallets",
             Self::PayoutTransactions => "payout_transactions",
+            Self::UserProfiles => "user_profiles",
         }
     }
 }
@@ -200,6 +202,12 @@ pub enum Field {
     WalletsAddress,
     // ── payout_transactions ───────────────────────────────────────
     PayoutTransactionsReason,
+    UserProfilesFullName,
+    UserProfilesBio,
+    UserProfilesWebsiteUrl,
+    UserProfilesXUrl,
+    UserProfilesLinkedinUrl,
+    UserProfilesGithubUrl,
 }
 
 impl Field {
@@ -426,6 +434,49 @@ impl Field {
                 max: 500,
                 purpose: "Human-readable reason a payout was credited or rejected.",
             },
+
+            Self::UserProfilesFullName => FieldSpec {
+                table: Table::UserProfiles,
+                field: "full_name",
+                min: 0,
+                max: 120,
+                purpose: "Full name shown on the public agent profile.",
+            },
+            Self::UserProfilesBio => FieldSpec {
+                table: Table::UserProfiles,
+                field: "bio",
+                min: 0,
+                max: 280,
+                purpose: "Short bio or headline shown under the name on the public profile.",
+            },
+            Self::UserProfilesWebsiteUrl => FieldSpec {
+                table: Table::UserProfiles,
+                field: "website_url",
+                min: 0,
+                max: 300,
+                purpose: "Personal or company website (http/https URL).",
+            },
+            Self::UserProfilesXUrl => FieldSpec {
+                table: Table::UserProfiles,
+                field: "x_url",
+                min: 0,
+                max: 300,
+                purpose: "x.com profile, stored as https://x.com/<handle>.",
+            },
+            Self::UserProfilesLinkedinUrl => FieldSpec {
+                table: Table::UserProfiles,
+                field: "linkedin_url",
+                min: 0,
+                max: 300,
+                purpose: "LinkedIn profile, stored as https://www.linkedin.com/in/<slug>.",
+            },
+            Self::UserProfilesGithubUrl => FieldSpec {
+                table: Table::UserProfiles,
+                field: "github_url",
+                min: 0,
+                max: 300,
+                purpose: "GitHub profile, stored as https://github.com/<login>.",
+            },
         }
     }
 
@@ -516,6 +567,12 @@ pub const ALL_FIELDS: &[Field] = &[
     Field::TokenTransactionsNote,
     Field::WalletsAddress,
     Field::PayoutTransactionsReason,
+    Field::UserProfilesFullName,
+    Field::UserProfilesBio,
+    Field::UserProfilesWebsiteUrl,
+    Field::UserProfilesXUrl,
+    Field::UserProfilesLinkedinUrl,
+    Field::UserProfilesGithubUrl,
 ];
 
 /// Iterate the fields belonging to one table. Used by the docs
@@ -571,6 +628,7 @@ pub fn render_markdown_section(tables: &[Table]) -> String {
         Table::TokenTransactions,
         Table::Wallets,
         Table::PayoutTransactions,
+        Table::UserProfiles,
     ] {
         if !include(tbl) {
             continue;
@@ -890,6 +948,7 @@ mod tests {
             Table::TokenTransactions,
             Table::Wallets,
             Table::PayoutTransactions,
+            Table::UserProfiles,
         ] {
             let n = t.name();
             assert!(

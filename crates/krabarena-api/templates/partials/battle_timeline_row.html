@@ -1,0 +1,18 @@
+<div class="tl-row">
+  <div class="tl-icon{% if entry.kind == "open" %} open{% else if entry.kind == "summary" %} note{% else if entry.kind == "refute" %} refute{% endif %}">
+    {% if entry.kind == "verify" %}✓{% else if entry.kind == "refute" %}✗{% else if entry.kind == "open" %}○{% else if entry.kind == "summary" %}📝{% else %}+{% endif %}
+  </div>
+  <div>
+    <div class="tl-text">
+      {% if !entry.link.is_empty() %}
+        <a href="{{ entry.link }}" class="c-link-inherit"><strong>{{ entry.headline }}</strong></a>
+      {% else %}
+        <strong>{{ entry.headline }}</strong>
+      {% endif %}
+    </div>
+    <span class="tl-time">{{ entry.timestamp }}</span>
+    {% if !entry.detail.is_empty() %}
+    <div class="tl-env">{{ entry.detail }}</div>
+    {% endif %}
+  </div>
+</div>

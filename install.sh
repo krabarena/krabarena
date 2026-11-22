@@ -6,6 +6,7 @@
 #   Claude Code → ./.claude/skills/
 #   OpenClaw    → ./.openclaw/skills/
 #   Codex       → ./.codex/skills/
+#   Hermes      → ${HERMES_HOME:-~/.hermes}/skills/krabarena/ (global unless --skills-scope project)
 #   Copilot     → ./.github/ (only with --github-copilot / --copilot)
 #
 # Usage:
@@ -16,6 +17,7 @@
 #   --openclaw      Force OpenClaw skill install
 #   --claude-code   Force Claude Code skill install
 #   --codex         Force Codex skill install
+#   --hermes        Force Hermes Agent skill install
 #   --github-copilot, --copilot
 #                  Install GitHub Copilot repo instructions in this checkout
 #   --skills-scope project|global|none
@@ -33,6 +35,8 @@
 #   KRAB_COPILOT_ROOT — repo root for Copilot files (default: current dir)
 #   KRAB_SKILLS_DIR — custom skills root for one forced SKILL.md runtime
 #   KRAB_SKIP_SKILLS=1 — skip skill installation
+#   HERMES_HOME      — Hermes Agent home (default: ~/.hermes)
+#   KRAB_SKILLS_BASE_URL — fetch skill archives from here instead of the release (http(s):// or file://)
 #
 # This installer is intentionally written in POSIX `sh` (no bashisms,
 # no `set -u`, no arrays). The shell script runs in minimal Linux and
@@ -47,11 +51,13 @@ KRAB_API_URL="${KRAB_API_URL:-https://krabarena.com}"
 INSTALL_DIR="${KRAB_INSTALL_DIR:-${KRABBIT_INSTALL_DIR:-$HOME/.krab/bin}}"
 VERSION_PIN="${KRAB_VERSION:-${KRABBIT_VERSION:-}}"
 INSTALL_CWD=$(pwd)
+HERMES_HOME_DIR="${HERMES_HOME:-$HOME/.hermes}"
 
 FORCE_OPENCLAW=false
 FORCE_CLAUDE=false
 FORCE_CODEX=false
 FORCE_COPILOT=false
+FORCE_HERMES=false
 SKIP_SKILLS=false
 SILENT=false
 SKILLS_SCOPE=""
@@ -70,6 +76,7 @@ while [ "$#" -gt 0 ]; do
     --openclaw)    FORCE_OPENCLAW=true ;;
     --claude-code) FORCE_CLAUDE=true ;;
     --codex)       FORCE_CODEX=true ;;
+    --hermes)      FORCE_HERMES=true ;;
     --github-copilot|--copilot) FORCE_COPILOT=true ;;
     --skip-skills|--no-skills)
       SKIP_SKILLS=true
@@ -156,8 +163,8 @@ fi
 # ── Detect AI agents (install skills for ALL present) ────────────────
 #
 # Codex (`~/.codex/skills/`) accepts the same SKILL.md format but ships
-# a Codex-specific policy body. Hermes Agent (`~/.hermes/skills/`) keeps
-# using the Claude Code bundle because its wrapper format is identical.
+# a Codex-specific policy body. Hermes Agent gets its own bundle under
+# the `krabarena` category dir in `${HERMES_HOME:-~/.hermes}/skills/`.
 # GitHub Copilot does not use SKILL.md; its repo custom instructions are
 # installed only when explicitly requested with --github-copilot /
 # --copilot so this script never mutates an arbitrary checkout just
@@ -186,10 +193,14 @@ fi
 if [ "$FORCE_COPILOT" = true ]; then
   INSTALL_COPILOT=true
 fi
+if [ "$FORCE_HERMES" = true ]; then
+  INSTALL_HERMES_SKILLS=true
+fi
 
 # Auto-detect if no flags forced
 if [ "$FORCE_CLAUDE" = false ] && [ "$FORCE_OPENCLAW" = false ] \
-    && [ "$FORCE_CODEX" = false ] && [ "$FORCE_COPILOT" = false ]; then
+    && [ "$FORCE_CODEX" = false ] && [ "$FORCE_COPILOT" = false ] \
+    && [ "$FORCE_HERMES" = false ]; then
   if [ -n "${CLAUDE_CODE:-}" ] || [ -n "${CLAUDE_CODE_ENTRY:-}" ] || [ -d "$HOME/.claude" ]; then
     INSTALL_CLAUDE=true
     step "Agent detected: claude-code"
@@ -202,7 +213,7 @@ if [ "$FORCE_CLAUDE" = false ] && [ "$FORCE_OPENCLAW" = false ] \
     INSTALL_CODEX_SKILLS=true
     step "Agent detected: codex"
   fi
-  if [ -d "$HOME/.hermes" ]; then
+  if [ -n "${HERMES_HOME:-}" ] || [ -d "$HOME/.hermes" ]; then
     INSTALL_HERMES_SKILLS=true
     step "Agent detected: hermes"
   fi
@@ -282,6 +293,7 @@ prompt_skills_scope_if_needed() {
   log "  4) Custom path (one SKILL.md runtime only)"
   printf "Choice [1]: " >&2
   read _skills_choice
+  SKILLS_SCOPE_EXPLICIT=true
   case "$_skills_choice" in
     ""|1|project|project-local)
       SKILLS_SCOPE="project"
@@ -313,7 +325,7 @@ validate_custom_skill_scope() {
   [ -n "$SKILLS_DIR" ] || die "--skills-dir requires a non-empty path"
   _count=$(skill_runtime_count)
   if [ "$_count" -ne 1 ]; then
-    die "--skills-dir/KRAB_SKILLS_DIR requires exactly one SKILL.md runtime target; pass --claude-code, --openclaw, --codex, or use --skills-scope project|global"
+    die "--skills-dir/KRAB_SKILLS_DIR requires exactly one SKILL.md runtime target; pass --claude-code, --openclaw, --codex, --hermes, or use --skills-scope project|global"
   fi
 }
 
@@ -325,6 +337,16 @@ skill_dest() {
     global) echo "$_global" ;;
     custom) echo "$SKILLS_DIR" ;;
   esac
+}
+
+hermes_skill_dest() {
+  if [ "$SKILLS_SCOPE" = project ] && [ "$SKILLS_SCOPE_EXPLICIT" = true ]; then
+    echo "${INSTALL_CWD}/.hermes/skills/krabarena"
+  elif [ "$SKILLS_SCOPE" = custom ]; then
+    echo "$SKILLS_DIR"
+  else
+    echo "${HERMES_HOME_DIR}/skills/krabarena"
+  fi
 }
 
 aider_agent_path() {
@@ -394,6 +416,8 @@ else
   SHORT_VERSION=$(printf '%.8s' "$VERSION")
   step "Version: latest (${SHORT_VERSION})"
 fi
+
+SKILLS_BASE_URL="${KRAB_SKILLS_BASE_URL:-$BASE_URL}"
 
 # ── Download binary ──────────────────────────────────────────────────
 step "Downloading ${ARCHIVE} from ${BASE_URL}/"
@@ -561,9 +585,9 @@ install_skills() {
   _label="$3"
   step "Downloading ${_archive}..."
   if [ "$SILENT" = true ]; then
-    curl -fsSL "${BASE_URL}/${_archive}" -o "${TMPDIR}/${_archive}" 2>/dev/null || true
+    curl -fsSL "${SKILLS_BASE_URL}/${_archive}" -o "${TMPDIR}/${_archive}" 2>/dev/null || true
   else
-    curl -fSL "${BASE_URL}/${_archive}" -o "${TMPDIR}/${_archive}" 2>/dev/null || true
+    curl -fSL "${SKILLS_BASE_URL}/${_archive}" -o "${TMPDIR}/${_archive}" 2>/dev/null || true
   fi
   if [ -f "${TMPDIR}/${_archive}" ]; then
     mkdir -p "$_dir"
@@ -581,15 +605,28 @@ install_skills() {
   fi
 }
 
+migrate_legacy_hermes_layout() {
+  _category="$1"
+  _skills_root=$(dirname "$_category")
+  if grep -q '^name: krabarena$' "${_category}/SKILL.md" 2>/dev/null; then
+    rm -f "${_category}/SKILL.md"
+    step "Skills (Hermes): removed legacy ${_category}/SKILL.md"
+  fi
+  if grep -q '^name: krabarena-heartbeat$' "${_skills_root}/krabarena-heartbeat/SKILL.md" 2>/dev/null; then
+    rm -rf "${_skills_root}/krabarena-heartbeat"
+    step "Skills (Hermes): removed legacy ${_skills_root}/krabarena-heartbeat"
+  fi
+}
+
 install_copilot_instructions() {
   _archive="krabarena-skills-github-copilot.tar.gz"
   _root="${KRAB_COPILOT_ROOT:-$INSTALL_CWD}"
   _label="GitHub Copilot"
   step "Downloading ${_archive}..."
   if [ "$SILENT" = true ]; then
-    curl -fsSL "${BASE_URL}/${_archive}" -o "${TMPDIR}/${_archive}" 2>/dev/null || true
+    curl -fsSL "${SKILLS_BASE_URL}/${_archive}" -o "${TMPDIR}/${_archive}" 2>/dev/null || true
   else
-    curl -fSL "${BASE_URL}/${_archive}" -o "${TMPDIR}/${_archive}" 2>/dev/null || true
+    curl -fSL "${SKILLS_BASE_URL}/${_archive}" -o "${TMPDIR}/${_archive}" 2>/dev/null || true
   fi
   if [ ! -f "${TMPDIR}/${_archive}" ]; then
     step "Skills (${_label}): archive not available, skipped"
@@ -659,9 +696,11 @@ else
     install_copilot_instructions
   fi
   if [ "$INSTALL_HERMES_SKILLS" = true ]; then
+    _hermes_dest="$(hermes_skill_dest)"
+    [ "$SKILLS_SCOPE" = custom ] || migrate_legacy_hermes_layout "$_hermes_dest"
     install_skills \
-      "krabarena-skills-claude-code.tar.gz" \
-      "$(skill_dest ".hermes/skills" "$HOME/.hermes/skills")" \
+      "krabarena-skills-hermes.tar.gz" \
+      "$_hermes_dest" \
       "Hermes"
   fi
   # Aider: drop the canonical /docs/agent guide as a flat markdown
@@ -754,14 +793,16 @@ if [ "$HAS_IDENTITY" = false ]; then
   # `~/.claude/` dir. NemoClaw is intentionally omitted: NemoClaw users
   # run their sessions through Claude Code or Cursor and the
   # underlying harness is what should be tagged on the leaderboard.
-  if [ -n "${CODEX_CLI_VERSION:-}" ] || [ -d "$HOME/.codex" ]; then
+  if [ "$FORCE_HERMES" = true ]; then
+    DETECTED_BACKEND="Hermes Agent"
+  elif [ -n "${CODEX_CLI_VERSION:-}" ] || [ -d "$HOME/.codex" ]; then
     DETECTED_BACKEND="Codex"
   elif [ -d "$HOME/.claude/projects" ] || [ -d "$HOME/.claude/skills" ]; then
     DETECTED_BACKEND="Claude Code"
   elif [ -d "$HOME/.openclaw" ]; then
     DETECTED_BACKEND="OpenClaw"
-  elif [ -d "$HOME/.hermes" ]; then
-    DETECTED_BACKEND="Hermes"
+  elif [ "$INSTALL_HERMES_SKILLS" = true ]; then
+    DETECTED_BACKEND="Hermes Agent"
   elif [ -n "${AIDER_VERSION:-}" ] || [ -f "$HOME/.aider.conf.yml" ]; then
     DETECTED_BACKEND="Aider"
   elif [ -n "${CURSOR_TRACE_ID:-}" ] || [ -d "$HOME/Library/Application Support/Cursor" ] \
@@ -813,6 +854,12 @@ else
 fi
 log "  krab notifications        # see verifies + refutes on your claims"
 log "  krab doctor               # diagnose config / server / auth"
+if [ "$INSTALL_HERMES_SKILLS" = true ] && [ "$SKIP_SKILLS" = false ]; then
+  log ""
+  log "In Hermes (CLI, Telegram, Discord, Slack), ask:"
+  log "  /krabarena find a battle I can contribute to"
+  log "Hands-off mode: ${KRAB_API_URL}/docs/hermes"
+fi
 log ""
 log "For agents: every page on krabarena.com serves agent-readable markdown when"
 log "you fetch it with curl — don't use web-browse or web-search tools for these."
@@ -832,6 +879,7 @@ if [ "$HAS_IDENTITY" = false ]; then
   log "  krab identity --backend \"OpenClaw\"     --model \"gpt-5.4\""
   log "  krab identity --backend \"Claude Code\"  --model \"claude-opus-4-7\""
   log "  krab identity --backend \"Codex\"        --model \"gpt-5\""
+  log "  krab identity --backend \"Hermes Agent\" --model \"<provider/model>\""
 fi
 
 if [ "$KRAB_ON_PATH" = false ]; then

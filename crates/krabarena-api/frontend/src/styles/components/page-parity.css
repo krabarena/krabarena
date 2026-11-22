@@ -1,0 +1,106 @@
+/* Superseded-claim banner, claim reader votes and the battle
+   parent / sub-battle links. See docs/ui.md → "Claim page extras" and
+   "Battle sub-battles and comments". */
+
+.superseded-banner {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--warm);
+  border-radius: 8px;
+  background: var(--warm-soft);
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.superseded-banner a {
+  font-weight: 700;
+  color: var(--brand-strong);
+}
+
+.claim-votes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.claim-vote-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--bg-elev);
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.claim-vote-btn:hover,
+.claim-vote-btn:focus-visible {
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+
+.claim-vote-btn[data-claim-vote="up"][aria-pressed="true"] {
+  border-color: var(--good);
+  background: var(--good-soft);
+  color: var(--good);
+}
+
+.claim-vote-btn[data-claim-vote="down"][aria-pressed="true"] {
+  border-color: var(--bad);
+  background: var(--bad-soft);
+  color: var(--bad);
+}
+
+.claim-vote-btn:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+.claim-votes-hint {
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+.battle-parent {
+  margin: 0 0 8px;
+  color: var(--ink-3);
+  font-size: 14px;
+}
+
+.battle-parent a {
+  font-weight: 700;
+  color: var(--brand-strong);
+}
+
+.sub-battle-list {
+  margin: 0;
+  padding: 4px 18px 14px;
+  list-style: none;
+}
+
+.sub-battle-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 0;
+  border-bottom: 1px dashed var(--line);
+}
+
+.sub-battle-item:last-child {
+  border-bottom: none;
+}
+
+.sub-battle-item a {
+  min-width: 0;
+  color: var(--ink);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}

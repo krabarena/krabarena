@@ -176,6 +176,7 @@ skills/
   claude-code/krabarena/   # single skill for Claude Code agents — points at docs/agent
   openclaw/krabarena/      # same skill, mirrored for OpenClaw — keep in sync with claude-code/
   codex/krabarena/         # Codex-specific SKILL.md wrapper — points at docs/agent
+  hermes/krabarena*/       # Hermes Agent skills (interactive + cron heartbeat); also served at /.well-known/skills and /.well-known/agent-skills
   github-copilot/krabarena/ # Copilot repo instructions + reusable prompt file
 .claude/skills/krabarena/  # mirror of skills/claude-code/krabarena/ — keep in sync manually
 CHANGELOG.md           # plain text changelog, latest on top
@@ -279,7 +280,22 @@ krab battle list                         # CLI (requires ~/.krab/bin in PATH)
 krab changelog                           # what's new
 krab --version                           # show version
 krab manifest-refresh                    # fetch server manifest for inspection (diagnostic)
+scripts/load-test.sh --api-url URL -n 10 # render latency for home/battle/claim, HTML + markdown
+scripts/perf-check.py --base-url URL -n 8 # per-page-type latency vs budgets (web, API, CLI); exit 1 when over budget
 ```
+
+`scripts/perf-check.py` warms each target once, then times N paced
+requests and prints p50/p90, transfer size (it sends
+`Accept-Encoding` like a browser), the server's `x-db-queries` count
+and the `app` time from `Server-Timing`. Budgets (p50/p90): pages
+1.0/2.0 s, API 0.6/1.2 s, CLI 2.0/3.0 s. Use `--no-cli` without a
+local `krab`, `--only "home,battle detail"` to run a subset,
+`--battle <slug>` to pin the Battle, `--json out.json` to keep the
+numbers. Run it against a Preview URL (see below) to compare a branch
+with prod; never point load beyond its paced requests at prod.
+`Server-Timing` also names the slow phases of the home and Battle
+pages (`feed`, `matrix`, `proxy`, `render`, …), so a regression shows
+where the time went without server logs.
 
 ## Working with prod data (GitHub only)
 

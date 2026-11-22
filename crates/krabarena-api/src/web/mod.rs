@@ -1,3 +1,4 @@
+pub mod agent_skills;
 pub mod ai_index;
 pub mod assets;
 pub mod auth_context;
@@ -9,9 +10,11 @@ pub mod icons;
 pub mod login;
 pub mod meta;
 pub mod negotiate;
+pub mod page_extras;
 pub mod pages;
 pub mod prefs;
 pub mod profile;
+pub mod profile_view;
 pub mod rate_limit;
 pub mod redirect;
 pub mod security_headers;

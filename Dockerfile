@@ -64,6 +64,9 @@ COPY CHANGELOG.md ./
 # build context or the release compile fails with
 # "couldn't read ../../../docs/proxy-spec.md".
 COPY docs/ docs/
+# skills/hermes/ is `include_str!`-ed by web::agent_skills (served at
+# /.well-known/skills/ and /.well-known/agent-skills/).
+COPY skills/ skills/
 
 ENV CARGO_TARGET_DIR=/app/target-cache \
     CARGO_INCREMENTAL=1 \
