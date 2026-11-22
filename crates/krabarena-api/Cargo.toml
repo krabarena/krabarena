@@ -92,3 +92,4 @@ uuid.workspace = true
 tower = "0.5"
 # Mock HTTP server for outbound-HTTP tests. Test-only.
 wiremock = "0.6"
+ring = "0.17"

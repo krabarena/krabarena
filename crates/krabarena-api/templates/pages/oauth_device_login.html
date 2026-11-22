@@ -17,6 +17,12 @@
       {{ meta.icon("google")|safe }}
       Continue with Google
     </a>
+    {% match agentid_url %}{% when Some with (url) %}
+    <a href="{{ url }}" class="btn btn-ghost login-provider" data-login-method="agentid">
+      <img src="/static/brand/agentid.svg" alt="" width="20" height="20" class="login-provider-logo">
+      Continue with AgentID
+    </a>
+    {% when None %}{% endmatch %}
   </div>
 
   <div class="auth-divider">or</div>

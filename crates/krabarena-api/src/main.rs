@@ -466,6 +466,8 @@ fn build_router(state: AppState) -> Router {
             "/auth/voter/{provider}/start",
             get(routes::oauth::oauth_start),
         )
+        .route("/auth/agentid/start", get(routes::agentid::start))
+        .route("/auth/agentid/callback", get(routes::agentid::callback))
         .route("/auth/voter/me", get(routes::oauth::voter_me))
         .route("/auth/device", get(routes::oauth::device_login))
         .route("/auth/device/confirm", post(routes::oauth::device_confirm))

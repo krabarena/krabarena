@@ -157,19 +157,23 @@ fn append_cookie(headers: &mut HeaderMap, cookie: String) {
 }
 
 fn set_state_cookie(headers: &mut HeaderMap, nonce: &str) {
+    set_state_cookie_max_age(headers, nonce, OAUTH_STATE_MAX_AGE);
+}
+
+pub(crate) fn set_state_cookie_max_age(headers: &mut HeaderMap, nonce: &str, max_age: i64) {
     append_cookie(
         headers,
         cookies::build(
             OAUTH_STATE_COOKIE,
             nonce,
-            OAUTH_STATE_MAX_AGE,
+            max_age,
             true,
             cookies::secure_cookies(),
         ),
     );
 }
 
-fn clear_state_cookie(headers: &mut HeaderMap) {
+pub(crate) fn clear_state_cookie(headers: &mut HeaderMap) {
     append_cookie(
         headers,
         cookies::clear(OAUTH_STATE_COOKIE, cookies::secure_cookies()),
@@ -329,13 +333,14 @@ struct OAuthDeviceLoginTemplate {
     meta: PageMeta,
     github_url: String,
     google_url: String,
+    agentid_url: Option<String>,
     user_code: String,
 }
 
 /// Render a human-friendly HTML error page for an OAuth callback
 /// failure. Called in place of letting `ApiError` fall through to the
 /// default JSON error response — browser users were seeing raw JSON.
-fn oauth_error_page(
+pub(crate) fn oauth_error_page(
     public_base_url: &str,
     provider: &str,
     err: &ApiError,
@@ -1045,14 +1050,23 @@ async fn stage_device_login(
         &user.role,
         &state.jwt_secret,
     )?;
+    stage_device_jwt(state, &jwt, &identity.display_name, session, nonce).await
+}
 
+pub(crate) async fn stage_device_jwt(
+    state: &AppState,
+    jwt: &str,
+    display_name: &str,
+    session: &Uuid,
+    nonce: &str,
+) -> Result<Response, ApiError> {
     let staged = sqlx::query(
         "UPDATE pending_verifications \
          SET pending_token = $1, browser_binding = $2, expires_at = NOW() + INTERVAL '10 minutes' \
          WHERE verification_type = 'device' AND code = $3 AND expires_at > NOW() \
            AND result_token IS NULL",
     )
-    .bind(&jwt)
+    .bind(jwt)
     .bind(browser_binding(nonce))
     .bind(session.to_string())
     .execute(&state.pool)
@@ -1065,7 +1079,7 @@ async fn stage_device_login(
 
     Ok(render_device_confirm_page(
         &state.public_base_url,
-        &identity.display_name,
+        display_name,
         session,
     ))
 }
@@ -1230,6 +1244,15 @@ pub async fn device_login(
         );
     }
 
+    let agentid_start = crate::services::agentid::enabled()
+        .then(|| crate::routes::agentid::start_path(Some(&session)));
+    if let Some(url) = agentid_start
+        .as_deref()
+        .filter(|_| params.get("provider").map(String::as_str) == Some("agentid"))
+    {
+        return Redirect::to(url).into_response();
+    }
+
     crate::web::errors::render_template_or_500(
         OAuthDeviceLoginTemplate {
             meta: PageMeta::new(&base, "/auth/device")
@@ -1238,6 +1261,7 @@ pub async fn device_login(
                 .noindex_follow(),
             github_url: provider_start_path("github", Some(&session)),
             google_url: provider_start_path("google", Some(&session)),
+            agentid_url: agentid_start.clone(),
             user_code: device_user_code(&session),
         },
         &base,
@@ -1391,6 +1415,27 @@ fn rand_code() -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn device_login_html(agentid_url: Option<String>) -> String {
+        OAuthDeviceLoginTemplate {
+            meta: PageMeta::new("https://krabarena.test", "/auth/device"),
+            github_url: provider_start_path("github", None),
+            google_url: provider_start_path("google", None),
+            agentid_url,
+            user_code: "ABCD-1234".into(),
+        }
+        .render()
+        .unwrap()
+    }
+
+    #[test]
+    fn device_login_offers_agentid_only_when_configured() {
+        assert!(!device_login_html(None).contains("AgentID"));
+        let s = Uuid::new_v4();
+        let html = device_login_html(Some(crate::routes::agentid::start_path(Some(&s))));
+        assert!(html.contains("Continue with AgentID"));
+        assert!(html.contains(&format!("/auth/agentid/start?session={s}")));
+    }
 
     /// Non-admin voters must NOT get an `admin_token` field at all
     /// in the JSON — not `"admin_token": null`. We use

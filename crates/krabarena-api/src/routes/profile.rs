@@ -65,9 +65,9 @@ pub struct VoterSelf {
 #[derive(Debug, Serialize)]
 pub struct ProfileMeResponse {
     pub voter: VoterSelf,
-    /// The agent (`users` row) whose email matches the voter's email.
-    /// `None` if the voter has never authenticated as an agent on this
-    /// platform.
+    /// The agent (`users` row) whose email matches the voter's email,
+    /// else the AgentID agent whose verified owner email matches the
+    /// session's verified email. `None` if neither exists.
     pub my_agent: Option<AgentSummary>,
     /// Other agents under the same work domain. Empty when the voter's
     /// email is on a personal-mail provider (gmail.com etc.) — those
@@ -96,10 +96,7 @@ pub async fn get_me(
 
     // Resolve "my agent" by email match. Case-insensitive on email
     // because OAuth providers don't agree on casing.
-    let my_agent: Option<AgentSummary> = match voter_email.as_deref() {
-        Some(e) => fetch_agent_by_email(&state, e).await?,
-        None => None,
-    };
+    let my_agent = resolve_my_agent(&state, &token, voter_email.as_deref()).await?;
 
     let work_domain: Option<String> = voter_email
         .as_deref()
@@ -157,16 +154,7 @@ pub async fn get_agent_notifications(
         .await?
         .ok_or(ApiError::Unauthorized)?;
 
-    let Some(email) = voter.email.as_deref() else {
-        return Ok(Json(ApiResponse::new(ProfileNotificationsResponse {
-            agent: None,
-            items: Vec::new(),
-            next_cursor: None,
-            has_more: false,
-        })));
-    };
-
-    let Some(agent) = fetch_agent_by_email(&state, email).await? else {
+    let Some(agent) = resolve_my_agent(&state, &token, voter.email.as_deref()).await? else {
         return Ok(Json(ApiResponse::new(ProfileNotificationsResponse {
             agent: None,
             items: Vec::new(),
@@ -352,19 +340,38 @@ async fn resolve_agent_user_id(
     let voter = voter_service::get_voter_by_session(&state.pool, &token)
         .await?
         .ok_or(ApiError::Unauthorized)?;
-    let Some(email) = voter.email.as_deref() else {
-        return Ok(None);
-    };
-    Ok(fetch_agent_by_email(state, email).await?.map(|a| a.user_id))
+    Ok(resolve_my_agent(state, &token, voter.email.as_deref())
+        .await?
+        .map(|a| a.user_id))
 }
 
 // ---------------------------------------------------------------------------
 // helpers
 // ---------------------------------------------------------------------------
 
-async fn fetch_agent_by_email(
+async fn resolve_my_agent(
     state: &AppState,
-    email: &str,
+    token: &str,
+    voter_email: Option<&str>,
+) -> Result<Option<AgentSummary>, ApiError> {
+    if let Some(email) = voter_email
+        && let Some(agent) = fetch_agent(state, Some(email), None).await?
+    {
+        return Ok(Some(agent));
+    }
+    let Some(verified) = voter_service::session_verified_email(&state.pool, token).await? else {
+        return Ok(None);
+    };
+    match crate::services::agentid::owned_agent_for_verified_email(&state.pool, &verified).await? {
+        Some(agent_id) => fetch_agent(state, None, Some(agent_id)).await,
+        None => Ok(None),
+    }
+}
+
+async fn fetch_agent(
+    state: &AppState,
+    email: Option<&str>,
+    user_id: Option<Uuid>,
 ) -> Result<Option<AgentSummary>, ApiError> {
     // total_claims = lineage HEADs only (edited claims don't double-
     // count both versions). See `models::claim::not_superseded`.
@@ -381,11 +388,12 @@ async fn fetch_agent_by_email(
             (SELECT COUNT(*) FROM verifications WHERE author_id = u.id AND verdict = 'disconfirmed')
         FROM users u
         JOIN entities e ON u.entity_id = e.id
-        WHERE LOWER(u.email) = LOWER($1)
+        WHERE ($1::text IS NOT NULL AND LOWER(u.email) = LOWER($1)) OR u.id = $2
         LIMIT 1
         "#
     ))
     .bind(email)
+    .bind(user_id)
     .fetch_optional(&state.pool)
     .await
     .map_err(|e| ApiError::Internal(e.into()))
@@ -458,10 +466,9 @@ async fn linked_agent_id(state: &AppState, headers: &HeaderMap) -> Result<Option
     let voter = voter_service::get_voter_by_session(&state.pool, &token)
         .await?
         .ok_or(ApiError::Unauthorized)?;
-    let Some(email) = voter.email.as_deref() else {
-        return Ok(None);
-    };
-    Ok(fetch_agent_by_email(state, email).await?.map(|a| a.user_id))
+    Ok(resolve_my_agent(state, &token, voter.email.as_deref())
+        .await?
+        .map(|a| a.user_id))
 }
 
 /// `GET /v1/profile/agent-notifications/unread-count` — voter-authenticated.
