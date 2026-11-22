@@ -50,6 +50,37 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
+      - name: Install Rust
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+
+      # Cargo cache — same shape as ci.yml. Without this every E2E
+      # run (and every `gh run rerun --failed`) recompiles the test
+      # binary from scratch, costing ~3-5 minutes per attempt on a
+      # transient Gemini flake. Keyed on `Cargo.lock` so dependency
+      # changes invalidate but unrelated code touches don't.
+      #
+      # Switched from `actions/cache@v4` to `Swatinem/rust-cache` after
+      # `cache@v4` began deterministically killing the job between
+      # "Install Rust" and "Cache cargo" — no error log, just a runner
+      # exit. 4 attempts on 2026-05-28 confirmed reproducibility.
+      # `rust-cache` is Rust-specific, handles its own key derivation
+      # from Cargo.lock + rustc version, and ships its own retry +
+      # incremental-only cache logic, so it sidesteps whatever the
+      # generic cache backend was failing on.
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          shared-key: e2e
+          # Restoring the prior build's target/ keeps E2E iteration time
+          # at ~30s for incremental rebuilds; cold builds take ~3-5min.
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Compile E2E tests in the background
+        run: |
+          (cargo test -p krabarena-api --test review_e2e --test feed_e2e --no-run > /tmp/e2e-build.log 2>&1; echo $? > /tmp/e2e-build.rc) &
+
       - id: auth
         uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
         with:
@@ -57,6 +88,8 @@ jobs:
           service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
 
       - uses: google-github-actions/setup-gcloud@e427ad8a34f8676edf47cf7d7925499adf3eb74f # v2
+        with:
+          skip_install: true
 
       - name: Determine image
         id: tag
@@ -122,33 +155,6 @@ jobs:
           done
           curl -fsS "${URL}/health"
 
-      - name: Install Rust
-        run: |
-          rustup toolchain install stable --profile minimal
-          rustup default stable
-
-      # Cargo cache — same shape as ci.yml. Without this every E2E
-      # run (and every `gh run rerun --failed`) recompiles the test
-      # binary from scratch, costing ~3-5 minutes per attempt on a
-      # transient Gemini flake. Keyed on `Cargo.lock` so dependency
-      # changes invalidate but unrelated code touches don't.
-      #
-      # Switched from `actions/cache@v4` to `Swatinem/rust-cache` after
-      # `cache@v4` began deterministically killing the job between
-      # "Install Rust" and "Cache cargo" — no error log, just a runner
-      # exit. 4 attempts on 2026-05-28 confirmed reproducibility.
-      # `rust-cache` is Rust-specific, handles its own key derivation
-      # from Cargo.lock + rustc version, and ships its own retry +
-      # incremental-only cache logic, so it sidesteps whatever the
-      # generic cache backend was failing on.
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
-        with:
-          shared-key: e2e
-          # Restoring the prior build's target/ keeps E2E iteration time
-          # at ~30s for incremental rebuilds; cold builds take ~3-5min.
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-
       - name: E2E against test URL
         env:
           KRAB_TEST_BASE: ${{ steps.url.outputs.url }}
@@ -160,6 +166,9 @@ jobs:
           # The summary step below runs `if: always()` so a failing
           # test still produces a readable report.
           set -o pipefail
+          until [ -f /tmp/e2e-build.rc ]; do sleep 2; done
+          cat /tmp/e2e-build.log
+          [ "$(cat /tmp/e2e-build.rc)" = 0 ] || { echo "::error::E2E test build failed"; exit 1; }
           # review_e2e (KrabReviewer) + feed_e2e (home-feed-not-empty
           # regression guard, added 0.20.2 after the numeric→f64 decode
           # bug shipped an empty feed to prod). Both run against the
