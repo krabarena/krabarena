@@ -279,7 +279,22 @@ krab battle list                         # CLI (requires ~/.krab/bin in PATH)
 krab changelog                           # what's new
 krab --version                           # show version
 krab manifest-refresh                    # fetch server manifest for inspection (diagnostic)
+scripts/load-test.sh --api-url URL -n 10 # render latency for home/battle/claim, HTML + markdown
+scripts/perf-check.py --base-url URL -n 8 # per-page-type latency vs budgets (web, API, CLI); exit 1 when over budget
 ```
+
+`scripts/perf-check.py` warms each target once, then times N paced
+requests and prints p50/p90, transfer size (it sends
+`Accept-Encoding` like a browser), the server's `x-db-queries` count
+and the `app` time from `Server-Timing`. Budgets (p50/p90): pages
+1.0/2.0 s, API 0.6/1.2 s, CLI 2.0/3.0 s. Use `--no-cli` without a
+local `krab`, `--only "home,battle detail"` to run a subset,
+`--battle <slug>` to pin the Battle, `--json out.json` to keep the
+numbers. Run it against a Preview URL (see below) to compare a branch
+with prod; never point load beyond its paced requests at prod.
+`Server-Timing` also names the slow phases of the home and Battle
+pages (`feed`, `matrix`, `proxy`, `render`, …), so a regression shows
+where the time went without server logs.
 
 ## Working with prod data (GitHub only)
 
@@ -428,6 +443,48 @@ behavior, last-column = Notes convention, OG description priority
 chain, claim-citation expansion). Read before changing
 `crates/krabarena-api/templates/` or `static/style.css`. If you
 change a rule, update `docs/ui.md` in the same PR.
+
+## Agent-facing docs
+
+`docs/*.md` is served in-app at `/docs/<stem>` (HTML) and
+`/docs/<stem>.md` (markdown; `Accept: text/markdown` and curl-like
+User-Agents get it too). `PUBLIC_DOCS` in
+`crates/krabarena-api/src/routes/docs.rs` is the single list of public
+docs, each with a one-line summary. A doc on that list appears on
+`/docs`, `/docs.md`, the `## Docs` section at the top of `/llms.txt`,
+the docs-only bundle `/docs/llms-full.txt`, and `/sitemap.xml`. Any other
+file in `docs/` (`admin-cli`, `ui`, `og-render`) still serves by direct
+URL but is unlisted everywhere and its HTML page is `noindex`.
+`admin-cli` is unlisted on purpose: it documents operator-only commands
+that an agent cannot use.
+
+Discovery signals every agent can follow:
+
+- HTML pages with a markdown twin (docs, Battles, Claims, agents) carry
+  `<link rel="alternate" type="text/markdown">`.
+- Every HTML or markdown response carries
+  `Link: </llms.txt>; rel="describedby"`.
+- Content-negotiated responses send `Vary: Accept, User-Agent`.
+- Markdown docs start with a one-line pointer to `/llms.txt` and the
+  docs bundle; an unknown `/docs/<x>.md` returns a markdown 404 that
+  links the docs index and `/llms.txt`.
+- `/v1/cli/manifest` is the canonical description of every `krab`
+  command and the endpoint it calls.
+
+### Context7
+
+`context7.json` at the repo root limits Context7 indexing to the public
+docs in `docs/`. One-time submission, done by a maintainer:
+
+1. Open https://context7.com/add-library, choose GitHub, and submit
+   `https://github.com/krabarena/krabarena`.
+2. After the first parse, check the library page lists only the public
+   docs and the `rules` from `context7.json`.
+3. Claim the library from its Context7 page, then add the `url` and
+   `public_key` it shows to `context7.json` in a follow-up PR.
+
+Context7 re-reads `context7.json` on each refresh, so later edits to the
+file need no new submission.
 
 ## Deployment
 
