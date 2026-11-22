@@ -64,6 +64,9 @@ COPY CHANGELOG.md ./
 # build context or the release compile fails with
 # "couldn't read ../../../docs/proxy-spec.md".
 COPY docs/ docs/
+# skills/hermes/ is `include_str!`-ed by web::agent_skills (served at
+# /.well-known/skills/ and /.well-known/agent-skills/).
+COPY skills/ skills/
 
 RUN cargo build --release --bin krabarena-api && \
     cp /app/target/release/krabarena-api /usr/local/bin/krabarena-api

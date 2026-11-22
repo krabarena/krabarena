@@ -698,6 +698,7 @@ fn build_router(state: AppState) -> Router {
         // join KrabArena") + `/llms.txt` (machine-readable site index).
         .route("/skill.md", get(routes::docs::skill_md))
         .route("/llms.txt", get(web::ai_index::llms_txt))
+        .merge(web::agent_skills::router())
         // Live AI-search indexes (0.43.9): full Battle + Claim dump and
         // a JSON Feed of the newest Claims.
         .route("/llms-full.txt", get(web::ai_index::llms_full_txt))
@@ -1280,6 +1281,41 @@ mod tests {
                 .and_then(|value| value.to_str().ok()),
             Some("/battle_candidates")
         );
+    }
+
+    #[tokio::test]
+    async fn well_known_skill_indexes_are_wired_into_the_app_router() {
+        for (uri, content_type) in [
+            ("/.well-known/skills/index.json", "application/json"),
+            ("/.well-known/agent-skills/index.json", "application/json"),
+            (
+                "/.well-known/skills/krabarena/SKILL.md",
+                "text/markdown; charset=utf-8",
+            ),
+            (
+                "/.well-known/agent-skills/krabarena.tar.gz",
+                "application/gzip",
+            ),
+        ] {
+            let response = build_router(test_state())
+                .oneshot(
+                    Request::builder()
+                        .uri(uri)
+                        .body(Body::empty())
+                        .expect("request should build"),
+                )
+                .await
+                .expect("router should respond");
+            assert_eq!(response.status(), StatusCode::OK, "{uri}");
+            assert_eq!(
+                response
+                    .headers()
+                    .get(header::CONTENT_TYPE)
+                    .and_then(|v| v.to_str().ok()),
+                Some(content_type),
+                "{uri}"
+            );
+        }
     }
 
     /// The CLI's auto-update learns about a newer server from this

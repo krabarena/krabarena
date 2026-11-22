@@ -498,9 +498,9 @@ pub async fn run(
         .as_deref()
         .and_then(find_harness_for_backend);
     if let (Some(home), Ok(cwd)) = (home_dir(), std::env::current_dir()) {
+        let env = |var: &str| std::env::var(var).ok();
         if let Some(active) = active_harness {
-            let roots =
-                skill_root_candidates(&cwd, &home, active.project_rel_dir, active.global_rel_dir);
+            let roots = harness_root_candidates(active, &cwd, &home, env);
             check_skills_for_agent(active, roots, true, "active", fix, &mut reporter).await;
         }
 
@@ -508,8 +508,7 @@ pub async fn run(
             if active_harness.is_some_and(|active| active.label == harness.label) {
                 continue;
             }
-            let candidates =
-                skill_root_candidates(&cwd, &home, harness.project_rel_dir, harness.global_rel_dir);
+            let candidates = harness_root_candidates(harness, &cwd, &home, env);
             let roots = existing_skill_roots(&candidates);
             if roots.is_empty() {
                 continue;
@@ -618,7 +617,7 @@ async fn fetch_battle_count(api_url: &str, token: &str) -> Result<usize> {
 const EXPECTED_SKILLS_CLAUDE: &[&str] = &["krabarena"];
 const EXPECTED_SKILLS_OPENCLAW: &[&str] = &["krabarena"];
 const EXPECTED_SKILLS_CODEX: &[&str] = &["krabarena"];
-const EXPECTED_SKILLS_HERMES: &[&str] = &["krabarena"];
+const EXPECTED_SKILLS_HERMES: &[&str] = &["krabarena", "krabarena-heartbeat"];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct HarnessDef {
@@ -628,6 +627,9 @@ struct HarnessDef {
     global_rel_dir: &'static str,
     archive_name: &'static str,
     expected: &'static [&'static str],
+    home_env: Option<(&'static str, &'static str)>,
+    legacy_flat_layout: bool,
+    prefer_global: bool,
 }
 
 const HARNESSES: &[HarnessDef] = &[
@@ -638,6 +640,9 @@ const HARNESSES: &[HarnessDef] = &[
         global_rel_dir: "~/.claude/skills",
         archive_name: "krabarena-skills-claude-code.tar.gz",
         expected: EXPECTED_SKILLS_CLAUDE,
+        home_env: None,
+        legacy_flat_layout: false,
+        prefer_global: false,
     },
     HarnessDef {
         label: "OpenClaw",
@@ -646,6 +651,9 @@ const HARNESSES: &[HarnessDef] = &[
         global_rel_dir: "~/.openclaw/skills",
         archive_name: "krabarena-skills-openclaw.tar.gz",
         expected: EXPECTED_SKILLS_OPENCLAW,
+        home_env: None,
+        legacy_flat_layout: false,
+        prefer_global: false,
     },
     HarnessDef {
         label: "Codex",
@@ -654,14 +662,20 @@ const HARNESSES: &[HarnessDef] = &[
         global_rel_dir: "~/.codex/skills",
         archive_name: "krabarena-skills-codex.tar.gz",
         expected: EXPECTED_SKILLS_CODEX,
+        home_env: None,
+        legacy_flat_layout: false,
+        prefer_global: false,
     },
     HarnessDef {
         label: "Hermes",
-        aliases: &["hermes"],
-        project_rel_dir: ".hermes/skills",
-        global_rel_dir: "~/.hermes/skills",
-        archive_name: "krabarena-skills-claude-code.tar.gz",
+        aliases: &["hermes", "hermesagent"],
+        project_rel_dir: ".hermes/skills/krabarena",
+        global_rel_dir: "~/.hermes/skills/krabarena",
+        archive_name: "krabarena-skills-hermes.tar.gz",
         expected: EXPECTED_SKILLS_HERMES,
+        home_env: Some(("HERMES_HOME", "skills/krabarena")),
+        legacy_flat_layout: true,
+        prefer_global: true,
     },
 ];
 
@@ -722,6 +736,65 @@ fn skill_root_candidates(
     ]
 }
 
+fn harness_root_candidates(
+    harness: &HarnessDef,
+    cwd: &Path,
+    home: &Path,
+    env: impl Fn(&str) -> Option<String>,
+) -> Vec<SkillRoot> {
+    let mut candidates =
+        skill_root_candidates(cwd, home, harness.project_rel_dir, harness.global_rel_dir);
+    let env_root = harness.home_env.and_then(|(var, rel)| {
+        env(var)
+            .filter(|v| !v.trim().is_empty())
+            .map(|v| PathBuf::from(v).join(rel))
+    });
+    if let Some(root) = env_root {
+        let base = root.parent().map(Path::to_path_buf).unwrap_or(root.clone());
+        candidates[1] = SkillRoot {
+            root,
+            base,
+            scope: "global",
+        };
+    }
+    if harness.prefer_global {
+        candidates.reverse();
+    }
+    candidates
+}
+
+fn legacy_flat_paths(root: &Path) -> Vec<PathBuf> {
+    let has_name = |path: &Path, name: &str| {
+        std::fs::read_to_string(path)
+            .map(|body| body.lines().any(|l| l.trim() == format!("name: {name}")))
+            .unwrap_or(false)
+    };
+    let mut out = Vec::new();
+    let flat_skill = root.join("SKILL.md");
+    if has_name(&flat_skill, "krabarena") {
+        out.push(flat_skill);
+    }
+    if let Some(parent) = root.parent() {
+        let heartbeat = parent.join("krabarena-heartbeat");
+        if has_name(&heartbeat.join("SKILL.md"), "krabarena-heartbeat") {
+            out.push(heartbeat);
+        }
+    }
+    out
+}
+
+fn remove_legacy_flat_paths(paths: &[PathBuf]) -> Result<()> {
+    for path in paths {
+        if path.is_dir() {
+            std::fs::remove_dir_all(path)
+        } else {
+            std::fs::remove_file(path)
+        }
+        .with_context(|| format!("remove {}", path.display()))?;
+    }
+    Ok(())
+}
+
 fn existing_skill_roots(candidates: &[SkillRoot]) -> Vec<SkillRoot> {
     candidates
         .iter()
@@ -775,6 +848,44 @@ async fn check_skills_for_agent(
     }
 
     reporter.section(&format!("skills ({})", harness.label));
+
+    if harness.legacy_flat_layout {
+        for root in &roots {
+            let legacy = legacy_flat_paths(&root.root);
+            if legacy.is_empty() {
+                continue;
+            }
+            let listed = legacy
+                .iter()
+                .map(|p| p.display().to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
+            if !fix {
+                reporter.skill_warn(
+                    harness.label,
+                    check_scope,
+                    "legacy layout",
+                    &format!("{listed} — run `krab doctor --fix` to migrate"),
+                );
+                continue;
+            }
+            match remove_legacy_flat_paths(&legacy) {
+                Ok(()) => reporter.skill_fixed(
+                    harness.label,
+                    check_scope,
+                    "legacy layout",
+                    &format!("removed {listed}"),
+                ),
+                Err(e) => reporter.skill_fail(
+                    harness.label,
+                    check_scope,
+                    hard,
+                    "legacy layout",
+                    &format!("{e:#}"),
+                ),
+            }
+        }
+    }
 
     // Partition into installed vs missing up front. We feed installed
     // skills through drift detection and missing skills through the
@@ -1412,6 +1523,14 @@ mod tests {
             find_harness_for_backend("OpenClaw").map(|h| h.label),
             Some("OpenClaw")
         );
+        assert_eq!(
+            find_harness_for_backend("Hermes Agent").map(|h| h.label),
+            Some("Hermes")
+        );
+        assert_eq!(
+            find_harness_for_backend("hermes").map(|h| h.label),
+            Some("Hermes")
+        );
         assert!(find_harness_for_backend("Gemini CLI").is_none());
     }
 
@@ -1430,6 +1549,120 @@ mod tests {
             existing_skill_roots(&candidates).is_empty(),
             "other harness checks should stay silent when no harness dir exists"
         );
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    fn hermes() -> &'static HarnessDef {
+        find_harness_for_backend("Hermes Agent").unwrap()
+    }
+
+    #[test]
+    fn hermes_harness_refreshes_the_hermes_bundle_in_its_category_dir() {
+        let h = hermes();
+        assert_eq!(h.archive_name, "krabarena-skills-hermes.tar.gz");
+        assert_eq!(h.expected, ["krabarena", "krabarena-heartbeat"]);
+
+        let tmp = tempdir_for("hermes-roots").unwrap();
+        let cwd = tmp.join("project");
+        let home = tmp.join("home");
+        let default = harness_root_candidates(h, &cwd, &home, |_| None);
+        assert_eq!(default[0].root, home.join(".hermes/skills/krabarena"));
+        assert_eq!(default[0].base, home.join(".hermes/skills"));
+        assert_eq!(default[1].root, cwd.join(".hermes/skills/krabarena"));
+        assert_eq!(
+            choose_skill_install_root(&default).map(|r| r.scope),
+            Some("global")
+        );
+
+        let custom = tmp.join("hermes-home");
+        let custom_str = custom.to_string_lossy().into_owned();
+        let with_env = harness_root_candidates(h, &cwd, &home, |var| {
+            (var == "HERMES_HOME").then(|| custom_str.clone())
+        });
+        assert_eq!(with_env[0].root, custom.join("skills/krabarena"));
+        assert_eq!(with_env[0].scope, "global");
+
+        let blank = harness_root_candidates(h, &cwd, &home, |_| Some("  ".into()));
+        assert_eq!(blank[0].root, home.join(".hermes/skills/krabarena"));
+
+        let claude = find_harness_for_backend("Claude Code").unwrap();
+        let unaffected = harness_root_candidates(claude, &cwd, &home, |_| Some(custom_str.clone()));
+        assert_eq!(unaffected[1].root, home.join(".claude/skills"));
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn hermes_archive_installs_both_skills_under_the_category_dir() {
+        let tmp = tempdir_for("hermes-archive-extract").unwrap();
+        let gz = build_tar_gz(&[
+            ("krabarena/SKILL.md", b"---\nname: krabarena\n---\n"),
+            ("krabarena/references/claim-structure.md", b"doc\n"),
+            (
+                "krabarena-heartbeat/SKILL.md",
+                b"---\nname: krabarena-heartbeat\n---\n",
+            ),
+        ]);
+        let archive = parse_skill_archive(&gz).unwrap();
+        validate_skill_archive_contents(&archive, hermes().expected).unwrap();
+
+        let archive_path = tmp.join("krabarena-skills-hermes.tar.gz");
+        std::fs::write(&archive_path, &gz).unwrap();
+        let home = tmp.join("home");
+        let roots = harness_root_candidates(hermes(), &tmp.join("cwd"), &home, |_| None);
+        std::fs::create_dir_all(&roots[0].root).unwrap();
+        extract_tar_gz(&archive_path, &roots[0].root).unwrap();
+        for name in hermes().expected {
+            assert_eq!(
+                find_installed_skill_root(&roots, name).map(|r| r.scope),
+                Some("global"),
+                "{name}"
+            );
+        }
+        assert!(
+            home.join(".hermes/skills/krabarena/krabarena/references/claim-structure.md")
+                .exists()
+        );
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn legacy_flat_hermes_layout_is_detected_and_removed() {
+        let tmp = tempdir_for("hermes-legacy").unwrap();
+        let skills = tmp.join(".hermes/skills");
+        let category = skills.join("krabarena");
+        std::fs::create_dir_all(category.join("krabarena")).unwrap();
+        std::fs::create_dir_all(skills.join("krabarena-heartbeat")).unwrap();
+        std::fs::create_dir_all(skills.join("other")).unwrap();
+        std::fs::write(category.join("SKILL.md"), "---\nname: krabarena\n---\n").unwrap();
+        std::fs::write(
+            category.join("krabarena/SKILL.md"),
+            "---\nname: krabarena\n---\n",
+        )
+        .unwrap();
+        std::fs::write(
+            skills.join("krabarena-heartbeat/SKILL.md"),
+            "---\nname: krabarena-heartbeat\n---\n",
+        )
+        .unwrap();
+        std::fs::write(skills.join("other/SKILL.md"), "---\nname: other\n---\n").unwrap();
+
+        let legacy = legacy_flat_paths(&category);
+        assert_eq!(
+            legacy,
+            vec![
+                category.join("SKILL.md"),
+                skills.join("krabarena-heartbeat")
+            ]
+        );
+        remove_legacy_flat_paths(&legacy).unwrap();
+        assert!(!category.join("SKILL.md").exists());
+        assert!(!skills.join("krabarena-heartbeat").exists());
+        assert!(category.join("krabarena/SKILL.md").exists());
+        assert!(skills.join("other/SKILL.md").exists());
+        assert!(legacy_flat_paths(&category).is_empty());
 
         let _ = std::fs::remove_dir_all(&tmp);
     }

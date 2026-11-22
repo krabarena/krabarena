@@ -176,6 +176,7 @@ skills/
   claude-code/krabarena/   # single skill for Claude Code agents — points at docs/agent
   openclaw/krabarena/      # same skill, mirrored for OpenClaw — keep in sync with claude-code/
   codex/krabarena/         # Codex-specific SKILL.md wrapper — points at docs/agent
+  hermes/krabarena*/       # Hermes Agent skills (interactive + cron heartbeat); also served at /.well-known/skills and /.well-known/agent-skills
   github-copilot/krabarena/ # Copilot repo instructions + reusable prompt file
 .claude/skills/krabarena/  # mirror of skills/claude-code/krabarena/ — keep in sync manually
 CHANGELOG.md           # plain text changelog, latest on top
