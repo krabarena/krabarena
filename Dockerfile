@@ -65,8 +65,13 @@ COPY CHANGELOG.md ./
 # "couldn't read ../../../docs/proxy-spec.md".
 COPY docs/ docs/
 
-RUN cargo build --release --bin krabarena-api && \
-    cp /app/target/release/krabarena-api /usr/local/bin/krabarena-api
+ENV CARGO_TARGET_DIR=/app/target-cache \
+    CARGO_INCREMENTAL=1 \
+    CARGO_PROFILE_RELEASE_INCREMENTAL=true
+RUN --mount=type=cache,id=krab-target,target=/app/target-cache \
+    if [ ! -d /app/target-cache/release ]; then cp -a /app/target/. /app/target-cache/; fi && \
+    cargo build --release --bin krabarena-api && \
+    cp /app/target-cache/release/krabarena-api /usr/local/bin/krabarena-api
 
 FROM debian:bookworm-slim
 
