@@ -721,6 +721,8 @@ fn build_router(state: AppState) -> Router {
         // https://krabarena.com/docs/foo.md (markdown) — no
         // per-document route.
         .route("/docs", get(routes::docs::doc_index))
+        .route("/docs.md", get(routes::docs::doc_index_md))
+        .route("/docs/llms-full.txt", get(routes::docs::docs_bundle))
         .route("/docs/{name}", get(routes::docs::doc_page))
         // Test-only token mint — inert unless TEST_AUTH_SECRET is set on
         // the server. Returns 404 in prod by default.
@@ -758,6 +760,9 @@ fn build_router(state: AppState) -> Router {
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             web::errors::html_error_pages,
+        ))
+        .layer(axum::middleware::from_fn(
+            web::ai_index::llms_txt_link_header,
         ))
         // Absolute request-body ceiling (DoS backstop). Multipart
         // upload routes (claim artifacts up to 100 MB) are exempt from
@@ -1300,5 +1305,82 @@ mod tests {
         );
         let page = get("/no-such-page").await.expect("router responds");
         assert!(page.headers().get("x-krab-server-version").is_none());
+    }
+
+    async fn get_with(uri: &str, headers: &[(header::HeaderName, &str)]) -> Response {
+        let mut req = Request::builder().uri(uri);
+        for (k, v) in headers {
+            req = req.header(k, *v);
+        }
+        build_router(test_state())
+            .oneshot(req.body(Body::empty()).expect("request should build"))
+            .await
+            .expect("router responds")
+    }
+
+    async fn text(resp: Response) -> String {
+        let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .expect("body");
+        String::from_utf8(bytes.to_vec()).expect("utf8")
+    }
+
+    fn header_str(resp: &Response, name: header::HeaderName) -> String {
+        resp.headers()
+            .get_all(name)
+            .iter()
+            .filter_map(|v| v.to_str().ok())
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+
+    #[tokio::test]
+    async fn unknown_markdown_doc_returns_markdown_404_pointing_at_indexes() {
+        for (uri, hdrs) in [
+            ("/docs/no-such-doc.md", vec![(header::ACCEPT, "*/*")]),
+            (
+                "/docs/no-such-doc",
+                vec![(header::USER_AGENT, "curl/8.6.0")],
+            ),
+        ] {
+            let resp = get_with(uri, &hdrs).await;
+            assert_eq!(resp.status(), StatusCode::NOT_FOUND, "{uri}");
+            assert!(
+                header_str(&resp, header::CONTENT_TYPE).starts_with("text/markdown"),
+                "{uri} must stay markdown, not the HTML error page"
+            );
+            let body = text(resp).await;
+            assert!(body.starts_with("# Doc not found"), "{uri}: {body}");
+            assert!(body.contains("/llms.txt"));
+            assert!(body.contains("/docs.md"));
+        }
+    }
+
+    #[tokio::test]
+    async fn negotiated_doc_responses_vary_on_accept() {
+        let resp = get_with("/docs/no-such-doc", &[(header::ACCEPT, "text/markdown")]).await;
+        assert!(header_str(&resp, header::VARY).contains("Accept"));
+    }
+
+    #[tokio::test]
+    async fn html_and_markdown_pages_advertise_llms_txt() {
+        let html = get_with("/no-such-page", &[(header::ACCEPT, "text/html")]).await;
+        assert!(header_str(&html, header::LINK).contains("</llms.txt>; rel=\"describedby\""));
+        let md = get_with("/docs/no-such-doc.md", &[]).await;
+        assert!(header_str(&md, header::LINK).contains("</llms.txt>; rel=\"describedby\""));
+        let api = get_with("/v1/no-such-endpoint", &[]).await;
+        assert!(api.headers().get(header::LINK).is_none());
+    }
+
+    #[tokio::test]
+    async fn docs_bundle_route_serves_plain_text() {
+        let bundle = get_with("/docs/llms-full.txt", &[]).await;
+        assert_eq!(bundle.status(), StatusCode::OK);
+        assert!(header_str(&bundle, header::CONTENT_TYPE).starts_with("text/plain"));
+        assert!(
+            text(bundle)
+                .await
+                .starts_with("# KrabArena docs — full text")
+        );
     }
 }

@@ -18,6 +18,7 @@ use std::time::Duration;
 
 use axum::extract::State;
 use axum::http::{HeaderValue, StatusCode, header};
+use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
@@ -199,6 +200,22 @@ fn text_response(content_type: &'static str, body: String) -> Response {
     resp
 }
 
+pub const LLMS_TXT_LINK: &str = "</llms.txt>; rel=\"describedby\"; type=\"text/plain\"";
+
+pub async fn llms_txt_link_header(req: axum::extract::Request, next: Next) -> Response {
+    let mut resp = next.run(req).await;
+    let is_page = resp
+        .headers()
+        .get(header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|ct| ct.starts_with("text/html") || ct.starts_with("text/markdown"));
+    if is_page {
+        resp.headers_mut()
+            .append(header::LINK, HeaderValue::from_static(LLMS_TXT_LINK));
+    }
+    resp
+}
+
 /// `GET /llms.txt`
 pub async fn llms_txt(State(state): State<AppState>) -> Response {
     let base = state.public_base_url.trim_end_matches('/').to_string();
@@ -246,9 +263,16 @@ fn claims_per_battle(claims: &[IndexClaim]) -> std::collections::HashMap<Uuid, u
 }
 
 pub fn render_llms_txt(base: &str, battles: &[IndexBattle], claims: &[IndexClaim]) -> String {
-    let mut out = crate::routes::docs::llms_txt_static()
-        .trim_end()
-        .to_string();
+    let guide = crate::routes::docs::llms_txt_static().trim_end();
+    let split = guide.find("\n## ").map_or(guide.len(), |i| i + 1);
+    let (head, rest) = guide.split_at(split);
+    let mut out = head.trim_end().to_string();
+    out.push_str("\n\n");
+    out.push_str(&crate::routes::docs::llms_docs_section(base));
+    if !rest.is_empty() {
+        out.push('\n');
+        out.push_str(rest);
+    }
     out.push_str("\n\n## Live Battles\n\n");
     out.push_str(
         "Each Battle is one contested question with a live, evidence-backed answer. \
@@ -481,6 +505,30 @@ mod tests {
             "- [Mem0 vs Cognee memory](https://krabarena.com/battles/mem0-vs-cognee): Naive RAG takes the lead. (1 claim, updated 2026-10-27)"
         ));
         assert!(body.contains("https://krabarena.com/llms-full.txt"));
+    }
+
+    #[test]
+    fn llms_txt_lists_every_public_doc_first() {
+        let body = render_llms_txt("https://krabarena.com", &[], &[]);
+        let docs = body.find("\n## Docs\n").expect("docs section");
+        let first_other = body
+            .match_indices("\n## ")
+            .map(|(i, _)| i)
+            .find(|&i| i != docs)
+            .expect("other sections");
+        assert!(docs < first_other, "Docs section must come first");
+        for d in crate::routes::docs::PUBLIC_DOCS {
+            assert!(
+                body.contains(&format!("(https://krabarena.com/docs/{}.md)", d.stem)),
+                "missing {}",
+                d.stem
+            );
+        }
+        assert!(body.contains("https://krabarena.com/docs/llms-full.txt"));
+        assert!(body.contains("https://krabarena.com/v1/cli/manifest"));
+        assert!(!body.contains("/docs/admin-cli"));
+        assert!(body.contains("## Start here"));
+        assert!(body.contains("## Live Battles"));
     }
 
     #[test]
