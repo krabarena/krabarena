@@ -46,6 +46,7 @@ use crate::envelope::ApiResponse;
 use crate::error::ApiError;
 use crate::services::auth_service::{MIN_LINK_TOKEN_LEN, dev_log_login_codes, new_link_token};
 use crate::services::email_validation::validate_voter_email;
+use crate::services::profile_service::{self, OAuthProfile, clean_oauth_avatar, clean_oauth_text};
 use crate::services::voter_service;
 use crate::web::cookies;
 use crate::web::meta::PageMeta;
@@ -157,19 +158,23 @@ fn append_cookie(headers: &mut HeaderMap, cookie: String) {
 }
 
 fn set_state_cookie(headers: &mut HeaderMap, nonce: &str) {
+    set_state_cookie_max_age(headers, nonce, OAUTH_STATE_MAX_AGE);
+}
+
+pub(crate) fn set_state_cookie_max_age(headers: &mut HeaderMap, nonce: &str, max_age: i64) {
     append_cookie(
         headers,
         cookies::build(
             OAUTH_STATE_COOKIE,
             nonce,
-            OAUTH_STATE_MAX_AGE,
+            max_age,
             true,
             cookies::secure_cookies(),
         ),
     );
 }
 
-fn clear_state_cookie(headers: &mut HeaderMap) {
+pub(crate) fn clear_state_cookie(headers: &mut HeaderMap) {
     append_cookie(
         headers,
         cookies::clear(OAUTH_STATE_COOKIE, cookies::secure_cookies()),
@@ -329,13 +334,14 @@ struct OAuthDeviceLoginTemplate {
     meta: PageMeta,
     github_url: String,
     google_url: String,
+    agentid_url: Option<String>,
     user_code: String,
 }
 
 /// Render a human-friendly HTML error page for an OAuth callback
 /// failure. Called in place of letting `ApiError` fall through to the
 /// default JSON error response — browser users were seeing raw JSON.
-fn oauth_error_page(
+pub(crate) fn oauth_error_page(
     public_base_url: &str,
     provider: &str,
     err: &ApiError,
@@ -659,6 +665,10 @@ pub async fn email_verify(
     )
     .await?;
 
+    if let Err(e) = profile_service::sync_agent_for_email(&state.pool, &email).await {
+        tracing::warn!(error = %e, voter_id = %voter.id, "profile.agent_sync_failed");
+    }
+
     // The code proves control of `email`.
     let token = voter_service::create_session(&state.pool, voter.id, Some(&email)).await?;
     let admin_token =
@@ -750,6 +760,56 @@ struct ProviderIdentity {
     /// Only set when the provider asserts the address is verified.
     verified_email: Option<String>,
     avatar: Option<String>,
+    profile: OAuthProfile,
+}
+
+fn json_str(v: &serde_json::Value, key: &str) -> Option<String> {
+    clean_oauth_text(v[key].as_str())
+}
+
+fn github_oauth_profile(
+    user_info: &serde_json::Value,
+    verified_email: Option<&str>,
+) -> OAuthProfile {
+    OAuthProfile {
+        provider: "github".into(),
+        email: verified_email.map(str::to_string),
+        email_verified: verified_email.is_some(),
+        full_name: json_str(user_info, "name"),
+        given_name: None,
+        family_name: None,
+        username: json_str(user_info, "login"),
+        profile_url: json_str(user_info, "html_url"),
+        avatar_url: clean_oauth_avatar(user_info["avatar_url"].as_str()),
+        website_url: json_str(user_info, "blog"),
+        x_handle: json_str(user_info, "twitter_username"),
+        bio: json_str(user_info, "bio"),
+        company: json_str(user_info, "company"),
+        location: json_str(user_info, "location"),
+    }
+}
+
+fn oidc_oauth_profile(
+    provider: &str,
+    user_info: &serde_json::Value,
+    verified_email: Option<&str>,
+) -> OAuthProfile {
+    OAuthProfile {
+        provider: provider.into(),
+        email: verified_email.map(str::to_string),
+        email_verified: verified_email.is_some(),
+        full_name: json_str(user_info, "name"),
+        given_name: json_str(user_info, "given_name"),
+        family_name: json_str(user_info, "family_name"),
+        username: None,
+        profile_url: json_str(user_info, "profile"),
+        avatar_url: clean_oauth_avatar(user_info["picture"].as_str()),
+        website_url: None,
+        x_handle: None,
+        bio: None,
+        company: json_str(user_info, "hd"),
+        location: None,
+    }
 }
 
 /// Normalise a provider email: trimmed, lowercased, non-empty.
@@ -839,6 +899,8 @@ async fn github_identity(code: &str) -> Result<ProviderIdentity, ApiError> {
         .await
         .unwrap_or(serde_json::Value::Null);
 
+    let verified_email = github_primary_verified_email(&emails);
+    let profile = github_oauth_profile(&user_info, verified_email.as_deref());
     Ok(ProviderIdentity {
         provider: "github",
         provider_id: github_id,
@@ -846,8 +908,9 @@ async fn github_identity(code: &str) -> Result<ProviderIdentity, ApiError> {
             .as_str()
             .unwrap_or("github-user")
             .to_string(),
-        verified_email: github_primary_verified_email(&emails),
+        verified_email,
         avatar: user_info["avatar_url"].as_str().map(str::to_string),
+        profile,
     })
 }
 
@@ -896,6 +959,8 @@ async fn google_identity(code: &str, public_base_url: &str) -> Result<ProviderId
         .ok_or_else(|| ApiError::ValidationError("Google user lookup failed".into()))?
         .to_string();
 
+    let verified_email = google_verified_email(&user_info);
+    let profile = oidc_oauth_profile("google", &user_info, verified_email.as_deref());
     Ok(ProviderIdentity {
         provider: "google",
         provider_id: google_id,
@@ -903,8 +968,9 @@ async fn google_identity(code: &str, public_base_url: &str) -> Result<ProviderId
             .as_str()
             .unwrap_or("google-user")
             .to_string(),
-        verified_email: google_verified_email(&user_info),
+        verified_email,
         avatar: user_info["picture"].as_str().map(str::to_string),
+        profile,
     })
 }
 
@@ -953,6 +1019,8 @@ async fn linkedin_identity(code: &str) -> Result<ProviderIdentity, ApiError> {
         .ok_or_else(|| ApiError::ValidationError("LinkedIn user lookup failed".into()))?
         .to_string();
 
+    let verified_email = linkedin_verified_email(&user_info);
+    let profile = oidc_oauth_profile("linkedin", &user_info, verified_email.as_deref());
     Ok(ProviderIdentity {
         provider: "linkedin",
         provider_id: linkedin_id,
@@ -960,8 +1028,9 @@ async fn linkedin_identity(code: &str) -> Result<ProviderIdentity, ApiError> {
             .as_str()
             .unwrap_or("linkedin-user")
             .to_string(),
-        verified_email: linkedin_verified_email(&user_info),
+        verified_email,
         avatar: user_info["picture"].as_str().map(str::to_string),
+        profile,
     })
 }
 
@@ -1039,20 +1108,34 @@ async fn stage_device_login(
         identity.verified_email.as_deref(),
     )
     .await?;
+    if let Err(e) =
+        profile_service::apply_seeds(&state.pool, user.id, &[identity.profile.seed()]).await
+    {
+        tracing::warn!(error = %e, user_id = %user.id, "profile.oauth_seed_failed");
+    }
     let jwt = crate::services::auth_service::create_jwt(
         user.id,
         user.entity_id,
         &user.role,
         &state.jwt_secret,
     )?;
+    stage_device_jwt(state, &jwt, &identity.display_name, session, nonce).await
+}
 
+pub(crate) async fn stage_device_jwt(
+    state: &AppState,
+    jwt: &str,
+    display_name: &str,
+    session: &Uuid,
+    nonce: &str,
+) -> Result<Response, ApiError> {
     let staged = sqlx::query(
         "UPDATE pending_verifications \
          SET pending_token = $1, browser_binding = $2, expires_at = NOW() + INTERVAL '10 minutes' \
          WHERE verification_type = 'device' AND code = $3 AND expires_at > NOW() \
            AND result_token IS NULL",
     )
-    .bind(&jwt)
+    .bind(jwt)
     .bind(browser_binding(nonce))
     .bind(session.to_string())
     .execute(&state.pool)
@@ -1065,7 +1148,7 @@ async fn stage_device_login(
 
     Ok(render_device_confirm_page(
         &state.public_base_url,
-        &identity.display_name,
+        display_name,
         session,
     ))
 }
@@ -1086,6 +1169,8 @@ async fn complete_web_login(
     )
     .await?;
 
+    capture_oauth_profile(state, voter.id, identity).await;
+
     let token =
         voter_service::create_session(&state.pool, voter.id, identity.verified_email.as_deref())
             .await?;
@@ -1094,6 +1179,20 @@ async fn complete_web_login(
     crate::web::cookies::set_login_cookies(resp.headers_mut(), &token);
     clear_state_cookie(resp.headers_mut());
     Ok(resp)
+}
+
+async fn capture_oauth_profile(state: &AppState, voter_id: Uuid, identity: &ProviderIdentity) {
+    if let Err(e) =
+        profile_service::upsert_oauth_snapshot(&state.pool, voter_id, &identity.profile).await
+    {
+        tracing::warn!(error = %e, voter_id = %voter_id, "profile.oauth_snapshot_failed");
+        return;
+    }
+    if let Some(email) = identity.verified_email.as_deref() {
+        if let Err(e) = profile_service::sync_agent_for_email(&state.pool, email).await {
+            tracing::warn!(error = %e, voter_id = %voter_id, "profile.agent_sync_failed");
+        }
+    }
 }
 
 /// Where a finished web OAuth login lands. The session token rides in
@@ -1230,6 +1329,15 @@ pub async fn device_login(
         );
     }
 
+    let agentid_start = crate::services::agentid::enabled()
+        .then(|| crate::routes::agentid::start_path(Some(&session)));
+    if let Some(url) = agentid_start
+        .as_deref()
+        .filter(|_| params.get("provider").map(String::as_str) == Some("agentid"))
+    {
+        return Redirect::to(url).into_response();
+    }
+
     crate::web::errors::render_template_or_500(
         OAuthDeviceLoginTemplate {
             meta: PageMeta::new(&base, "/auth/device")
@@ -1238,6 +1346,7 @@ pub async fn device_login(
                 .noindex_follow(),
             github_url: provider_start_path("github", Some(&session)),
             google_url: provider_start_path("google", Some(&session)),
+            agentid_url: agentid_start.clone(),
             user_code: device_user_code(&session),
         },
         &base,
@@ -1392,6 +1501,27 @@ fn rand_code() -> u32 {
 mod tests {
     use super::*;
 
+    fn device_login_html(agentid_url: Option<String>) -> String {
+        OAuthDeviceLoginTemplate {
+            meta: PageMeta::new("https://krabarena.test", "/auth/device"),
+            github_url: provider_start_path("github", None),
+            google_url: provider_start_path("google", None),
+            agentid_url,
+            user_code: "ABCD-1234".into(),
+        }
+        .render()
+        .unwrap()
+    }
+
+    #[test]
+    fn device_login_offers_agentid_only_when_configured() {
+        assert!(!device_login_html(None).contains("AgentID"));
+        let s = Uuid::new_v4();
+        let html = device_login_html(Some(crate::routes::agentid::start_path(Some(&s))));
+        assert!(html.contains("Continue with AgentID"));
+        assert!(html.contains(&format!("/auth/agentid/start?session={s}")));
+    }
+
     /// Non-admin voters must NOT get an `admin_token` field at all
     /// in the JSON — not `"admin_token": null`. We use
     /// `skip_serializing_if = "Option::is_none"` to enforce this:
@@ -1453,6 +1583,71 @@ mod tests {
         assert_eq!(claims.sub, user_id);
         assert_eq!(claims.entity_id, entity_id);
         assert_eq!(claims.role, "admin");
+    }
+
+    #[test]
+    fn github_user_payload_captures_public_profile_fields() {
+        let user = serde_json::json!({
+            "id": 583231,
+            "login": "octocat",
+            "name": "  The   Octocat ",
+            "avatar_url": "https://avatars.githubusercontent.com/u/583231?v=4",
+            "html_url": "https://github.com/octocat",
+            "blog": "https://github.blog",
+            "twitter_username": "octocat",
+            "bio": null,
+            "company": "@github",
+            "location": "San Francisco"
+        });
+        let p = github_oauth_profile(&user, Some("octo@example.com"));
+        assert_eq!(p.provider, "github");
+        assert_eq!(p.full_name.as_deref(), Some("The Octocat"));
+        assert_eq!(p.username.as_deref(), Some("octocat"));
+        assert_eq!(p.profile_url.as_deref(), Some("https://github.com/octocat"));
+        assert_eq!(p.website_url.as_deref(), Some("https://github.blog"));
+        assert_eq!(p.x_handle.as_deref(), Some("octocat"));
+        assert_eq!(p.bio, None);
+        assert_eq!(p.company.as_deref(), Some("@github"));
+        assert_eq!(p.location.as_deref(), Some("San Francisco"));
+        assert!(p.email_verified);
+        let seed = p.seed();
+        assert_eq!(
+            seed.github_url.as_deref(),
+            Some("https://github.com/octocat")
+        );
+        assert_eq!(seed.x_url.as_deref(), Some("https://x.com/octocat"));
+    }
+
+    #[test]
+    fn oidc_userinfo_captures_name_parts_and_picture() {
+        let info = serde_json::json!({
+            "sub": "abc",
+            "name": "Ada Lovelace",
+            "given_name": "Ada",
+            "family_name": "Lovelace",
+            "picture": "https://lh3.googleusercontent.com/a/xyz=s96-c",
+            "email": "ada@example.com",
+            "email_verified": true,
+            "hd": "example.com"
+        });
+        let p = oidc_oauth_profile("google", &info, None);
+        assert_eq!(p.full_name.as_deref(), Some("Ada Lovelace"));
+        assert_eq!(p.given_name.as_deref(), Some("Ada"));
+        assert_eq!(p.family_name.as_deref(), Some("Lovelace"));
+        assert_eq!(
+            p.avatar_url.as_deref(),
+            Some("https://lh3.googleusercontent.com/a/xyz=s96-c")
+        );
+        assert_eq!(p.company.as_deref(), Some("example.com"));
+        assert!(!p.email_verified);
+        assert_eq!(p.email, None);
+        let linkedin = oidc_oauth_profile(
+            "linkedin",
+            &serde_json::json!({"sub": "z", "picture": "javascript:alert(1)"}),
+            Some("z@example.com"),
+        );
+        assert_eq!(linkedin.avatar_url, None);
+        assert_eq!(linkedin.email.as_deref(), Some("z@example.com"));
     }
 
     #[test]

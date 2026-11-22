@@ -52,6 +52,7 @@ pub struct ContributionItem {
 #[derive(Debug, Serialize)]
 pub struct ContributorResponse {
     pub user: KrabberResponse,
+    pub profile: crate::services::profile_service::PublicProfile,
     pub activity: Vec<ContributionItem>,
     /// Keyset cursor for the next activity page, or `None` on the last
     /// page. Added alongside the unified pagination work — older CLI
@@ -315,8 +316,13 @@ pub async fn contributor(
         })
         .collect();
 
+    let profile = crate::services::profile_service::get_public_profile(&state.pool, user_id)
+        .await?
+        .unwrap_or_default();
+
     Ok(Json(ApiResponse::new(ContributorResponse {
         user,
+        profile,
         activity,
         next_cursor: pagination.next_cursor,
         has_more: pagination.has_more,

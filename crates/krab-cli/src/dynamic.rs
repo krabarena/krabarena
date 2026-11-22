@@ -635,27 +635,23 @@ fn display_response(response: &Value, display: Option<&DisplayDef>, json_output:
         }
     }
 
-    // List mode
+    if !display.header.is_empty() {
+        let data = json_path(response, "data").unwrap_or(response);
+        print_fields(data, &display.header);
+    }
+
     if let Some(ref list_path) = display.list {
         if let Some(items) = json_path(response, list_path).and_then(|v| v.as_array()) {
             if items.is_empty() {
                 println!("  (none)");
             } else {
                 for item in items {
-                    let parts: Vec<String> = display
-                        .cols
-                        .iter()
-                        .filter_map(|col| {
-                            item.get(col).map(|v| match v {
-                                Value::String(s) => s.clone(),
-                                Value::Null => String::new(),
-                                other => other.to_string(),
-                            })
-                        })
-                        .collect();
-                    println!("  {}", parts.join("\t"));
+                    println!("  {}", list_row(item, &display.cols).join("\t"));
                 }
             }
+        }
+        if let Some(cursor) = next_cursor(response) {
+            eprintln!("More results: rerun with --cursor {cursor}");
         }
     }
 
@@ -665,23 +661,56 @@ fn display_response(response: &Value, display: Option<&DisplayDef>, json_output:
     // can reach inside.
     if display.list.is_none() && !display.cols.is_empty() {
         let data = json_path(response, "data").unwrap_or(response);
-        for col in &display.cols {
-            if let Some(val) = json_path(data, col) {
-                let display_val = match val {
-                    Value::String(s) => s.clone(),
-                    Value::Array(a) => a
-                        .iter()
-                        .filter_map(|v| v.as_str())
-                        .collect::<Vec<_>>()
-                        .join(", "),
-                    Value::Null => continue,
-                    other => other.to_string(),
-                };
-                let label = col.rsplit('.').next().unwrap_or(col);
-                println!("{}: {}", label, display_val);
-            }
+        print_fields(data, &display.cols);
+    }
+}
+
+fn print_fields(data: &Value, fields: &[String]) {
+    for col in fields {
+        if let Some(val) = json_path(data, col) {
+            let display_val = match val {
+                Value::String(s) => s.clone(),
+                Value::Array(a) => a
+                    .iter()
+                    .map(|v| match v {
+                        Value::String(s) => s.clone(),
+                        other => other.to_string(),
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                Value::Null => continue,
+                other => other.to_string(),
+            };
+            let label = col.rsplit('.').next().unwrap_or(col);
+            println!("{}: {}", label, display_val);
         }
     }
+}
+
+fn list_row(item: &Value, cols: &[String]) -> Vec<String> {
+    cols.iter()
+        .filter_map(|col| {
+            json_path(item, col).map(|v| match v {
+                Value::String(s) => s.clone(),
+                Value::Null => String::new(),
+                other => other.to_string(),
+            })
+        })
+        .collect()
+}
+
+fn next_cursor(response: &Value) -> Option<String> {
+    let page = [
+        response.get("pagination"),
+        response.get("data").filter(|d| d.is_object()),
+    ]
+    .into_iter()
+    .flatten()
+    .find(|p| p.get("has_more").and_then(Value::as_bool) == Some(true))?;
+    page.get("next_cursor")
+        .and_then(Value::as_str)
+        .filter(|c| !c.is_empty())
+        .map(str::to_string)
 }
 
 fn handle_error_response(body: &Value, def: &CommandDef, json_output: bool) -> Result<ExitCode> {
@@ -767,7 +796,7 @@ fn get_arg_as_string(matches: &ArgMatches, arg: &ArgDef) -> Option<String> {
         "int" => matches.get_one::<i64>(&arg.name).map(|v| v.to_string()),
         "bool" => {
             if matches.get_flag(&arg.name) {
-                Some("true".to_string())
+                Some(arg.constant.clone().unwrap_or_else(|| "true".to_string()))
             } else {
                 None
             }
@@ -1442,6 +1471,47 @@ mod tests {
         let body = build_json_body(&m, &def.args, &Config::default()).unwrap();
         let _ = std::fs::remove_file(&tmp);
         assert_eq!(body["claim"], "# Title\n\n## Summary\nFrom file.");
+    }
+
+    #[test]
+    fn list_row_reads_dotted_columns() {
+        let item = json!({"id": "c1", "author": {"display_name": "Krab"}, "n": 3});
+        let cols = vec![
+            "id".to_string(),
+            "author.display_name".to_string(),
+            "n".to_string(),
+        ];
+        assert_eq!(list_row(&item, &cols), vec!["c1", "Krab", "3"]);
+    }
+
+    #[test]
+    fn next_cursor_found_in_pagination_envelope() {
+        let resp = json!({"data": [], "pagination": {"has_more": true, "next_cursor": "abc"}});
+        assert_eq!(next_cursor(&resp).as_deref(), Some("abc"));
+        let done = json!({"data": [], "pagination": {"has_more": false, "next_cursor": null}});
+        assert_eq!(next_cursor(&done), None);
+    }
+
+    #[test]
+    fn next_cursor_found_inside_data_object() {
+        let resp = json!({"data": {"activity": [], "has_more": true, "next_cursor": "xyz"}});
+        assert_eq!(next_cursor(&resp).as_deref(), Some("xyz"));
+    }
+
+    #[test]
+    fn bool_query_flag_sends_constant_value() {
+        let manifest = krabarena_shared::manifest_builder::build_manifest();
+        let def = manifest
+            .commands
+            .iter()
+            .find(|c| c.name == "search")
+            .expect("search")
+            .clone();
+        let m = build_matches(&def, vec!["hello", "--no-ai"]);
+        let no_ai = def.args.iter().find(|a| a.name == "no-ai").unwrap();
+        assert_eq!(get_arg_as_string(&m, no_ai).as_deref(), Some("0"));
+        let ai = def.args.iter().find(|a| a.name == "ai").unwrap();
+        assert_eq!(get_arg_as_string(&m, ai), None);
     }
 
     #[test]

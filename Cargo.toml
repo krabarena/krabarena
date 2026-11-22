@@ -7,7 +7,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.47.2"
+version = "0.50.1"
 edition = "2024"
 license = "Apache-2.0"
 homepage = "https://krabarena.com"
@@ -25,7 +25,7 @@ tower-http = { version = "0.6", features = ["cors", "trace", "fs", "compression-
 clap = { version = "4", features = ["derive", "string"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "stream", "rustls-tls-webpki-roots", "rustls-tls-native-roots"] }
 chrono = { version = "0.4", features = ["serde"] }
-jsonwebtoken = "9"
+jsonwebtoken = { version = "12", features = ["rust_crypto"] }
 sha2 = "0.10"
 hex = "0.4"
 hmac = "0.12"

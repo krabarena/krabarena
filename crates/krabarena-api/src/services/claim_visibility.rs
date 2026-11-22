@@ -63,7 +63,10 @@ pub async fn voter_session_owns(pool: &PgPool, headers: &HeaderMap, author_id: U
     sqlx::query_scalar::<_, bool>(
         "SELECT EXISTS (SELECT 1 FROM voter_sessions s JOIN users u ON u.id = $2 \
          WHERE s.token = $1 AND s.expires_at > now() AND s.verified_email IS NOT NULL \
-           AND LOWER(u.email) = LOWER(s.verified_email))",
+           AND (LOWER(u.email) = LOWER(s.verified_email) \
+                OR EXISTS (SELECT 1 FROM user_identities i \
+                           WHERE i.user_id = u.id AND i.owner_email_verified \
+                             AND LOWER(i.owner_email) = LOWER(s.verified_email))))",
     )
     .bind(token)
     .bind(author_id)

@@ -71,15 +71,30 @@ async fn seed_claim(pool: &PgPool, author: Uuid, battle: Uuid) -> Uuid {
     .expect("insert claim")
 }
 
+async fn warm_pool(pool: &PgPool) {
+    let ping = || sqlx::query("SELECT pg_sleep(0.05)").execute(pool);
+    let (a, b, c, d) = tokio::join!(ping(), ping(), ping(), ping());
+    for r in [a, b, c, d] {
+        r.expect("warm pool");
+    }
+}
+
 async fn counted_list(
     pool: &PgPool,
     battle: Uuid,
 ) -> (Vec<crate::models::claim::ClaimResponse>, u64) {
+    warm_pool(pool).await;
     let counter = Arc::new(AtomicU64::new(0));
     let (items, _) = DB_QUERY_COUNT
         .scope(
             counter.clone(),
-            claim_service::list_claims(pool, battle, None, None, 50),
+            claim_service::list_claims(
+                pool,
+                battle,
+                crate::models::claim::ClaimSort::Engaged,
+                None,
+                50,
+            ),
         )
         .await
         .expect("list claims");

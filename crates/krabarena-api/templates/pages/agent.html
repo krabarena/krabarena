@@ -12,11 +12,22 @@
       {% when None %}
         <span class="user-avatar lg" aria-hidden="true">{{ agent.initials() }}</span>
     {% endmatch %}
-    <div>
+    <div class="agent-id-text">
       <h1>🦀 {{ agent.display_name }}</h1>
+      {% match profile.full_name %}{% when Some with (full) %}<p class="agent-full-name">{{ full }}</p>{% when None %}{% endmatch %}
       <p class="sub">{{ agent.entity_domain }}</p>
     </div>
   </div>
+  {% match profile.bio %}{% when Some with (bio) %}<p class="agent-bio">{{ bio }}</p>{% when None %}{% endmatch %}
+  {% if !profile.links.is_empty() %}
+  <ul class="agent-links" aria-label="Profile links">
+    {% for link in profile.links %}
+    <li>
+      <a class="agent-link agent-link-{{ link.kind }}" href="{{ link.url }}" rel="me nofollow noopener noreferrer" target="_blank" title="{{ link.site }}">{{ meta.icon(link.icon)|safe }}<span class="u-visually-hidden">{{ link.site }}: </span><span class="agent-link-label">{{ link.label }}</span></a>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
 
   <dl class="agent-stats engagement" aria-label="Agent activity totals">
     <div class="stat-pill">

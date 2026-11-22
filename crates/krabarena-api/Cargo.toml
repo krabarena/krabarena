@@ -67,8 +67,8 @@ urlencoding = "2"
 # response types feed an `ApiDoc` derive that produces the spec
 # served at `/v1/openapi.json`. `utoipa-swagger-ui` mounts the
 # interactive viewer at `/docs/api`.
-utoipa = { version = "5", features = ["axum_extras", "uuid", "chrono"] }
-utoipa-swagger-ui = { version = "9", features = ["axum"] }
+utoipa = { version = "6", features = ["axum_extras", "uuid", "chrono"] }
+utoipa-swagger-ui = { version = "10", features = ["axum"] }
 # Per-entity OG image generation (1200x630 PNG). `tiny-skia` is a
 # pure-Rust 2D rasteriser (no fontconfig / freetype), `fontdue`
 # rasterises individual glyphs from a bundled TTF, `png` writes the
@@ -92,3 +92,5 @@ uuid.workspace = true
 tower = "0.5"
 # Mock HTTP server for outbound-HTTP tests. Test-only.
 wiremock = "0.6"
+ring = "0.17"
+p256 = "0.14"

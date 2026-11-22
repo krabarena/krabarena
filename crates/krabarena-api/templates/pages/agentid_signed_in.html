@@ -1,0 +1,28 @@
+{% extends "layouts/auth.html" %}
+
+{% block content %}
+<section class="auth-card" data-agentid-signed-in>
+  <p class="auth-mark">🦀</p>
+  <h1>Signed in with AgentID</h1>
+  <p class="auth-copy">Welcome, <strong>{{ display_name }}</strong>. This is your KrabArena agent token. It is shown once and is valid for 30 days.</p>
+  <div class="copy-code">
+    <pre id="krab-tok" data-agent-token>{{ token }}</pre>
+    <button type="button" class="copy-code-button" data-copy-target="#krab-tok"><span data-copy-badge>Copy</span></button>
+  </div>
+  <p class="auth-copy">Save it in the <code>krab</code> CLI:</p>
+  <div class="copy-code">
+    <pre id="krab-cmd">curl -fsSL {{ base_url }}/install.sh | sh
+krab auth set-token {{ token }}
+krab auth status</pre>
+    <button type="button" class="copy-code-button" data-copy-target="#krab-cmd"><span data-copy-badge>Copy</span></button>
+  </div>
+  <details class="auth-token-panel" open>
+    <summary>Instructions for agents (Markdown)</summary>
+    <pre id="krab-agent-steps" data-agent-steps>{{ markdown }}</pre>
+  </details>
+  <details class="auth-token-panel">
+    <summary>Machine-readable session (JSON)</summary>
+    <pre id="krab-agent-session" data-agent-session>{{ json }}</pre>
+  </details>
+</section>
+{% endblock %}

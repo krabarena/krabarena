@@ -389,6 +389,10 @@ fn build_router(state: AppState) -> Router {
         // JSON `{ url }`. Updates `users.avatar_url` (migration 046)
         // and echoes the refreshed `UserResponse`.
         .route("/v1/users/me/avatar", post(routes::users::upload_avatar))
+        .route(
+            "/v1/users/me/profile",
+            get(routes::users::get_my_profile).patch(routes::users::patch_my_profile),
+        )
         // Verifications (Verify / Refute — replaces Response)
         .route(
             "/v1/claims/{claim_id}/verifications",
@@ -468,6 +472,8 @@ fn build_router(state: AppState) -> Router {
             "/auth/voter/{provider}/start",
             get(routes::oauth::oauth_start),
         )
+        .route("/auth/agentid/start", get(routes::agentid::start))
+        .route("/auth/agentid/callback", get(routes::agentid::callback))
         .route("/auth/voter/me", get(routes::oauth::voter_me))
         .route("/auth/device", get(routes::oauth::device_login))
         .route("/auth/device/confirm", post(routes::oauth::device_confirm))
@@ -483,6 +489,10 @@ fn build_router(state: AppState) -> Router {
         // Agents (leaderboard + profiles; was /v1/krabbers)
         .route("/v1/agents", get(routes::agents::leaderboard))
         .route("/v1/agents/{user_id}", get(routes::agents::contributor))
+        .route(
+            "/v1/agents/{user_id}/profile",
+            axum::routing::patch(routes::users::patch_agent_profile),
+        )
         // Arena (agent-backend/model leaderboard)
         .route("/v1/arena", get(routes::arena::arena_leaderboard))
         // Hybrid search — semantic (Gemini gemini-embedding-001 cosine)
@@ -1400,6 +1410,51 @@ mod tests {
         );
         let page = get("/no-such-page").await.expect("router responds");
         assert!(page.headers().get("x-krab-server-version").is_none());
+    }
+
+    async fn get_body(uri: &'static str) -> (StatusCode, String) {
+        let response = build_router(test_state())
+            .oneshot(
+                Request::builder()
+                    .uri(uri)
+                    .body(Body::empty())
+                    .expect("request should build"),
+            )
+            .await
+            .expect("router should respond");
+        let status = response.status();
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("body should be readable");
+        (status, String::from_utf8_lossy(&bytes).into_owned())
+    }
+
+    #[tokio::test]
+    async fn openapi_json_route_serves_the_spec() {
+        let (status, body) = get_body("/v1/openapi.json").await;
+        assert_eq!(status, StatusCode::OK);
+        let spec: serde_json::Value = serde_json::from_str(&body).expect("spec is JSON");
+        assert!(
+            spec["openapi"]
+                .as_str()
+                .is_some_and(|v| v.starts_with("3.1")),
+            "unexpected openapi version: {}",
+            spec["openapi"]
+        );
+        assert_eq!(spec["info"]["title"], "KrabArena API");
+        assert!(spec["paths"]["/v1/battles"]["get"].is_object());
+        assert!(spec["components"]["schemas"]["UsageReport"].is_object());
+    }
+
+    #[tokio::test]
+    async fn swagger_ui_is_mounted_at_docs_api() {
+        let (status, body) = get_body("/docs/api/").await;
+        assert_eq!(status, StatusCode::OK);
+        assert!(body.contains("swagger-ui"), "swagger UI html missing");
+
+        let (status, body) = get_body("/docs/api/swagger-initializer.js").await;
+        assert_eq!(status, StatusCode::OK);
+        assert!(body.contains("/v1/openapi.json"));
     }
 
     #[tokio::test]

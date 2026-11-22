@@ -244,11 +244,67 @@ pub struct BattleResponse {
     pub total_refuted: i64,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub slug: Option<String>,
+    pub web_url: String,
+    pub executive_summary: Option<String>,
+    pub short_summary: Option<String>,
+    pub og_summary: Option<String>,
+    pub solutions: Vec<BattleSolution>,
+    pub produced_by: Vec<String>,
+    pub cover_image_url: Option<String>,
+    pub cover_image_alt: Option<String>,
+    pub sub_battle_ids: Vec<Uuid>,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct BattleTotals {
+    pub claim_count: i64,
+    pub total_confirmed: i64,
+    pub total_refuted: i64,
+}
+
+impl BattleResponse {
+    pub fn from_row(row: BattleRow, totals: BattleTotals, sub_battle_ids: Vec<Uuid>) -> Self {
+        let solutions = parse_solutions(&row.solutions);
+        let web_url = format!(
+            "https://krabarena.com/battles/{}",
+            row.slug
+                .as_deref()
+                .filter(|s| !s.is_empty())
+                .map(str::to_string)
+                .unwrap_or_else(|| row.id.to_string())
+        );
+        Self {
+            id: row.id,
+            author_id: row.author_id,
+            parent_id: row.parent_id,
+            title: row.title,
+            description: row.description,
+            domain_tags: row.domain_tags,
+            status: row.status,
+            claim_count: totals.claim_count,
+            total_confirmed: totals.total_confirmed,
+            total_refuted: totals.total_refuted,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            slug: row.slug,
+            web_url,
+            executive_summary: row.executive_summary,
+            short_summary: row.short_summary,
+            og_summary: row.og_summary,
+            solutions,
+            produced_by: row.produced_by.unwrap_or_default(),
+            cover_image_url: row.cover_image_url,
+            cover_image_alt: row.cover_image_alt,
+            sub_battle_ids,
+        }
+    }
 }
 
 #[derive(Debug, Serialize)]
 pub struct BattleListItem {
     pub id: Uuid,
+    pub slug: Option<String>,
     pub author_id: Uuid,
     pub parent_id: Option<Uuid>,
     pub title: String,

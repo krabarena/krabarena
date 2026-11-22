@@ -412,6 +412,19 @@ async fn persist_verification_review(
     Ok(())
 }
 
+pub fn normalize_verdict_filter(raw: Option<&str>) -> Result<Option<&'static str>, ApiError> {
+    let Some(raw) = raw.map(str::trim).filter(|s| !s.is_empty()) else {
+        return Ok(None);
+    };
+    krabarena_shared::domain::Verdict::from_db(&raw.to_ascii_lowercase())
+        .map(|v| Some(v.as_db()))
+        .ok_or_else(|| {
+            ApiError::ValidationError(format!(
+                "verdict must be one of: verified, refuted (aliases: confirmed, disconfirmed; got '{raw}')"
+            ))
+        })
+}
+
 pub async fn list_verifications(
     pool: &PgPool,
     claim_id: Uuid,
