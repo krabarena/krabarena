@@ -541,13 +541,25 @@ async fn flat_calls_reserve_under_the_lock_and_abandoned_calls_are_charged() {
 
 #[tokio::test]
 #[ignore]
-async fn contended_battle_budget_lock_returns_proxy_busy_instead_of_queueing() {
+async fn contended_battle_spend_row_returns_proxy_busy_instead_of_queueing() {
     let pool = pool().await;
     let (battle, user) = fixture(&pool).await;
     let s = spec(10_000, 0);
 
+    proxy_service::reserve_charge(
+        &pool,
+        &s,
+        battle,
+        user,
+        "keenable",
+        Uuid::new_v4(),
+        1_000,
+        1_000,
+    )
+    .await
+    .unwrap();
     let mut holder = pool.begin().await.unwrap();
-    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended('proxy_budget:' || $1::text, 0))")
+    sqlx::query("SELECT 1 FROM proxy_spend WHERE battle_id = $1 FOR UPDATE")
         .bind(battle)
         .execute(&mut *holder)
         .await
@@ -591,5 +603,151 @@ async fn contended_battle_budget_lock_returns_proxy_busy_instead_of_queueing() {
     assert!(
         ok.is_ok(),
         "reservation must succeed once the lock is free: {ok:?}"
+    );
+}
+
+async fn spend_rows(pool: &PgPool, battle: Uuid) -> Vec<(Uuid, i64)> {
+    sqlx::query_as(
+        "SELECT user_id, charged_micro_usd FROM proxy_spend WHERE battle_id = $1 ORDER BY user_id",
+    )
+    .bind(battle)
+    .fetch_all(pool)
+    .await
+    .unwrap()
+}
+
+async fn aggregate_rows(pool: &PgPool, battle: Uuid) -> Vec<(Uuid, i64)> {
+    sqlx::query_as(
+        "SELECT '00000000-0000-0000-0000-000000000000'::uuid, COALESCE(SUM(amount_micro_usd), 0)::BIGINT \
+           FROM proxy_charges WHERE battle_id = $1 \
+         UNION ALL \
+         SELECT user_id, SUM(amount_micro_usd)::BIGINT FROM proxy_charges WHERE battle_id = $1 GROUP BY user_id \
+         ORDER BY 1",
+    )
+    .bind(battle)
+    .fetch_all(pool)
+    .await
+    .unwrap()
+}
+
+#[tokio::test]
+#[ignore]
+async fn running_totals_match_the_full_aggregate_after_every_kind_of_write() {
+    let pool = pool().await;
+    let (battle, user) = fixture(&pool).await;
+    let other: (Uuid,) = sqlx::query_as(
+        "INSERT INTO users (entity_id, display_name, email, auth_method) \
+         SELECT entity_id, display_name || '-2', 'second-' || email, 'email' FROM users WHERE id = $1 \
+         RETURNING id",
+    )
+    .bind(user)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let other = other.0;
+    let s = spec(100_000, 50_000);
+
+    let a =
+        proxy_service::reserve_charge(&pool, &s, battle, user, "monid", Uuid::new_v4(), 4_000, 0)
+            .await
+            .unwrap();
+    proxy_service::settle_charge(&pool, a, &actual(2_500, Some("run_x"))).await;
+    let b =
+        proxy_service::reserve_charge(&pool, &s, battle, other, "monid", Uuid::new_v4(), 4_000, 0)
+            .await
+            .unwrap();
+    proxy_service::settle_charge(&pool, b, &actual(3_000, Some("run_x"))).await;
+    let c = proxy_service::reserve_charge(
+        &pool,
+        &s,
+        battle,
+        other,
+        "keenable",
+        Uuid::new_v4(),
+        1_000,
+        1_000,
+    )
+    .await
+    .unwrap();
+    proxy_service::release_charge(&pool, c).await;
+    proxy_service::reserve_charge(
+        &pool,
+        &s,
+        battle,
+        user,
+        "openrouter",
+        Uuid::new_v4(),
+        7_000,
+        1_000,
+    )
+    .await
+    .unwrap();
+
+    let counters = spend_rows(&pool, battle).await;
+    assert_eq!(counters, aggregate_rows(&pool, battle).await);
+    assert_eq!(
+        counters.iter().find(|(u, _)| u.is_nil()).unwrap().1,
+        2_500 + 500 + 7_000
+    );
+}
+
+#[tokio::test]
+#[ignore]
+async fn reserving_stays_fast_on_a_battle_with_a_large_history() {
+    let pool = pool().await;
+    let (battle, user) = fixture(&pool).await;
+    let mut conn = pool.acquire().await.unwrap();
+    sqlx::query("SET session_replication_role = replica")
+        .execute(&mut *conn)
+        .await
+        .unwrap();
+    sqlx::query(
+        "INSERT INTO proxy_charges (battle_id, user_id, service_name, amount_micro_usd, source, settled_at) \
+         SELECT $1, $2, 'keenable', 10, 'flat', now() FROM generate_series(1, 200000)",
+    )
+    .bind(battle)
+    .bind(user)
+    .execute(&mut *conn)
+    .await
+    .unwrap();
+    sqlx::query("SET session_replication_role = DEFAULT")
+        .execute(&mut *conn)
+        .await
+        .unwrap();
+    drop(conn);
+    sqlx::query(
+        "INSERT INTO proxy_spend (battle_id, user_id, charged_micro_usd) \
+         VALUES ($1, '00000000-0000-0000-0000-000000000000', 2000000), ($1, $2, 2000000)",
+    )
+    .bind(battle)
+    .bind(user)
+    .execute(&pool)
+    .await
+    .unwrap();
+    let s = spec(1_000_000, 0);
+
+    let started = std::time::Instant::now();
+    for _ in 0..50 {
+        proxy_service::reserve_charge(
+            &pool,
+            &s,
+            battle,
+            user,
+            "keenable",
+            Uuid::new_v4(),
+            1_000,
+            1_000,
+        )
+        .await
+        .unwrap();
+    }
+    let per_call = started.elapsed() / 50;
+    assert!(
+        per_call < std::time::Duration::from_millis(50),
+        "reserve_charge took {per_call:?} per call on a 200k-charge Battle"
+    );
+    assert_eq!(
+        spend_rows(&pool, battle).await,
+        aggregate_rows(&pool, battle).await
     );
 }
