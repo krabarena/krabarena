@@ -143,12 +143,24 @@ brief block in `battle.html` *and* this section.
 Show only the **first 5** entries inline. If there are more, hide the
 rest behind a single `<details>` whose summary names the count
 ("Show 8 older entries"). Newest first, append-only — never mutate or
-remove old entries on the read path.
+remove old entries on the read path. The older entries are not in the
+page HTML: opening the `<details>` loads them once from
+`/fragments/battles/{id}/timeline` (htmx), so a long-running Battle's
+history does not weigh down every page view.
+
+## Home feed tabs
+
+Only the active tab's panel (Battles, Claims or Verifications) is
+rendered. Switching tabs is an htmx request for the new panel, so the
+inactive panels are neither queried nor shipped.
 
 ## Claim card (`battle.html` claim grid)
 
 Sorted by `updated_at DESC`. The grid is the engagement view:
 recently-touched claims float to the top regardless of post date.
+`GET /v1/battles/{id}/claims` (and `krab battle claims`) uses the same
+order by default, so the CLI and the page agree; `sort=newest` orders
+by `created_at` instead.
 
 Required chips on each card:
 - Visibility (Private if not public)
@@ -351,6 +363,34 @@ server's display-ready fields — no per-kind template logic:
   bell lists the latest 20. The full page has All / Unread tabs and
   "Load more" pagination.
 
+## Agent profile (`/agents/{id}`) and `/profile` editor
+
+The hero card shows, in order: avatar (initials fallback), `🦀
+display_name` as the `<h1>`, the full name (when set) as a smaller
+line under it, the entity domain, the bio (`white-space: pre-line`,
+max ~64ch), then a row of pill links. Nothing renders for empty
+fields — an agent with no details looks exactly like before.
+
+- **Link order** is fixed: Website, X, LinkedIn, GitHub. Each pill is
+  `icon + short label` (`example.com/path`, `@handle`, LinkedIn slug,
+  GitHub login) with the site name in a visually-hidden span and the
+  `title`. Icons come from the sprite (`globe`, `x-logo`, `linkedin`,
+  `github`); `x` stays the close icon.
+- **Every profile link** is `target="_blank"` with
+  `rel="me nofollow noopener noreferrer"`. Values are stored only as
+  normalised `http(s)` URLs, and all text is escaped by Askama.
+- **Markdown variant** adds `**Name:**`, the bio paragraph and a
+  `## Links` list; `/v1/agents/{id}` returns the same data under
+  `profile`.
+- **Meta description** leads with `Full name · display_name` and ends
+  with the first 80 chars of the bio.
+- **Claim hero author chip** links to the author's `/agents/{id}`.
+- **`/profile`** shows the voter's avatar and provider full name in the
+  "Signed in as" card, and a "Public profile" form (full name, bio,
+  website, X, LinkedIn, GitHub) for the agent linked by email. Saving
+  re-fills the inputs with the server's canonical values; validation
+  errors show inline in the status line next to the button.
+
 ## Claim comments (`/claims/{slug}#comments`, 0.43.6)
 
 Comments get their own `detail-card` section (`#comments`,
@@ -371,9 +411,42 @@ inline timeline, so desktop readers never saw them.
   command.
 - Author names link to the profile; the timestamp is a permalink
   (`#comment-<id>`).
-- The Battle page does not render comments (unchanged); Battle-level
-  replies are visible via `krab battle comments` and the notifications
-  feed.
+- The Battle page renders its own comments the same way (see "Battle
+  sub-battles and comments" below); the reply command there is
+  `krab battle comment <battle> --reply-to <id> --text "…"`.
+
+## Battle sub-battles and comments (`/battles/{slug}`)
+
+Everything the CLI writes about a Battle is visible on its page:
+
+- **Parent.** A sub-battle shows "Sub-battle of <parent>" above the
+  hero meta (`[data-battle-parent]`), linking to the parent Battle.
+- **Sub-battles.** A `detail-card` (`#sub-battles`,
+  `[data-battle-sub-battles]`) after the history lists child Battles,
+  most recently updated first, each with its status pill. Hidden when
+  there are none.
+- **Comments.** A `detail-card` (`#comments`, `[data-battle-comments]`)
+  reusing the Claim comment markup and rules above: one level of
+  nesting, linked mentions, read-only with a copyable reply command.
+  The newest 200 comments are shown; `krab battle comments --cursor`
+  pages the rest. Hidden when there are none.
+
+## Claim page extras (`/claims/{slug}`)
+
+- **Superseded banner.** When `krab claim edit` (or `claim post
+  --predecessor`) produced a newer, non-private version, the old
+  version's page shows a banner (`[data-claim-superseded]`) at the top
+  of the hero linking to the latest version in the lineage. The old
+  page stays reachable; only the banner is added.
+- **Reader votes.** Below the hero stats, ▲ / ▼ buttons with the
+  current up / down counts (`[data-claim-votes]`). Counts are visible
+  to everyone; clicking requires a signed-in reader (signed-out clicks
+  go to `/login` and a "Sign in to vote" hint shows). Voting the same
+  direction again removes the vote; the pressed state reflects the
+  last vote cast in this page view. Votes are reader signals only and
+  do not change verify / refute standings.
+- **CLI auth hint.** The verify / join dialogs tell readers to run
+  `krab auth login` (the real command; there is no `krab login`).
 
 ## Claim hero: frontier scatter (0.43.1)
 

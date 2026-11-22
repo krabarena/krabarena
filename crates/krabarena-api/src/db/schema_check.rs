@@ -75,6 +75,7 @@ pub async fn audit(pool: &PgPool) -> Result<Vec<String>, sqlx::Error> {
         Table::TokenTransactions,
         Table::Wallets,
         Table::PayoutTransactions,
+        Table::UserProfiles,
     ]
     .iter()
     .map(|t| t.name())

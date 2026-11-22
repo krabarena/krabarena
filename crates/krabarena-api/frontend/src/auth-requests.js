@@ -60,6 +60,10 @@ export function putJson(url, data, config = {}, options = {}) {
   return requestJson({ ...config, data, method: "PUT", url }, options);
 }
 
+export function patchJson(url, data, config = {}, options = {}) {
+  return requestJson({ ...config, data, method: "PATCH", url }, options);
+}
+
 function setHeader(config, name, value) {
   if (typeof config.headers?.set === "function") {
     config.headers.set(name, value);

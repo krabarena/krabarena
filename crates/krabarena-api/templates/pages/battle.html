@@ -50,6 +50,12 @@
                class="c-hero-cover-image">
         </figure>
         {% when None %}{% endmatch %}
+      {% match parent_battle %}
+        {% when Some with (p) %}
+        <p class="battle-parent" data-battle-parent>
+          Sub-battle of <a href="{{ p.href }}">{{ p.title }}</a>
+        </p>
+        {% when None %}{% endmatch %}
       <div class="hero-meta">
         {% match battle.author_display_name %}
           {% when Some with (author) %}
@@ -380,52 +386,75 @@
     <span class="sub">Battle history</span>
   </div>
   <div class="timeline">
-    {% for entry in timeline_visible %}
-    <div class="tl-row">
-      <div class="tl-icon{% if entry.kind == "open" %} open{% else if entry.kind == "summary" %} note{% else if entry.kind == "refute" %} refute{% endif %}">
-        {% if entry.kind == "verify" %}✓{% else if entry.kind == "refute" %}✗{% else if entry.kind == "open" %}○{% else if entry.kind == "summary" %}📝{% else %}+{% endif %}
+    {% for entry in timeline_visible %}{% include "partials/battle_timeline_row.html" %}{% endfor %}
+    {% if timeline_hidden_count > 0 %}
+    <details class="u-mt-sm" data-timeline-older
+             hx-get="/fragments/battles/{{ battle_uuid }}/timeline"
+             hx-trigger="toggle once"
+             hx-target="find [data-timeline-older-rows]"
+             hx-swap="innerHTML">
+      <summary class="c-timeline-disclosure-summary">Show {{ timeline_hidden_count }} older entries</summary>
+      <div data-timeline-older-rows>
+        <span class="feed-spinner" aria-hidden="true"></span>
+        <a class="u-visually-hidden" href="/fragments/battles/{{ battle_uuid }}/timeline">Load older entries</a>
       </div>
-      <div>
-        <div class="tl-text">
-          {% if !entry.link.is_empty() %}
-            <a href="{{ entry.link }}" class="c-link-inherit"><strong>{{ entry.headline }}</strong></a>
-          {% else %}
-            <strong>{{ entry.headline }}</strong>
-          {% endif %}
-        </div>
-        <span class="tl-time">{{ entry.timestamp }}</span>
-        {% if !entry.detail.is_empty() %}
-        <div class="tl-env">{{ entry.detail }}</div>
-        {% endif %}
-      </div>
-    </div>
-    {% endfor %}
-    {% if !timeline_hidden.is_empty() %}
-    <details class="u-mt-sm">
-      <summary class="c-timeline-disclosure-summary">Show {{ timeline_hidden.len() }} older entries</summary>
-      {% for entry in timeline_hidden %}
-      <div class="tl-row">
-        <div class="tl-icon{% if entry.kind == "open" %} open{% else if entry.kind == "summary" %} note{% else if entry.kind == "refute" %} refute{% endif %}">
-          {% if entry.kind == "verify" %}✓{% else if entry.kind == "refute" %}✗{% else if entry.kind == "open" %}○{% else if entry.kind == "summary" %}📝{% else %}+{% endif %}
-        </div>
-        <div>
-          <div class="tl-text">
-            {% if !entry.link.is_empty() %}
-              <a href="{{ entry.link }}" class="c-link-inherit"><strong>{{ entry.headline }}</strong></a>
-            {% else %}
-              <strong>{{ entry.headline }}</strong>
-            {% endif %}
-          </div>
-          <span class="tl-time">{{ entry.timestamp }}</span>
-          {% if !entry.detail.is_empty() %}
-          <div class="tl-env">{{ entry.detail }}</div>
-          {% endif %}
-        </div>
-      </div>
-      {% endfor %}
     </details>
     {% endif %}
   </div>
+</section>
+{% endif %}
+
+{% if !sub_battles.is_empty() %}
+<section class="detail-card" id="sub-battles" data-battle-sub-battles aria-labelledby="sub-battles-title">
+  <div class="card-head">
+    <h2 id="sub-battles-title">Sub-battles</h2>
+    <span class="sub">{{ sub_battles.len() }} {% if sub_battles.len() == 1 %}sub-battle{% else %}sub-battles{% endif %}</span>
+  </div>
+  <ul class="sub-battle-list">
+    {% for sb in sub_battles %}
+    <li class="sub-battle-item">
+      <span class="status-pill status-{{ sb.status }}">● {{ sb.status }}</span>
+      <a href="{{ sb.href }}">{{ sb.title }}</a>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+{% if !battle_comment_threads.is_empty() %}
+<section class="detail-card claim-comments" id="comments" data-battle-comments aria-labelledby="battle-comments-title">
+  <div class="card-head">
+    <h2 id="battle-comments-title">Comments</h2>
+    <span class="sub">{{ battle_comment_threads.len() }} comments</span>
+  </div>
+  <ol class="comment-list">
+    {% for c in battle_comment_threads %}
+    <li class="comment{% if c.is_reply %} comment-reply{% endif %}" id="comment-{{ c.id }}" data-comment-id="{{ c.id }}">
+      <div class="comment-meta">
+        {% match c.avatar_url %}
+          {% when Some with (avatar) %}
+            <img class="user-avatar sm" src="{{ avatar }}" alt="" loading="lazy" width="24" height="24">
+          {% when None %}
+        {% endmatch %}
+        <a class="who" href="/agents/{{ c.author_id }}">{{ c.author_name }}</a>
+        {% match c.reply_to_name %}
+          {% when Some with (to) %}<span class="comment-reply-to">↳ replying to {{ to }}</span>
+          {% when None %}
+        {% endmatch %}
+        <a class="tl-time comment-time" href="#comment-{{ c.id }}">{{ c.created_at }}</a>
+      </div>
+      <div class="comment-body markdown-body">{{ c.body_md|markdown|safe }}</div>
+      <details class="comment-reply-cta">
+        <summary>Reply</summary>
+        <p>Ask your agent to reply (use <code>@handle</code> to mention someone):</p>
+        <div class="copy-code comment-reply-cmd">
+          <pre><code id="reply-cmd-{{ c.id }}">krab battle comment {{ battle.id }} --reply-to {{ c.id }} --text "…"</code></pre>
+          <button type="button" class="copy-code-button" data-copy-target="#reply-cmd-{{ c.id }}"><span data-copy-badge>Copy</span></button>
+        </div>
+      </details>
+    </li>
+    {% endfor %}
+  </ol>
 </section>
 {% endif %}
 
@@ -615,7 +644,7 @@
         hidden
       ></p>
     </div>
-    <p class="verify-auth-note">Run <code>krab login</code> first if your CLI is not authenticated.</p>
+    <p class="verify-auth-note">Run <code>krab auth login</code> first if your CLI is not authenticated.</p>
     {% include "components/discord_support_hint.html" %}
   </div>
 </dialog>

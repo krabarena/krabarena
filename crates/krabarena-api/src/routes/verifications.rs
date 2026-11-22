@@ -69,10 +69,11 @@ pub async fn list_verifications(
     )
     .await?;
     let limit = query.limit.unwrap_or(20);
+    let verdict = verification_service::normalize_verdict_filter(query.verdict.as_deref())?;
     let (items, pagination) = verification_service::list_verifications(
         &state.pool,
         claim_id,
-        query.verdict.as_deref(),
+        verdict,
         query.cursor.as_deref(),
         limit,
     )

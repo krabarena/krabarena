@@ -139,9 +139,12 @@ async fn load_usage(
 ) -> Result<UsageMap, ApiError> {
     let logs: Vec<(String, i64, i64)> = sqlx::query_as(
         "SELECT l.service_name, COUNT(*)::BIGINT, \
-           COUNT(*) FILTER (WHERE NOT EXISTS ( \
-             SELECT 1 FROM proxy_charges c WHERE c.proxy_log_id = l.id))::BIGINT \
+           COUNT(*) FILTER (WHERE charged.proxy_log_id IS NULL)::BIGINT \
          FROM proxy_logs l \
+         LEFT JOIN ( \
+           SELECT DISTINCT proxy_log_id FROM proxy_charges \
+           WHERE battle_id = $1 AND proxy_log_id IS NOT NULL \
+         ) charged ON charged.proxy_log_id = l.id \
          WHERE l.battle_id = $1 AND ($2::uuid IS NULL OR l.user_id = $2) \
          GROUP BY l.service_name",
     )

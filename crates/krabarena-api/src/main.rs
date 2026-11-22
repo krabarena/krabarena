@@ -8,6 +8,8 @@ use axum::http::{HeaderName, HeaderValue, Method, header};
 use axum::middleware::Next;
 use axum::response::Response;
 use axum::routing::{any, get, post};
+use tower_http::compression::CompressionLayer;
+use tower_http::compression::predicate::{Predicate, SizeAbove};
 use tower_http::cors::CorsLayer;
 use tower_http::services::ServeFile;
 use tower_http::trace::TraceLayer;
@@ -18,7 +20,7 @@ use krabarena_api::db::DB_QUERY_COUNT;
 // Module tree + AppState live in `lib.rs` so other entry points
 // (tests, future binaries) can share the same code.
 use krabarena_api::{
-    AppState, LeaderboardCaches, RecaptchaConfig, db, openapi, routes, services, web,
+    AppState, LeaderboardCaches, RecaptchaConfig, db, openapi, routes, server_timing, services, web,
 };
 use utoipa::OpenApi;
 
@@ -387,6 +389,10 @@ fn build_router(state: AppState) -> Router {
         // JSON `{ url }`. Updates `users.avatar_url` (migration 046)
         // and echoes the refreshed `UserResponse`.
         .route("/v1/users/me/avatar", post(routes::users::upload_avatar))
+        .route(
+            "/v1/users/me/profile",
+            get(routes::users::get_my_profile).patch(routes::users::patch_my_profile),
+        )
         // Verifications (Verify / Refute — replaces Response)
         .route(
             "/v1/claims/{claim_id}/verifications",
@@ -481,6 +487,10 @@ fn build_router(state: AppState) -> Router {
         // Agents (leaderboard + profiles; was /v1/krabbers)
         .route("/v1/agents", get(routes::agents::leaderboard))
         .route("/v1/agents/{user_id}", get(routes::agents::contributor))
+        .route(
+            "/v1/agents/{user_id}/profile",
+            axum::routing::patch(routes::users::patch_agent_profile),
+        )
         // Arena (agent-backend/model leaderboard)
         .route("/v1/arena", get(routes::arena::arena_leaderboard))
         // Hybrid search — semantic (Gemini gemini-embedding-001 cosine)
@@ -562,6 +572,10 @@ fn build_router(state: AppState) -> Router {
         .route(
             "/fragments/battles/{battle_id}/claims",
             get(web::pages::battle_claims_fragment),
+        )
+        .route(
+            "/fragments/battles/{battle_id}/timeline",
+            get(web::pages::battle_timeline_fragment),
         )
         .route("/fragments/agents", get(web::pages::agents_fragment))
         .route(
@@ -775,6 +789,10 @@ fn build_router(state: AppState) -> Router {
         // upload even if a future extractor consults it.
         .layer(DefaultBodyLimit::max(MAX_REQUEST_BODY_BYTES))
         .layer(axum::middleware::from_fn(count_db_queries))
+        .layer(
+            CompressionLayer::new()
+                .compress_when(SizeAbove::new(1024).and(is_compressible_response)),
+        )
         .layer(TraceLayer::new_for_http())
         // CORS locked to known origins (was `permissive()` ≤ 0.23).
         .layer(build_cors(&state.public_base_url))
@@ -858,6 +876,43 @@ fn build_cors(public_base_url: &str) -> CorsLayer {
         ])
 }
 
+fn is_compressible_content_type(content_type: &str) -> bool {
+    let mime = content_type
+        .split(';')
+        .next()
+        .unwrap_or("")
+        .trim()
+        .to_ascii_lowercase();
+    matches!(
+        mime.as_str(),
+        "text/html"
+            | "text/markdown"
+            | "text/plain"
+            | "text/css"
+            | "text/xml"
+            | "text/javascript"
+            | "application/javascript"
+            | "application/json"
+            | "application/feed+json"
+            | "application/xml"
+            | "application/rss+xml"
+            | "application/atom+xml"
+            | "image/svg+xml"
+    )
+}
+
+fn is_compressible_response(
+    _status: axum::http::StatusCode,
+    _version: axum::http::Version,
+    headers: &axum::http::HeaderMap,
+    _extensions: &axum::http::Extensions,
+) -> bool {
+    headers
+        .get(header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(is_compressible_content_type)
+}
+
 /// Tower middleware that scopes a fresh `DB_QUERY_COUNT` for the
 /// duration of each HTTP request and attaches the final value as
 /// `X-DB-Queries` on the response. Every sqlx query routed through
@@ -872,10 +927,22 @@ fn build_cors(public_base_url: &str) -> CorsLayer {
 async fn count_db_queries(req: Request, next: Next) -> Response {
     let counter: Arc<AtomicU64> = Arc::new(AtomicU64::new(0));
     let read = counter.clone();
-    let mut response = DB_QUERY_COUNT.scope(counter, next.run(req)).await;
+    let phases: server_timing::Phases = Arc::default();
+    let phases_read = phases.clone();
+    let started = std::time::Instant::now();
+    let mut response = server_timing::PHASES
+        .scope(phases, DB_QUERY_COUNT.scope(counter, next.run(req)))
+        .await;
     let n = read.load(Ordering::Relaxed);
     if let Ok(hv) = HeaderValue::from_str(&n.to_string()) {
         response.headers_mut().insert("x-db-queries", hv);
+    }
+    let timing = phases_read
+        .lock()
+        .map(|p| server_timing::header_value(started.elapsed(), &p))
+        .unwrap_or_default();
+    if let Ok(hv) = HeaderValue::from_str(&timing) {
+        response.headers_mut().insert("server-timing", hv);
     }
     response
 }
@@ -1341,6 +1408,83 @@ mod tests {
         );
         let page = get("/no-such-page").await.expect("router responds");
         assert!(page.headers().get("x-krab-server-version").is_none());
+    }
+
+    async fn get_body(uri: &'static str) -> (StatusCode, String) {
+        let response = build_router(test_state())
+            .oneshot(
+                Request::builder()
+                    .uri(uri)
+                    .body(Body::empty())
+                    .expect("request should build"),
+            )
+            .await
+            .expect("router should respond");
+        let status = response.status();
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("body should be readable");
+        (status, String::from_utf8_lossy(&bytes).into_owned())
+    }
+
+    #[tokio::test]
+    async fn openapi_json_route_serves_the_spec() {
+        let (status, body) = get_body("/v1/openapi.json").await;
+        assert_eq!(status, StatusCode::OK);
+        let spec: serde_json::Value = serde_json::from_str(&body).expect("spec is JSON");
+        assert!(
+            spec["openapi"]
+                .as_str()
+                .is_some_and(|v| v.starts_with("3.1")),
+            "unexpected openapi version: {}",
+            spec["openapi"]
+        );
+        assert_eq!(spec["info"]["title"], "KrabArena API");
+        assert!(spec["paths"]["/v1/battles"]["get"].is_object());
+        assert!(spec["components"]["schemas"]["UsageReport"].is_object());
+    }
+
+    #[tokio::test]
+    async fn swagger_ui_is_mounted_at_docs_api() {
+        let (status, body) = get_body("/docs/api/").await;
+        assert_eq!(status, StatusCode::OK);
+        assert!(body.contains("swagger-ui"), "swagger UI html missing");
+
+        let (status, body) = get_body("/docs/api/swagger-initializer.js").await;
+        assert_eq!(status, StatusCode::OK);
+        assert!(body.contains("/v1/openapi.json"));
+    }
+
+    #[tokio::test]
+    async fn large_json_is_compressed_when_client_accepts_gzip() {
+        let get = |encoding: Option<&'static str>| {
+            let mut req = Request::builder().uri("/v1/cli/manifest");
+            if let Some(enc) = encoding {
+                req = req.header(header::ACCEPT_ENCODING, enc);
+            }
+            build_router(test_state()).oneshot(req.body(Body::empty()).expect("request builds"))
+        };
+        let gz = get(Some("gzip")).await.expect("router responds");
+        assert_eq!(gz.status(), StatusCode::OK);
+        assert_eq!(
+            gz.headers()
+                .get(header::CONTENT_ENCODING)
+                .and_then(|v| v.to_str().ok()),
+            Some("gzip")
+        );
+        assert!(gz.headers().get("server-timing").is_some());
+        let plain = get(None).await.expect("router responds");
+        assert!(plain.headers().get(header::CONTENT_ENCODING).is_none());
+    }
+
+    #[test]
+    fn only_text_like_content_types_are_compressible() {
+        assert!(is_compressible_content_type("text/html; charset=utf-8"));
+        assert!(is_compressible_content_type("application/json"));
+        assert!(is_compressible_content_type("text/markdown; charset=utf-8"));
+        assert!(!is_compressible_content_type("text/event-stream"));
+        assert!(!is_compressible_content_type("application/octet-stream"));
+        assert!(!is_compressible_content_type("image/png"));
     }
 
     async fn get_with(uri: &str, headers: &[(header::HeaderName, &str)]) -> Response {
