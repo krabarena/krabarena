@@ -18,6 +18,12 @@
 #   4. macOS install — on Darwin runners, run the installer locally with
 #      an isolated HOME and verify the macOS archive installs and runs.
 #
+#   4b. Hermes install — run `install.sh --hermes` with an isolated HOME
+#      against the phase-2 Hermes bundle (via KRAB_SKILLS_BASE_URL) and
+#      verify the skills land in the `krabarena` category dir, honour
+#      HERMES_HOME, migrate the legacy flat layout, and set the
+#      `Hermes Agent` identity. Runs on macOS and glibc Linux hosts.
+#
 #   5. Ubuntu/glibc install — spin up a clean throwaway container,
 #      mount the install.sh read-only, set HOME=/tmp/krabhome (so the
 #      host filesystem is untouched), and run:
@@ -113,15 +119,24 @@ fi
 say "Phase 2: local skill bundle packaging"
 
 skill_tmp=$(mktemp -d)
-for platform in claude-code openclaw codex github-copilot; do
+trap 'rm -rf "$skill_tmp"' EXIT
+for platform in claude-code openclaw codex github-copilot hermes; do
   staging="${skill_tmp}/staging-${platform}"
   mkdir -p "$staging"
   for skill in "${REPO_ROOT}/skills/${platform}/krabarena" "${REPO_ROOT}/skills/${platform}"/krabarena-*; do
     [ -d "$skill" ] && cp -r "$skill" "$staging/"
   done
-  cp "${REPO_ROOT}/docs/claim-structure.md" "$staging/"
-  cp "${REPO_ROOT}/docs/battle-structure.md" "$staging/"
-  cp "${REPO_ROOT}/docs/proxy-spec.md" "$staging/"
+  if [ "$platform" = hermes ]; then
+    for skill in "$staging"/*/; do
+      mkdir -p "${skill}references"
+      cp "${REPO_ROOT}/docs/claim-structure.md" "${REPO_ROOT}/docs/battle-structure.md" \
+        "${REPO_ROOT}/docs/proxy-spec.md" "${skill}references/"
+    done
+  else
+    cp "${REPO_ROOT}/docs/claim-structure.md" "$staging/"
+    cp "${REPO_ROOT}/docs/battle-structure.md" "$staging/"
+    cp "${REPO_ROOT}/docs/proxy-spec.md" "$staging/"
+  fi
   archive="${skill_tmp}/krabarena-skills-${platform}.tar.gz"
   tar czf "$archive" -C "$staging" .
   listing="${archive}.list"
@@ -133,6 +148,13 @@ for platform in claude-code openclaw codex github-copilot; do
       grep -q '^./krabarena/krabarena-join-battle.prompt.md$' "$listing" \
         || die "${platform} bundle missing ./krabarena/krabarena-join-battle.prompt.md"
       ;;
+    hermes)
+      for f in krabarena/SKILL.md krabarena-heartbeat/SKILL.md \
+               krabarena/references/claim-structure.md \
+               krabarena-heartbeat/references/proxy-spec.md; do
+        grep -q "^./${f}\$" "$listing" || die "${platform} bundle missing ./${f}"
+      done
+      ;;
     *)
       grep -q '^./krabarena/SKILL.md$' "$listing" \
         || die "${platform} bundle missing ./krabarena/SKILL.md"
@@ -140,7 +162,6 @@ for platform in claude-code openclaw codex github-copilot; do
   esac
   ok "${platform} skill bundle contains required files"
 done
-rm -rf "$skill_tmp"
 
 # ── phase 3: server-served install.sh matches on-disk ────────────────
 say "Phase 3: served install.sh matches on-disk"
@@ -206,6 +227,72 @@ if [ "$(uname -s)" = Darwin ]; then
   rm -f "$macos_log"
 else
   skip "not running on macOS — skipping local macOS install"
+fi
+
+# ── phase 4b: Hermes skills install ─────────────────────────────────
+say "Phase 4b: Hermes skills install (--hermes)"
+
+hermes_install() {
+  _home="$1"
+  shift
+  _log=$(mktemp)
+  if ! env HOME="$_home" KRAB_SKILLS_BASE_URL="file://${skill_tmp}" "$@" \
+       sh "$INSTALL_SH" --silent --hermes >"$_log" 2>&1; then
+    cat "$_log"
+    rm -f "$_log"
+    die "install.sh --hermes FAILED"
+  fi
+  rm -f "$_log"
+}
+
+assert_hermes_skills() {
+  _category="$1"
+  for f in krabarena/SKILL.md krabarena-heartbeat/SKILL.md \
+           krabarena/references/claim-structure.md \
+           krabarena-heartbeat/references/battle-structure.md; do
+    [ -f "${_category}/${f}" ] || die "Hermes skill file missing: ${_category}/${f}"
+  done
+}
+
+host_glibc=true
+if [ "$(uname -s)" = Linux ] && ! getconf GNU_LIBC_VERSION >/dev/null 2>&1; then
+  host_glibc=false
+fi
+
+if [ "$host_glibc" = true ]; then
+  hermes_home=$(mktemp -d)
+  mkdir -p "$hermes_home/.hermes/skills/krabarena" "$hermes_home/.hermes/skills/krabarena-heartbeat"
+  printf -- '---\nname: krabarena\n---\n' > "$hermes_home/.hermes/skills/krabarena/SKILL.md"
+  printf -- '---\nname: krabarena-heartbeat\n---\n' > "$hermes_home/.hermes/skills/krabarena-heartbeat/SKILL.md"
+  hermes_install "$hermes_home"
+  assert_hermes_skills "$hermes_home/.hermes/skills/krabarena"
+  [ ! -f "$hermes_home/.hermes/skills/krabarena/SKILL.md" ] \
+    || die "legacy flat ~/.hermes/skills/krabarena/SKILL.md was not migrated"
+  [ ! -d "$hermes_home/.hermes/skills/krabarena-heartbeat" ] \
+    || die "legacy ~/.hermes/skills/krabarena-heartbeat was not migrated"
+  grep -q '^agent_backend = "Hermes Agent"' "$hermes_home/.krab/config.toml" \
+    || die "install.sh --hermes did not set the Hermes Agent identity"
+  ok "HOME/.hermes/skills/krabarena/{krabarena,krabarena-heartbeat} installed, legacy layout migrated"
+  rm -rf "$hermes_home"
+
+  hermes_home=$(mktemp -d)
+  hermes_install "$hermes_home" HERMES_HOME="$hermes_home/custom-hermes"
+  assert_hermes_skills "$hermes_home/custom-hermes/skills/krabarena"
+  [ ! -d "$hermes_home/.hermes" ] || die "HERMES_HOME was ignored"
+  ok "HERMES_HOME respected"
+  rm -rf "$hermes_home"
+
+  hermes_home=$(mktemp -d)
+  hermes_project=$(mktemp -d)
+  ( cd "$hermes_project" \
+      && env HOME="$hermes_home" KRAB_SKILLS_BASE_URL="file://${skill_tmp}" \
+           sh "$INSTALL_SH" --silent --hermes --skills-scope project >/dev/null 2>&1 ) \
+    || die "install.sh --hermes --skills-scope project FAILED"
+  assert_hermes_skills "$hermes_project/.hermes/skills/krabarena"
+  ok "--skills-scope project installs into ./.hermes/skills/krabarena"
+  rm -rf "$hermes_home" "$hermes_project"
+else
+  skip "host is not glibc — skipping Hermes install"
 fi
 
 # ── phase 5: container install ───────────────────────────────────────

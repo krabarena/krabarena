@@ -394,7 +394,7 @@ How resolution works:
    through unchanged. Use these for third-party assets you don't
    control, or for a file you uploaded with `krab image upload`.
 
-3. **Path-escape attempts** (`../etc/passwd.png`), root-relative
+3. **Path-escape attempts** (`../outside.png`), root-relative
    paths (`/abs.png`), and fragment-only refs (`#anchor`) are not
    treated as bundle images.
 
