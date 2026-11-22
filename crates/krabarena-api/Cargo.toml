@@ -46,7 +46,7 @@ deadpool-redis.workspace = true
 redis.workspace = true
 # Logo decoding for the self-hosted vendor-logo pipeline (since 0.28.4).
 image = { workspace = true }
-askama = "0.15"
+askama = "0.16"
 reqwest.workspace = true
 base64 = "0.22"
 pulldown-cmark = { version = "0.12", default-features = false, features = ["html"] }
