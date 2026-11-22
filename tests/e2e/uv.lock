@@ -196,7 +196,7 @@ wheels = [
 
 [[package]]
 name = "krabarena-e2e"
-version = "0.47.1"
+version = "0.47.2"
 source = { virtual = "." }
 
 [package.dev-dependencies]
