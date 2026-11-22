@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -402,13 +404,24 @@ pub async fn load_claim_author(
     pool: &PgPool,
     user_id: Uuid,
 ) -> Result<Option<crate::models::claim::ClaimAuthor>, ApiError> {
-    // `total_claims` counts lineage HEADs only — an edited claim
-    // (post --predecessor / claim edit) should not inflate the
-    // author's claim count by counting both the old + new version.
+    Ok(load_claim_authors(pool, &[user_id]).await?.remove(&user_id))
+}
+
+pub async fn load_claim_authors(
+    pool: &PgPool,
+    user_ids: &[Uuid],
+) -> Result<HashMap<Uuid, crate::models::claim::ClaimAuthor>, ApiError> {
+    let mut ids: Vec<Uuid> = user_ids.to_vec();
+    ids.sort_unstable();
+    ids.dedup();
+    if ids.is_empty() {
+        return Ok(HashMap::new());
+    }
     let superseded = not_superseded("c");
-    let row = sqlx::query_as::<_, (String, String, i64, i64, i64)>(&format!(
+    let rows = sqlx::query_as::<_, (Uuid, String, String, i64, i64, i64)>(&format!(
         r#"
         SELECT
+            u.id,
             u.display_name,
             e.domain,
             (SELECT COUNT(*) FROM verifications WHERE author_id = u.id AND verdict = 'confirmed'),
@@ -416,26 +429,40 @@ pub async fn load_claim_author(
             (SELECT COUNT(*) FROM claims c WHERE c.author_id = u.id AND c.deleted_at IS NULL {superseded})
         FROM users u
         JOIN entities e ON u.entity_id = e.id
-        WHERE u.id = $1
+        WHERE u.id = ANY($1)
         "#
     ))
-    .bind(user_id)
-    .fetch_optional(pool)
+    .bind(&ids)
+    .fetch_all(pool)
     .await
     .map_err(|e| ApiError::Internal(e.into()))?;
 
-    Ok(row.map(
-        |(display_name, entity_domain, confirmed, refuted, claims)| {
-            crate::models::claim::ClaimAuthor {
-                user_id,
-                display_name,
-                entity_domain,
-                total_confirmed: confirmed,
-                total_refuted: refuted,
-                total_claims: claims,
-            }
-        },
-    ))
+    Ok(rows
+        .into_iter()
+        .map(
+            |(user_id, display_name, entity_domain, confirmed, refuted, claims)| {
+                (
+                    user_id,
+                    crate::models::claim::ClaimAuthor {
+                        user_id,
+                        display_name,
+                        entity_domain,
+                        total_confirmed: confirmed,
+                        total_refuted: refuted,
+                        total_claims: claims,
+                    },
+                )
+            },
+        )
+        .collect())
+}
+
+pub async fn attach_authors(pool: &PgPool, items: &mut [ClaimResponse]) {
+    let ids: Vec<Uuid> = items.iter().map(|c| c.author_id).collect();
+    let authors = load_claim_authors(pool, &ids).await.unwrap_or_default();
+    for item in items.iter_mut() {
+        item.author = authors.get(&item.author_id).cloned();
+    }
 }
 
 pub async fn list_claims(
@@ -528,9 +555,7 @@ pub async fn list_claims(
     };
 
     let mut items = items;
-    for item in items.iter_mut() {
-        item.author = load_claim_author(pool, item.author_id).await.ok().flatten();
-    }
+    attach_authors(pool, &mut items).await;
 
     Ok((items, pagination))
 }
@@ -581,9 +606,7 @@ pub async fn list_latest_claims(
         Cursor::new(c.created_at, c.id)
     });
 
-    for item in items.iter_mut() {
-        item.author = load_claim_author(pool, item.author_id).await.ok().flatten();
-    }
+    attach_authors(pool, &mut items).await;
 
     Ok((items, pagination))
 }
@@ -732,9 +755,7 @@ pub async fn list_standalone_claims(
     let (mut items, pagination) = finalize_page(items, limit, |c: &ClaimResponse| {
         Cursor::new(c.created_at, c.id)
     });
-    for item in items.iter_mut() {
-        item.author = load_claim_author(pool, item.author_id).await.ok().flatten();
-    }
+    attach_authors(pool, &mut items).await;
     Ok((items, pagination))
 }
 

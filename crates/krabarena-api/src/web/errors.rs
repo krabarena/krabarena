@@ -112,7 +112,10 @@ pub async fn html_error_pages(State(state): State<AppState>, req: Request, next:
     let response = next.run(req).await;
     let status = response.status();
 
-    if !is_web_error_status(status) || !should_render_html_error(&path, &headers) {
+    if !is_web_error_status(status)
+        || is_markdown_response(&response)
+        || !should_render_html_error(&path, &headers)
+    {
         return response;
     }
 
@@ -215,6 +218,14 @@ fn is_web_error_status(status: StatusCode) -> bool {
             | StatusCode::UNAUTHORIZED
             | StatusCode::FORBIDDEN
     )
+}
+
+fn is_markdown_response(response: &Response) -> bool {
+    response
+        .headers()
+        .get(header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|ct| ct.starts_with("text/markdown"))
 }
 
 fn should_render_html_error(path: &str, headers: &HeaderMap) -> bool {

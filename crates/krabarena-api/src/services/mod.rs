@@ -67,6 +67,8 @@ mod auth_db_tests;
 #[cfg(test)]
 mod battle_candidates_db_tests;
 #[cfg(test)]
+mod claim_list_db_tests;
+#[cfg(test)]
 mod claim_visibility_db_tests;
 #[cfg(test)]
 mod cli_parity_db_tests;
