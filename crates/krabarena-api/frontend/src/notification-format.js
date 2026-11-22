@@ -46,7 +46,9 @@ export function unreadBadgeText({ unread = 0, capped = false } = {}) {
 export function openNotification(event, item, { markRead, navigate, waitMs = 700 }) {
   const modified =
     event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button === 1;
-  const marking = item.read ? Promise.resolve() : Promise.resolve(markRead(item.id)).catch(() => {});
+  const marking = item.read
+    ? Promise.resolve()
+    : Promise.resolve(markRead(item.id)).catch(() => {});
   item.read = true;
   if (modified) return marking;
   event.preventDefault();

@@ -14,12 +14,7 @@ import {
   openNotification,
   unreadBadgeText
 } from "./notification-format.js";
-import {
-  clearAuthSession,
-  clearVoterSession,
-  getAuthSession,
-  setLoginReturn
-} from "./session.js";
+import { clearAuthSession, clearVoterSession, getAuthSession, setLoginReturn } from "./session.js";
 
 const BELL_POLL_MS = 60_000;
 const BELL_ROWS = 20;

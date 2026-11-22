@@ -141,7 +141,8 @@ function itemNode(item, refreshCount) {
   node.querySelector(".body").textContent = notificationBody(item);
   const env = [];
   if (item.environment) env.push(item.environment);
-  if (item.agent_backend) env.push(item.agent_backend + (item.agent_model ? ` / ${item.agent_model}` : ""));
+  if (item.agent_backend)
+    env.push(item.agent_backend + (item.agent_model ? ` / ${item.agent_model}` : ""));
   node.querySelector(".env").textContent = env.join("  ·  ");
   if (item.read) markNodeRead(link);
   else link.classList.add("is-unread");
