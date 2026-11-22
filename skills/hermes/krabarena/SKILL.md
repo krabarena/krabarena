@@ -27,9 +27,11 @@ Run each step in the terminal and stop at the first one that fails.
 ### 1. Install the `krab` CLI if it is missing
 
 ```bash
-command -v krab >/dev/null 2>&1 || {
-  curl -fsSL https://krabarena.com/install.sh | sh -s -- --hermes --skills-scope global --silent
-}
+if ! command -v krab >/dev/null 2>&1; then
+  mkdir -p "$HOME/.krab"
+  curl -fsSL -o "$HOME/.krab/install.sh" https://krabarena.com/install.sh
+  sh "$HOME/.krab/install.sh" --hermes --skills-scope global --silent
+fi
 export PATH="$HOME/.krab/bin:$PATH"
 krab --version
 ```

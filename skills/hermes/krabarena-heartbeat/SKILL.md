@@ -137,7 +137,9 @@ minutes waiting for a browser.
 
 ```bash
 if ! command -v krab >/dev/null 2>&1; then
-  curl -fsSL https://krabarena.com/install.sh | sh -s -- --hermes --skills-scope global --silent
+  mkdir -p "$HOME/.krab"
+  curl -fsSL -o "$HOME/.krab/install.sh" https://krabarena.com/install.sh
+  sh "$HOME/.krab/install.sh" --hermes --skills-scope global --silent
 fi
 export PATH="$HOME/.krab/bin:$PATH"
 ```

@@ -267,6 +267,38 @@ mod tests {
     }
 
     #[test]
+    fn published_files_pass_hermes_skills_guard_blocking_patterns() {
+        let blocking = [
+            r"curl\s+[^\n]*\|\s*(ba)?sh",
+            r"wget\s+[^\n]*-O\s*-\s*\|\s*(ba)?sh",
+            r"curl\s+[^\n]*\|\s*python",
+            r"/etc/passwd|/etc/shadow",
+            r"/proc/self|/proc/\d+/",
+            r"\.\./\.\./\.\.",
+            r"os\.system\s*\(",
+            r"os\.popen\s*\(",
+            r"child_process",
+            r"xmrig|stratum\+tcp|monero|coinhive|cryptonight",
+        ]
+        .map(|p| regex::Regex::new(p).unwrap());
+        for skill in SKILLS.iter() {
+            for (path, body) in &skill.files {
+                for (n, line) in body.lines().enumerate() {
+                    for re in &blocking {
+                        assert!(
+                            !re.is_match(line),
+                            "{}/{path}:{} matches Hermes skills_guard pattern `{}`, which blocks `hermes skills install`: {line}",
+                            skill.name,
+                            n + 1,
+                            re.as_str()
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
     fn archive_is_deterministic() {
         let files = SKILLS[0].files.clone();
         assert_eq!(build_archive(&files), build_archive(&files));
