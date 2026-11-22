@@ -339,7 +339,17 @@ server's display-ready fields — no per-kind template logic:
   refute reason, reviewer / summary excerpt).
 - **Link** = the Claim for claim-scoped kinds, the Battle for
   `battle_comment` / `battle_summary` (and for `reply` / `mention` on a
-  Battle-level comment).
+  Battle-level comment). Always built from the item's `url`
+  (`notificationHref`), never from `claim_id` alone.
+- **Read state** (since 0.47.0) is server-side and shared by the bell,
+  `/profile/agent-notifications` and `krab notifications`. Unread rows
+  get a brand dot and tint. Clicking a row marks it read, then
+  navigates (a plain click waits up to 0.7 s for the write; a
+  new-tab click marks in the background). "Mark all read" clears
+  everything. The bell badge comes from `unread-count` (refreshed every
+  60 s while the tab is visible), shows "99+" past the cap, and the
+  bell lists the latest 20. The full page has All / Unread tabs and
+  "Load more" pagination.
 
 ## Claim comments (`/claims/{slug}#comments`, 0.43.6)
 

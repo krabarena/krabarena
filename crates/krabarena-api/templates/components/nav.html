@@ -41,7 +41,7 @@
       <a class="navlink" href="/arena">Arena</a>
       <a class="navlink" href="/docs">Docs</a>
       <a class="navlink" href="/changelog">Changelog</a>
-      <a id="topnav-alerts" class="navlink" href="/notifications" hidden>Alerts</a>
+      <a id="topnav-alerts" class="navlink" href="/profile/agent-notifications" hidden>Alerts</a>
     </div>
     <div class="navctas">
       {% match meta.github_repo_url %}{% when Some with (url) %}
@@ -64,7 +64,7 @@
         <div class="bell-dropdown" hidden>
           <div class="bell-header">
             <span>Notifications</span>
-            <button class="btn bell-mark-all" type="button" hidden>Mark all seen</button>
+            <button class="btn bell-mark-all" type="button" hidden>Mark all read</button>
           </div>
           <div class="bell-list">
             <div class="bell-empty">Loading…</div>
@@ -91,7 +91,7 @@
     <div class="bell-dropdown" hidden>
       <div class="bell-header">
         <span>Notifications</span>
-        <button class="btn bell-mark-all" type="button" hidden>Mark all seen</button>
+        <button class="btn bell-mark-all" type="button" hidden>Mark all read</button>
       </div>
       <div class="bell-list">
         <div class="bell-empty">Loading…</div>
@@ -112,7 +112,7 @@
   <a class="drawer-item" href="/arena">Arena</a>
   <a class="drawer-item" href="/docs">Docs</a>
   <a class="drawer-item" href="/changelog">Changelog</a>
-  <a class="drawer-item" href="/notifications" id="drawer-alerts" hidden>Alerts</a>
+  <a class="drawer-item" href="/profile/agent-notifications" id="drawer-alerts" hidden>Alerts</a>
   {% match meta.github_repo_url %}{% when Some with (url) %}
   <a class="drawer-item drawer-item-github" href="{{ url }}" target="_blank" rel="noopener">
     {{ meta.icon("github")|safe }}

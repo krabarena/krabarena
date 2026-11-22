@@ -1,113 +1,179 @@
-import { getAgentNotifications } from "./api.js";
+import {
+  getAgentNotifications,
+  getAgentNotificationsUnreadCount,
+  markAgentNotificationRead,
+  markAllAgentNotificationsRead
+} from "./api.js";
 import { getVoterToken } from "./auth-requests.js";
 import { HTTP_STATUS } from "./http-status.js";
-import { notificationBody, notificationHref, notificationLabel } from "./notification-format.js";
-import { getSessionValue, setSessionValue } from "./session.js";
+import {
+  notificationActor,
+  notificationBody,
+  notificationHref,
+  notificationLabel,
+  openNotification,
+  unreadBadgeText
+} from "./notification-format.js";
 
-const SEEN_KEY = "profile_agent_notifications_seen_at";
+const PAGE_SIZE = 30;
 
 export async function initNotifications() {
   const root = document.querySelector("[data-agent-notifications-page]");
   if (!root) return;
-  const token = getVoterToken();
-  if (!token) {
+  if (!getVoterToken()) {
     text("notif-sub", "");
     show("auth-required");
     return;
   }
 
-  try {
-    const response = await getAgentNotifications({ limit: 50 });
-    if (response.status === HTTP_STATUS.UNAUTHORIZED) {
+  const state = { unreadOnly: false, cursor: null, loading: false };
+  const list = document.getElementById("notif-list");
+
+  const refreshCount = async () => {
+    try {
+      const response = await getAgentNotificationsUnreadCount();
+      const count = response.data?.data;
+      if (!count) return;
+      const label = unreadBadgeText(count);
+      document.querySelectorAll("[data-notif-unread-count]").forEach((el) => {
+        el.textContent = label ? `(${label})` : "";
+      });
+      const markAll = document.getElementById("mark-all-btn");
+      if (markAll) markAll.hidden = !label;
+    } catch {
+      // The count is decorative; the list still works without it.
+    }
+  };
+
+  const load = async ({ reset }) => {
+    if (state.loading) return;
+    state.loading = true;
+    if (reset) {
+      state.cursor = null;
+      list.replaceChildren();
+      hide("empty");
+    }
+    try {
+      const response = await getAgentNotifications({
+        limit: PAGE_SIZE,
+        cursor: state.cursor,
+        unread: state.unreadOnly
+      });
+      if (response.status === HTTP_STATUS.UNAUTHORIZED) {
+        text("notif-sub", "");
+        show("auth-required");
+        return;
+      }
+      const data = response.data?.data;
+      if (!data) {
+        text("notif-sub", "Could not load notifications.");
+        return;
+      }
       text("notif-sub", "");
-      show("auth-required");
-      return;
+      if (!data.agent) {
+        show("no-agent");
+        return;
+      }
+      showAgent(data.agent);
+      show("notif-filters");
+      document.querySelector("[data-notif-filters]").hidden = false;
+      data.items.forEach((item) => {
+        list.appendChild(itemNode(item, refreshCount));
+      });
+      if (reset && !data.items.length) {
+        text("empty-text", state.unreadOnly ? "You're all caught up." : "No activity yet.");
+        show("empty");
+      }
+      state.cursor = data.has_more ? data.next_cursor : null;
+      document.getElementById("load-more-row").hidden = !state.cursor;
+    } catch (error) {
+      text("notif-sub", `Failed to load: ${error}`);
+    } finally {
+      state.loading = false;
     }
-    const body = response.data;
-    if (!body?.data) {
-      text("notif-sub", "Could not load notifications.");
-      return;
+  };
+
+  document.querySelectorAll("[data-notif-filter]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.unreadOnly = button.dataset.notifFilter === "unread";
+      document.querySelectorAll("[data-notif-filter]").forEach((other) => {
+        const active = other === button;
+        other.classList.toggle("is-active", active);
+        other.setAttribute("aria-selected", active ? "true" : "false");
+      });
+      load({ reset: true });
+    });
+  });
+  document.getElementById("load-more-btn")?.addEventListener("click", () => load({ reset: false }));
+  document.getElementById("mark-all-btn")?.addEventListener("click", async () => {
+    document.querySelectorAll(".profile-notification-item").forEach(markNodeRead);
+    try {
+      await markAllAgentNotificationsRead();
+    } finally {
+      refreshCount();
+      if (state.unreadOnly) load({ reset: true });
     }
-    renderNotifications(body.data);
-  } catch (error) {
-    text("notif-sub", `Failed to load: ${error}`);
-  }
+  });
+
+  await load({ reset: true });
+  refreshCount();
 }
 
-function renderNotifications(data) {
-  text("notif-sub", "");
-  if (!data.agent) {
-    show("no-agent");
-    return;
+function itemNode(item, refreshCount) {
+  const node = document.getElementById("notif-item-template").content.cloneNode(true);
+  const link = node.querySelector("a");
+  link.href = notificationHref(item);
+  node.querySelector(".kind").textContent = notificationLabel(item);
+  const actor = node.querySelector(".actor");
+  if (actor) actor.textContent = notificationActor(item);
+  const verdict = node.querySelector(".verdict");
+  if (item.kind === "response" && item.verdict === "confirmed") {
+    verdict.textContent = "Verified";
+    verdict.classList.add("is-verified");
+  } else if (item.kind === "response" && item.verdict === "disconfirmed") {
+    verdict.textContent = "Refuted";
+    verdict.classList.add("is-refuted");
+  } else {
+    verdict.textContent = "";
   }
+  node.querySelector(".when").textContent = relativeTime(item.created_at);
+  node.querySelector(".target").textContent = item.title || "";
+  node.querySelector(".body").textContent = notificationBody(item);
+  const env = [];
+  if (item.environment) env.push(item.environment);
+  if (item.agent_backend)
+    env.push(item.agent_backend + (item.agent_model ? ` / ${item.agent_model}` : ""));
+  node.querySelector(".env").textContent = env.join("  ·  ");
+  if (item.read) markNodeRead(link);
+  else link.classList.add("is-unread");
+  link.addEventListener("click", (event) => {
+    markNodeRead(link);
+    openNotification(event, item, {
+      markRead: (id) => markAgentNotificationRead(id).finally(refreshCount),
+      navigate: (href) => {
+        window.location.href = href;
+      }
+    });
+  });
+  return node;
+}
 
+function markNodeRead(link) {
+  link.classList.remove("is-unread");
+  link.querySelector(".unread-dot")?.classList.add("is-seen");
+}
+
+function showAgent(agent) {
   const agentLink = document.getElementById("agent-link");
   if (agentLink) {
-    agentLink.href = `/agents/${data.agent.user_id}`;
-    agentLink.textContent = `${data.agent.display_name} @ ${data.agent.entity_domain}`;
+    agentLink.href = `/agents/${agent.user_id}`;
+    agentLink.textContent = agent.display_name;
   }
   show("agent-card");
-
-  if (!data.items.length) {
-    show("empty");
-    return;
-  }
-
-  const cutoff = getSessionValue(SEEN_KEY) ? new Date(getSessionValue(SEEN_KEY)).getTime() : 0;
-  const list = document.getElementById("notif-list");
-  let unreadCount = 0;
-  data.items.forEach((item) => {
-    const node = document.getElementById("notif-item-template").content.cloneNode(true);
-    const link = node.querySelector("a");
-    link.href = notificationHref(item);
-    node.querySelector(".kind").textContent = notificationLabel(item);
-    const verdict = node.querySelector(".verdict");
-    if (item.kind !== "response") {
-      // Non-response kinds carry their verdict in the label already
-      // (e.g. "Review: pass"); don't repeat it.
-      verdict.textContent = "";
-    } else if (item.verdict === "confirmed") {
-      verdict.textContent = "Verified";
-      verdict.classList.add("is-verified");
-    } else if (item.verdict === "disconfirmed") {
-      verdict.textContent = "Refuted";
-      verdict.classList.add("is-refuted");
-    } else {
-      verdict.textContent = "";
-    }
-    node.querySelector(".when").textContent = relativeTime(item.created_at);
-    const target = node.querySelector(".target");
-    if (target) target.textContent = item.title || "";
-    node.querySelector(".body").textContent = notificationBody(item);
-    const envText = [];
-    if (item.environment) envText.push(item.environment);
-    if (item.agent_backend) {
-      envText.push(item.agent_backend + (item.agent_model ? ` / ${item.agent_model}` : ""));
-    }
-    node.querySelector(".env").textContent = envText.join("  ·  ");
-    const unread = new Date(item.created_at).getTime() > cutoff;
-    if (!unread) {
-      const dot = node.querySelector(".unread-dot");
-      dot.classList.add("is-seen");
-    } else {
-      unreadCount += 1;
-    }
-    list.appendChild(node);
-  });
-
-  if (unreadCount > 0) show("mark-all-row");
-  document.getElementById("mark-all-btn")?.addEventListener("click", () => {
-    setSessionValue(SEEN_KEY, new Date().toISOString());
-    document.querySelectorAll(".unread-dot").forEach((dot) => {
-      dot.classList.add("is-seen");
-    });
-    hide("mark-all-row");
-  });
 }
 
 function relativeTime(iso) {
-  const date = new Date(iso);
-  const seconds = Math.max(0, (Date.now() - date.getTime()) / 1000);
+  const seconds = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
   if (seconds < 60) return `${Math.floor(seconds)}s ago`;
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
   if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;

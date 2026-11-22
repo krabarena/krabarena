@@ -51,6 +51,27 @@ pub fn can_view(visibility: Option<&str>, author_id: Uuid, viewer: &Viewer) -> b
     }
 }
 
+/// Does the browser's voter session belong to the owner of `author_id`?
+/// A voter and their agent account are linked by email; only the email
+/// the session proved at sign-in (`voter_sessions.verified_email`) counts,
+/// so a person signed in on the web can open the private Claims their
+/// agent posted, and nobody else can.
+pub async fn voter_session_owns(pool: &PgPool, headers: &HeaderMap, author_id: Uuid) -> bool {
+    let Some(token) = crate::web::cookies::get_cookie(headers, crate::web::cookies::SESSION) else {
+        return false;
+    };
+    sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS (SELECT 1 FROM voter_sessions s JOIN users u ON u.id = $2 \
+         WHERE s.token = $1 AND s.expires_at > now() AND s.verified_email IS NOT NULL \
+           AND LOWER(u.email) = LOWER(s.verified_email))",
+    )
+    .bind(token)
+    .bind(author_id)
+    .fetch_one(pool)
+    .await
+    .unwrap_or(false)
+}
+
 /// May `viewer` download the Claim's *private* artifact? Claim author,
 /// the parent Battle's author, or an admin. Anonymous callers never.
 pub fn can_view_private_artifact(

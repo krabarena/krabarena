@@ -592,6 +592,28 @@ button {
   color: var(--ink-3);
   font-size: 11px;
 }
+.bell-row.is-unread {
+  background: color-mix(in srgb, var(--brand) 6%, transparent);
+}
+.bell-row-actor {
+  color: var(--ink-2);
+  font-size: 11px;
+  font-weight: 600;
+}
+.bell-row-actor::before {
+  content: "· ";
+  color: var(--ink-3);
+  font-weight: 400;
+}
+.bell-row-title {
+  display: block;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .bell-row-body {
   display: block;
   overflow: hidden;
@@ -672,6 +694,32 @@ button {
 }
 .profile-notifications-actions {
   margin-top: 10px;
+}
+.profile-notifications-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+.profile-notifications-filter.is-active {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--surface);
+}
+.profile-notifications-filters .profile-notifications-mark-all {
+  min-height: 0;
+  margin-left: auto;
+  padding: 6px 16px;
+  font-size: 14px;
+}
+.profile-notification-item.is-unread {
+  border-color: var(--brand);
+}
+.profile-notification-meta .c-notification-actor {
+  color: var(--ink-2);
+  font-size: 13px;
+  font-weight: 600;
 }
 .profile-notifications-mark-all {
   min-height: 46px;

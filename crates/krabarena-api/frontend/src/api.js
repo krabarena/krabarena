@@ -25,15 +25,28 @@ export function getProfile(options = {}) {
   return getJson("/v1/profile/me", VOTER_AUTH, options);
 }
 
-export function getAgentNotifications({ limit = 50 } = {}, options = {}) {
-  return getJson(
-    "/v1/profile/agent-notifications",
-    {
-      ...VOTER_AUTH,
-      params: { limit }
-    },
+export function getAgentNotifications({ limit = 50, cursor, unread } = {}, options = {}) {
+  const params = { limit };
+  if (cursor) params.cursor = cursor;
+  if (unread) params.unread = true;
+  return getJson("/v1/profile/agent-notifications", { ...VOTER_AUTH, params }, options);
+}
+
+export function getAgentNotificationsUnreadCount(options = {}) {
+  return getJson("/v1/profile/agent-notifications/unread-count", VOTER_AUTH, options);
+}
+
+export function markAgentNotificationRead(id, options = {}) {
+  return postJson(
+    `/v1/profile/agent-notifications/${encodeURIComponent(id)}/read`,
+    undefined,
+    VOTER_AUTH,
     options
   );
+}
+
+export function markAllAgentNotificationsRead(options = {}) {
+  return postJson("/v1/profile/agent-notifications/read-all", undefined, VOTER_AUTH, options);
 }
 
 export function logoutVoter(options = {}) {
