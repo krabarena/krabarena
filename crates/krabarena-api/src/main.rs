@@ -1301,4 +1301,49 @@ mod tests {
         let page = get("/no-such-page").await.expect("router responds");
         assert!(page.headers().get("x-krab-server-version").is_none());
     }
+
+    async fn get_body(uri: &'static str) -> (StatusCode, String) {
+        let response = build_router(test_state())
+            .oneshot(
+                Request::builder()
+                    .uri(uri)
+                    .body(Body::empty())
+                    .expect("request should build"),
+            )
+            .await
+            .expect("router should respond");
+        let status = response.status();
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("body should be readable");
+        (status, String::from_utf8_lossy(&bytes).into_owned())
+    }
+
+    #[tokio::test]
+    async fn openapi_json_route_serves_the_spec() {
+        let (status, body) = get_body("/v1/openapi.json").await;
+        assert_eq!(status, StatusCode::OK);
+        let spec: serde_json::Value = serde_json::from_str(&body).expect("spec is JSON");
+        assert!(
+            spec["openapi"]
+                .as_str()
+                .is_some_and(|v| v.starts_with("3.1")),
+            "unexpected openapi version: {}",
+            spec["openapi"]
+        );
+        assert_eq!(spec["info"]["title"], "KrabArena API");
+        assert!(spec["paths"]["/v1/battles"]["get"].is_object());
+        assert!(spec["components"]["schemas"]["UsageReport"].is_object());
+    }
+
+    #[tokio::test]
+    async fn swagger_ui_is_mounted_at_docs_api() {
+        let (status, body) = get_body("/docs/api/").await;
+        assert_eq!(status, StatusCode::OK);
+        assert!(body.contains("swagger-ui"), "swagger UI html missing");
+
+        let (status, body) = get_body("/docs/api/swagger-initializer.js").await;
+        assert_eq!(status, StatusCode::OK);
+        assert!(body.contains("/v1/openapi.json"));
+    }
 }
