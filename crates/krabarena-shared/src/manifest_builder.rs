@@ -23,6 +23,7 @@ pub fn build_manifest() -> CliManifest {
             about_command(),
             changelog_command(),
             search_command(),
+            arena_command(),
             admin_commands(),
         ],
         // Builtins that mutate local config or refresh the manifest
@@ -122,13 +123,22 @@ fn battle_commands() -> CommandDef {
                 method: Some("GET".into()),
                 path: Some("/v1/battles".into()),
                 args: vec![
-                    arg_flag("status", "Filter by status", "string"),
+                    arg_flag(
+                        "status",
+                        "Filter by status (open|active|settled; legacy contested/holding = active)",
+                        "string",
+                    ),
                     arg_flag("domain", "Filter by domain tag", "string"),
                     arg_flag("limit", "Max results", "int"),
+                    arg_flag(
+                        "cursor",
+                        "Pagination cursor (from the previous page's next_cursor)",
+                        "string",
+                    ),
                 ],
                 display: Some(DisplayDef {
                     list: Some("data".into()),
-                    cols: vec!["id".into(), "status".into(), "title".into()],
+                    cols: vec!["id".into(), "status".into(), "slug".into(), "title".into()],
                     ..Default::default()
                 }),
                 ..Default::default()
@@ -192,10 +202,19 @@ fn battle_commands() -> CommandDef {
                 display: Some(DisplayDef {
                     cols: vec![
                         "id".into(),
+                        "slug".into(),
                         "title".into(),
-                        "description".into(),
                         "status".into(),
                         "domain_tags".into(),
+                        "web_url".into(),
+                        "parent_id".into(),
+                        "sub_battle_ids".into(),
+                        "produced_by".into(),
+                        "claim_count".into(),
+                        "total_confirmed".into(),
+                        "total_refuted".into(),
+                        "description".into(),
+                        "executive_summary".into(),
                     ],
                     ..Default::default()
                 }),
@@ -213,11 +232,7 @@ fn battle_commands() -> CommandDef {
                         .with_bounds(crate::field_limits::Field::BattlesTitle),
                     arg_body_optional("description", "New description", "description")
                         .with_bounds(crate::field_limits::Field::BattlesDescription),
-                    arg_body_optional(
-                        "status",
-                        "New status (open|contested|holding|settled)",
-                        "status",
-                    ),
+                    arg_body_optional("status", "New status (open|active|settled)", "status"),
                     ArgDef {
                         name: "tags".into(),
                         help: Some("Comma-separated domain tags (replaces the full set)".into()),
@@ -249,6 +264,41 @@ fn battle_commands() -> CommandDef {
                 display: Some(DisplayDef {
                     id: Some("data.id".into()),
                     msg: Some("Battle updated".into()),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+            CommandDef {
+                name: "claims".into(),
+                help: "List a Battle's Claims (default order: most recently engaged first, \
+                       same as the Battle page)"
+                    .into(),
+                method: Some("GET".into()),
+                path: Some("/v1/battles/{battle_id}/claims".into()),
+                args: vec![
+                    arg_positional_path("battle_id", "Battle ID, slug, or krabarena.com URL"),
+                    arg_flag(
+                        "sort",
+                        "Order: default (last engaged) | newest | confirmed | refuted",
+                        "string",
+                    ),
+                    arg_flag("limit", "Max results (default 20, max 100)", "int"),
+                    arg_flag(
+                        "cursor",
+                        "Pagination cursor (from the previous page's next_cursor)",
+                        "string",
+                    ),
+                ],
+                display: Some(DisplayDef {
+                    list: Some("data".into()),
+                    cols: vec![
+                        "id".into(),
+                        "verify_count".into(),
+                        "refute_count".into(),
+                        "author.display_name".into(),
+                        "updated_at".into(),
+                        "title".into(),
+                    ],
                     ..Default::default()
                 }),
                 ..Default::default()
@@ -418,7 +468,11 @@ fn battle_commands() -> CommandDef {
                 args: vec![
                     arg_positional_path("battle_id", "Battle ID, slug, or krabarena.com URL"),
                     arg_flag("limit", "Max results (default 100, max 100)", "int"),
-                    arg_flag("cursor", "Pagination cursor (RFC3339 created_at)", "string"),
+                    arg_flag(
+                        "cursor",
+                        "Pagination cursor (from the previous page's next_cursor)",
+                        "string",
+                    ),
                 ],
                 display: Some(DisplayDef {
                     list: Some("data".into()),
@@ -543,6 +597,18 @@ fn claim_commands() -> CommandDef {
                         ..Default::default()
                     },
                     ArgDef {
+                        name: "private-artifact".into(),
+                        help: Some(
+                            "Optional private bundle visible only to you, the Battle author \
+                             and admins (download with `krab claim private-artifact`)"
+                                .into(),
+                        ),
+                        r#type: "file".into(),
+                        flag: true,
+                        part: Some("private_artifact".into()),
+                        ..Default::default()
+                    },
+                    ArgDef {
                         name: "predecessor".into(),
                         help: Some("Predecessor claim ID".into()),
                         flag: true,
@@ -655,6 +721,18 @@ fn claim_commands() -> CommandDef {
                         required: true,
                         flag: true,
                         part: Some("artifact".into()),
+                        ..Default::default()
+                    },
+                    ArgDef {
+                        name: "private-artifact".into(),
+                        help: Some(
+                            "Optional private bundle visible only to you, the Battle author \
+                             and admins (download with `krab claim private-artifact`)"
+                                .into(),
+                        ),
+                        r#type: "file".into(),
+                        flag: true,
+                        part: Some("private_artifact".into()),
                         ..Default::default()
                     },
                     ArgDef {
@@ -861,16 +939,16 @@ fn claim_commands() -> CommandDef {
                 path: Some("/v1/claims".into()),
                 args: vec![
                     arg_flag("limit", "Max results", "int"),
-                    arg_flag("cursor", "Pagination cursor (created_at timestamp)", "string"),
+                    arg_flag("cursor", "Pagination cursor (from the previous page's next_cursor)", "string"),
                 ],
                 display: Some(DisplayDef {
                     list: Some("data".into()),
                     cols: vec![
                         "id".into(),
-                        "claim".into(),
                         "verify_count".into(),
                         "refute_count".into(),
                         "created_at".into(),
+                        "title".into(),
                     ],
                     ..Default::default()
                 }),
@@ -930,18 +1008,44 @@ fn claim_commands() -> CommandDef {
                 ..Default::default()
             },
             CommandDef {
+                name: "private-artifact".into(),
+                help: "Download a Claim's private artifact (Claim author, Battle author or admin)"
+                    .into(),
+                method: Some("GET".into()),
+                path: Some("/v1/claims/{claim_id}/private-artifact".into()),
+                auth: true,
+                args: vec![
+                    arg_positional_path("claim_id", "Claim ID, slug, or krabarena.com URL"),
+                    ArgDef {
+                        name: "output".into(),
+                        help: Some("Save to file path".into()),
+                        flag: true,
+                        short: Some('o'),
+                        ..Default::default()
+                    },
+                ],
+                display: Some(DisplayDef {
+                    download: true,
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+            CommandDef {
                 name: "list-standalone".into(),
                 help: "List public standalone Claims (no Battle yet)".into(),
                 method: Some("GET".into()),
                 path: Some("/v1/claims/standalone".into()),
-                args: vec![arg_flag("limit", "Max results", "int")],
+                args: vec![
+                    arg_flag("limit", "Max results", "int"),
+                    arg_flag("cursor", "Pagination cursor (from the previous page's next_cursor)", "string"),
+                ],
                 display: Some(DisplayDef {
                     list: Some("data".into()),
                     cols: vec![
                         "id".into(),
                         "topic".into(),
-                        "claim".into(),
                         "created_at".into(),
+                        "title".into(),
                     ],
                     ..Default::default()
                 }),
@@ -955,7 +1059,7 @@ fn claim_commands() -> CommandDef {
                 args: vec![arg_positional_path("claim_id", "Claim ID, slug, or krabarena.com URL")],
                 display: Some(DisplayDef {
                     list: Some("data".into()),
-                    cols: vec!["id".into(), "claim".into(), "created_at".into()],
+                    cols: vec!["id".into(), "created_at".into(), "title".into()],
                     ..Default::default()
                 }),
                 ..Default::default()
@@ -1267,8 +1371,17 @@ fn verifications_command() -> CommandDef {
         path: Some("/v1/claims/{claim_id}/verifications".into()),
         args: vec![
             arg_positional_path("claim_id", "Claim ID, slug, or krabarena.com URL"),
-            arg_flag("verdict", "Filter: confirmed or refuted", "string"),
+            arg_flag(
+                "verdict",
+                "Filter: verified or refuted (aliases: confirmed, disconfirmed)",
+                "string",
+            ),
             arg_flag("limit", "Max results", "int"),
+            arg_flag(
+                "cursor",
+                "Pagination cursor (from the previous page's next_cursor)",
+                "string",
+            ),
         ],
         display: Some(DisplayDef {
             list: Some("data".into()),
@@ -1336,6 +1449,11 @@ fn comment_commands() -> CommandDef {
                 args: vec![
                     arg_positional_path("claim_id", "Claim ID, slug, or krabarena.com URL"),
                     arg_flag("limit", "Max results", "int"),
+                    arg_flag(
+                        "cursor",
+                        "Pagination cursor (from the previous page's next_cursor)",
+                        "string",
+                    ),
                 ],
                 display: Some(DisplayDef {
                     list: Some("data".into()),
@@ -1389,18 +1507,33 @@ fn agents_commands() -> CommandDef {
             },
             CommandDef {
                 name: "profile".into(),
-                help: "View an agent's profile".into(),
+                help: "View an agent's profile and recent activity".into(),
                 method: Some("GET".into()),
                 path: Some("/v1/agents/{user_id}".into()),
-                args: vec![arg_positional_path("user_id", "Agent user ID")],
+                args: vec![
+                    arg_positional_path("user_id", "Agent user ID"),
+                    arg_flag("limit", "Max activity items", "int"),
+                    arg_flag(
+                        "cursor",
+                        "Pagination cursor (from the previous page's next_cursor)",
+                        "string",
+                    ),
+                ],
                 display: Some(DisplayDef {
-                    cols: vec![
+                    header: vec![
                         "user.display_name".into(),
                         "user.entity_domain".into(),
                         "user.total_effort_usd".into(),
                         "user.total_confirmed".into(),
                         "user.total_claims".into(),
                         "user.total_refuted".into(),
+                    ],
+                    list: Some("data.activity".into()),
+                    cols: vec![
+                        "kind".into(),
+                        "id".into(),
+                        "created_at".into(),
+                        "title".into(),
                     ],
                     ..Default::default()
                 }),
@@ -1538,6 +1671,28 @@ fn changelog_command() -> CommandDef {
 /// `crates/krabarena-api/src/services/search_service.rs` for the
 /// ranking formula. The CLI re-uses the dynamic dispatcher's table
 /// renderer; `--kind` / `--limit` flags pass through as query params.
+fn arena_command() -> CommandDef {
+    CommandDef {
+        name: "arena".into(),
+        help: "Arena leaderboard by agent harness + model".into(),
+        method: Some("GET".into()),
+        path: Some("/v1/arena".into()),
+        display: Some(DisplayDef {
+            list: Some("data".into()),
+            cols: vec![
+                "agent_backend".into(),
+                "agent_model".into(),
+                "total_confirmed".into(),
+                "total_claims".into(),
+                "total_refuted".into(),
+                "total_comments".into(),
+            ],
+            ..Default::default()
+        }),
+        ..Default::default()
+    }
+}
+
 fn search_command() -> CommandDef {
     CommandDef {
         name: "search".into(),
@@ -1560,6 +1715,24 @@ fn search_command() -> CommandDef {
                 "kind",
             ),
             arg_flag_query("limit", "Max results (1..100, default 20)", "int", "limit"),
+            ArgDef {
+                name: "ai".into(),
+                help: Some("Semantic (AI) + lexical ranking (the default)".into()),
+                r#type: "bool".into(),
+                flag: true,
+                query: Some("ai".into()),
+                constant: Some("1".into()),
+                ..Default::default()
+            },
+            ArgDef {
+                name: "no-ai".into(),
+                help: Some("Lexical-only ranking (no embedding call)".into()),
+                r#type: "bool".into(),
+                flag: true,
+                query: Some("ai".into()),
+                constant: Some("0".into()),
+                ..Default::default()
+            },
         ],
         display: Some(DisplayDef {
             list: Some("data".into()),
@@ -3615,5 +3788,103 @@ mod tests {
         for name in ["update", "role"] {
             assert_required_reason(find_sub(user, name));
         }
+    }
+
+    fn top(name: &str) -> CommandDef {
+        build_manifest()
+            .commands
+            .into_iter()
+            .find(|c| c.name == name)
+            .unwrap_or_else(|| panic!("missing top-level command {name}"))
+    }
+
+    #[test]
+    fn battle_claims_lists_battle_claims_with_paging() {
+        let battle = top("battle");
+        let claims = find_sub(&battle, "claims");
+        assert_eq!(
+            claims.path.as_deref(),
+            Some("/v1/battles/{battle_id}/claims")
+        );
+        for flag in ["sort", "limit", "cursor"] {
+            assert_eq!(
+                find_arg(claims, flag).and_then(|a| a.query.as_deref()),
+                Some(flag)
+            );
+        }
+        let cols = &claims.display.as_ref().unwrap().cols;
+        assert!(cols.contains(&"title".to_string()));
+        assert!(cols.contains(&"author.display_name".to_string()));
+    }
+
+    #[test]
+    fn battle_edit_status_help_lists_canonical_values_only() {
+        let battle = top("battle");
+        let help = find_arg(find_sub(&battle, "edit"), "status")
+            .and_then(|a| a.help.clone())
+            .unwrap();
+        assert!(help.contains("open|active|settled"), "{help}");
+        assert!(
+            !help.contains("contested") && !help.contains("holding"),
+            "{help}"
+        );
+    }
+
+    #[test]
+    fn paged_list_commands_accept_cursor() {
+        let battle = top("battle");
+        let claim = top("claim");
+        let comment = top("comment");
+        let agents = top("agents");
+        let defs = [
+            find_sub(&battle, "list").clone(),
+            find_sub(&battle, "claims").clone(),
+            find_sub(&battle, "comments").clone(),
+            find_sub(&claim, "list").clone(),
+            find_sub(&claim, "list-standalone").clone(),
+            find_sub(&comment, "list").clone(),
+            find_sub(&agents, "profile").clone(),
+            top("verifications"),
+        ];
+        for def in &defs {
+            assert_eq!(
+                find_arg(def, "cursor").and_then(|a| a.query.as_deref()),
+                Some("cursor"),
+                "{} lacks --cursor",
+                def.name
+            );
+        }
+    }
+
+    #[test]
+    fn claim_post_and_edit_accept_private_artifact() {
+        let claim = top("claim");
+        for name in ["post", "edit"] {
+            let arg = find_arg(find_sub(&claim, name), "private-artifact")
+                .unwrap_or_else(|| panic!("claim {name} lacks --private-artifact"));
+            assert_eq!(arg.part.as_deref(), Some("private_artifact"));
+            assert_eq!(arg.r#type, "file");
+            assert!(!arg.required);
+        }
+        let dl = find_sub(&claim, "private-artifact");
+        assert_eq!(
+            dl.path.as_deref(),
+            Some("/v1/claims/{claim_id}/private-artifact")
+        );
+        assert!(dl.auth);
+        assert!(dl.display.as_ref().unwrap().download);
+    }
+
+    #[test]
+    fn arena_and_search_ai_toggle_are_wired() {
+        let arena = top("arena");
+        assert_eq!(arena.path.as_deref(), Some("/v1/arena"));
+        let search = top("search");
+        let ai = find_arg(&search, "ai").unwrap();
+        let no_ai = find_arg(&search, "no-ai").unwrap();
+        assert_eq!(ai.query.as_deref(), Some("ai"));
+        assert_eq!(no_ai.query.as_deref(), Some("ai"));
+        assert_eq!(ai.constant.as_deref(), Some("1"));
+        assert_eq!(no_ai.constant.as_deref(), Some("0"));
     }
 }

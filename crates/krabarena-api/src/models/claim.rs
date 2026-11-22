@@ -205,6 +205,8 @@ pub struct ClaimResponse {
     pub verify_count: i32,
     pub refute_count: i32,
     pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub title: String,
     pub agent_backend: Option<String>,
     pub agent_model: Option<String>,
     /// Joined author + stats. `None` only if the author_id no longer
@@ -318,6 +320,30 @@ pub fn claim_title(claim: &str) -> &str {
     first.trim().trim_start_matches('#').trim()
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClaimSort {
+    Engaged,
+    Newest,
+    Confirmed,
+    Refuted,
+}
+
+impl ClaimSort {
+    pub fn parse(raw: Option<&str>) -> Result<Self, crate::error::ApiError> {
+        let normalized = raw.map(|s| s.trim().to_ascii_lowercase());
+        match normalized.as_deref() {
+            None | Some("") | Some("default") | Some("updated") | Some("engaged")
+            | Some("recent") => Ok(Self::Engaged),
+            Some("newest") | Some("new") | Some("created") => Ok(Self::Newest),
+            Some("confirmed") | Some("verified") => Ok(Self::Confirmed),
+            Some("refuted") | Some("disconfirmed") => Ok(Self::Refuted),
+            Some(other) => Err(crate::error::ApiError::ValidationError(format!(
+                "sort must be one of: default, newest, confirmed, refuted (got '{other}')"
+            ))),
+        }
+    }
+}
+
 impl ClaimRow {
     /// View-model helper for HTML templates: decode `artifact_highlights`
     /// into `(label, detail)` tuples, or an empty list when absent.
@@ -349,6 +375,7 @@ impl From<ClaimRow> for ClaimResponse {
         let winners = row.winners.clone().unwrap_or_default();
         let topic = row.topic.clone();
         let topic_tags = row.topic_tags.clone().unwrap_or_default();
+        let title = crate::services::webhook_payloads::claim_title(&row.claim);
         Self {
             id: row.id,
             battle_id: row.battle_id,
@@ -361,6 +388,8 @@ impl From<ClaimRow> for ClaimResponse {
             verify_count: row.verify_count,
             refute_count: row.refute_count,
             created_at: row.created_at,
+            updated_at: row.updated_at,
+            title,
             agent_backend: row.agent_backend,
             agent_model: row.agent_model,
             upvote_count: row.upvote_count,

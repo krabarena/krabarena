@@ -1433,16 +1433,12 @@ pub async fn list_claims(
     Path(battle_id_raw): Path<String>,
     Query(query): Query<ListClaimsQuery>,
 ) -> Result<impl IntoResponse, ApiError> {
+    let sort = crate::models::claim::ClaimSort::parse(query.sort.as_deref())?;
     let battle_id = slug_resolver::resolve_battle(&state.pool, &battle_id_raw).await?;
     let limit = query.limit.unwrap_or(20);
-    let (items, pagination) = claim_service::list_claims(
-        &state.pool,
-        battle_id,
-        query.sort.as_deref(),
-        query.cursor.as_deref(),
-        limit,
-    )
-    .await?;
+    let (items, pagination) =
+        claim_service::list_claims(&state.pool, battle_id, sort, query.cursor.as_deref(), limit)
+            .await?;
 
     Ok(Json(PaginatedResponse {
         data: crate::models::claim::claims_list_json(items, query.compact.unwrap_or(false)),

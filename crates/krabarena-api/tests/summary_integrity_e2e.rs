@@ -136,9 +136,15 @@ async fn soft_deleted_battle_and_claim_hidden_then_restored() {
         claim_service::get_claim(&pool, claim).await.is_err(),
         "soft-deleted claim must 404 publicly"
     );
-    let (list, _) = claim_service::list_claims(&pool, battle, None, None, 50)
-        .await
-        .unwrap();
+    let (list, _) = claim_service::list_claims(
+        &pool,
+        battle,
+        krabarena_api::models::claim::ClaimSort::Engaged,
+        None,
+        50,
+    )
+    .await
+    .unwrap();
     assert!(
         !list.iter().any(|c| c.id == claim),
         "soft-deleted claim must be absent from list_claims"

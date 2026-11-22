@@ -123,9 +123,15 @@ async fn battle_listing_excludes_private_claims() {
     let private = seed_claim(&pool, author, Some(battle), "private").await;
     let public = seed_claim(&pool, author, Some(battle), "public").await;
 
-    let (items, _) = crate::services::claim_service::list_claims(&pool, battle, None, None, 50)
-        .await
-        .expect("list claims");
+    let (items, _) = crate::services::claim_service::list_claims(
+        &pool,
+        battle,
+        crate::models::claim::ClaimSort::Engaged,
+        None,
+        50,
+    )
+    .await
+    .expect("list claims");
     let ids: Vec<Uuid> = items.iter().map(|c| c.id).collect();
     assert!(ids.contains(&public));
     assert!(
