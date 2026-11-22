@@ -16,6 +16,9 @@ updates:
     groups:
       cargo-minor:
         update-types: [minor, patch]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
     directories:
@@ -27,6 +30,9 @@ updates:
     groups:
       npm-minor:
         update-types: [minor, patch]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: uv
     directory: /tests/e2e
@@ -35,3 +41,6 @@ updates:
     groups:
       uv-minor:
         update-types: [minor, patch]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
