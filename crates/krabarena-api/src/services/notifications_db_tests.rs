@@ -1124,3 +1124,125 @@ async fn reply_and_mention_emails_route_once_per_recipient() {
     .unwrap();
     assert_eq!(out, DeliveryOutcome::Skipped(SkipReason::Actor));
 }
+
+#[tokio::test]
+async fn read_state_is_per_item_shared_and_filterable() {
+    let Some(pool) = test_pool().await else {
+        return;
+    };
+    let sc = seed_scenario(&pool).await;
+    let unread_only = activity_service::NotificationFilter {
+        unread_only: true,
+        kinds: None,
+    };
+
+    let (all, _) = activity_service::user_notifications(&pool, sc.a, None, 50)
+        .await
+        .expect("feed");
+    assert!(!all.is_empty());
+    assert!(all.iter().all(|i| !i.read), "a fresh feed starts unread");
+    let total = all.len() as i64;
+    assert_eq!(
+        activity_service::unread_count(&pool, sc.a).await.unwrap(),
+        total
+    );
+
+    let opened = all[0].id;
+    activity_service::mark_read(&pool, sc.a, &[opened])
+        .await
+        .unwrap();
+    activity_service::mark_read(&pool, sc.a, &[opened])
+        .await
+        .unwrap();
+
+    let (after, _) = activity_service::user_notifications(&pool, sc.a, None, 50)
+        .await
+        .unwrap();
+    assert!(after.iter().find(|i| i.id == opened).unwrap().read);
+    assert_eq!(after.iter().filter(|i| i.read).count(), 1);
+    assert_eq!(
+        activity_service::unread_count(&pool, sc.a).await.unwrap(),
+        total - 1
+    );
+
+    let (unread, _) =
+        activity_service::user_notifications_filtered(&pool, sc.a, None, 50, &unread_only)
+            .await
+            .unwrap();
+    assert_eq!(unread.len() as i64, total - 1);
+    assert!(unread.iter().all(|i| i.id != opened && !i.read));
+
+    let (other_user, _) = activity_service::user_notifications(&pool, sc.b, None, 50)
+        .await
+        .unwrap();
+    assert!(
+        other_user.iter().all(|i| !i.read),
+        "read state must not leak across users"
+    );
+
+    let only_reviews = activity_service::NotificationFilter {
+        unread_only: false,
+        kinds: Some(vec!["claim_review".into()]),
+    };
+    let (reviews, _) =
+        activity_service::user_notifications_filtered(&pool, sc.a, None, 50, &only_reviews)
+            .await
+            .unwrap();
+    assert!(!reviews.is_empty());
+    assert!(reviews.iter().all(|i| i.kind == "claim_review"));
+
+    activity_service::mark_all_read(&pool, sc.a).await.unwrap();
+    assert_eq!(
+        activity_service::unread_count(&pool, sc.a).await.unwrap(),
+        0
+    );
+    let (cleared, _) =
+        activity_service::user_notifications_filtered(&pool, sc.a, None, 50, &unread_only)
+            .await
+            .unwrap();
+    assert!(cleared.is_empty());
+    let (everything, _) = activity_service::user_notifications(&pool, sc.a, None, 50)
+        .await
+        .unwrap();
+    assert!(everything.iter().all(|i| i.read));
+}
+
+#[tokio::test]
+async fn unread_pagination_walks_every_unread_item_once() {
+    let Some(pool) = test_pool().await else {
+        return;
+    };
+    let sc = seed_scenario(&pool).await;
+    let (all, _) = activity_service::user_notifications(&pool, sc.a, None, 50)
+        .await
+        .unwrap();
+    let read_every_other: Vec<Uuid> = all.iter().step_by(2).map(|i| i.id).collect();
+    activity_service::mark_read(&pool, sc.a, &read_every_other)
+        .await
+        .unwrap();
+
+    let filter = activity_service::NotificationFilter {
+        unread_only: true,
+        kinds: None,
+    };
+    let mut seen = Vec::new();
+    let mut cursor: Option<String> = None;
+    loop {
+        let (page, meta) = activity_service::user_notifications_filtered(
+            &pool,
+            sc.a,
+            cursor.as_deref(),
+            1,
+            &filter,
+        )
+        .await
+        .unwrap();
+        seen.extend(page.iter().map(|i| i.id));
+        if !meta.has_more {
+            break;
+        }
+        cursor = meta.next_cursor;
+    }
+    let want: Vec<Uuid> = all.iter().skip(1).step_by(2).map(|i| i.id).collect();
+    assert_eq!(seen, want);
+}

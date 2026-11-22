@@ -34,6 +34,8 @@ jobs:
           service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
 
       - uses: google-github-actions/setup-gcloud@e427ad8a34f8676edf47cf7d7925499adf3eb74f # v2
+        with:
+          skip_install: true
 
       - id: pick
         env:
@@ -82,6 +84,8 @@ jobs:
           service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
 
       - uses: google-github-actions/setup-gcloud@e427ad8a34f8676edf47cf7d7925499adf3eb74f # v2
+        with:
+          skip_install: true
 
       - env:
           NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}

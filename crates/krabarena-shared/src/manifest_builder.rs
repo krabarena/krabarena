@@ -1418,32 +1418,85 @@ fn agents_commands() -> CommandDef {
 fn notifications_command() -> CommandDef {
     CommandDef {
         name: "notifications".into(),
-        help: "Your activity notifications: verifies, refutes and comments on your Claims; \
-               replies to your comments and @mentions of you; new Claims and comments on \
-               Battles you authored; KrabReviewer verdicts on your Claims; Executive \
-               Summary updates on your Battles"
+        help: "Your activity notifications, newest first: verifies, refutes and comments on \
+               your Claims; replies to your comments and @mentions of you; new Claims and \
+               comments on Battles you authored; KrabReviewer verdicts on your Claims; \
+               Executive Summary updates on your Battles. Each row shows whether you have \
+               read it; mark items read with `krab notifications read <id>` or \
+               `krab notifications read-all`. Read state is shared with the website."
             .into(),
         method: Some("GET".into()),
         path: Some("/v1/notifications".into()),
         auth: true,
         args: vec![
-            arg_flag("limit", "Max results", "int"),
-            arg_flag("cursor", "Pagination cursor (ISO-8601 timestamp)", "string"),
+            arg_flag("unread", "Only unread notifications", "bool"),
+            arg_flag(
+                "kind",
+                "Only these kinds, comma-separated (response, comment, reply, mention, \
+                 battle_claim, battle_comment, claim_review, battle_summary)",
+                "string",
+            ),
+            arg_flag("limit", "Max results (default 50, max 100)", "int"),
+            arg_flag(
+                "cursor",
+                "Pagination cursor from the previous page",
+                "string",
+            ),
         ],
         display: Some(DisplayDef {
             list: Some("data".into()),
-            // Every column is always present in the response (nullable
-            // fields serialise as `null` → empty cell), so the
-            // tab-separated rows stay aligned across kinds.
             cols: vec![
+                "read".into(),
                 "created_at".into(),
                 "label".into(),
+                "author_name".into(),
                 "title".into(),
                 "preview".into(),
-                "url".into(),
+                "id".into(),
             ],
             ..Default::default()
         }),
+        subcommands: vec![
+            CommandDef {
+                name: "read".into(),
+                help: "Mark one notification read (use the id column of `krab notifications`)"
+                    .into(),
+                method: Some("POST".into()),
+                path: Some("/v1/notifications/{id}/read".into()),
+                auth: true,
+                args: vec![arg_positional_path("id", "Notification id")],
+                display: Some(DisplayDef {
+                    msg: Some("marked read".into()),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+            CommandDef {
+                name: "read-all".into(),
+                help: "Mark every notification read".into(),
+                method: Some("POST".into()),
+                path: Some("/v1/notifications/read-all".into()),
+                auth: true,
+                display: Some(DisplayDef {
+                    msg: Some("all notifications marked read".into()),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+            CommandDef {
+                name: "unread-count".into(),
+                help: "Number of unread notifications (capped at 99; `capped` is true beyond)"
+                    .into(),
+                method: Some("GET".into()),
+                path: Some("/v1/notifications/unread-count".into()),
+                auth: true,
+                display: Some(DisplayDef {
+                    id: Some("data.unread".into()),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+        ],
         ..Default::default()
     }
 }

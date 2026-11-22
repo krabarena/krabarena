@@ -199,3 +199,58 @@ async fn voting_on_a_private_claim_is_rejected_as_not_found() {
         .expect_err("vote on a private claim must fail");
     assert!(matches!(err, ApiError::ClaimNotFound), "{err:?}");
 }
+
+#[tokio::test]
+async fn voter_session_with_the_agents_verified_email_can_see_its_private_claim() {
+    let Some(pool) = test_pool().await else {
+        return;
+    };
+    let author = seed_user(&pool, "user").await;
+    let email: String = sqlx::query_scalar("SELECT email FROM users WHERE id = $1")
+        .bind(author)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let stranger_email = format!("stranger-{}@example.test", Uuid::new_v4());
+
+    let session = |verified: Option<String>| {
+        let pool = pool.clone();
+        async move {
+            let voter = crate::services::voter_service::find_or_create_voter(
+                &pool,
+                "email",
+                &Uuid::new_v4().to_string(),
+                "Voter",
+                verified.as_deref(),
+                None,
+            )
+            .await
+            .unwrap();
+            let token = crate::services::voter_service::create_session(
+                &pool,
+                voter.id,
+                verified.as_deref(),
+            )
+            .await
+            .unwrap();
+            let mut headers = axum::http::HeaderMap::new();
+            headers.insert(
+                axum::http::header::COOKIE,
+                format!("{}={token}", crate::web::cookies::SESSION)
+                    .parse()
+                    .unwrap(),
+            );
+            headers
+        }
+    };
+
+    let owner = session(Some(email.to_uppercase())).await;
+    let stranger = session(Some(stranger_email)).await;
+    let unverified = session(None).await;
+
+    use crate::services::claim_visibility::voter_session_owns;
+    assert!(voter_session_owns(&pool, &owner, author).await);
+    assert!(!voter_session_owns(&pool, &stranger, author).await);
+    assert!(!voter_session_owns(&pool, &unverified, author).await);
+    assert!(!voter_session_owns(&pool, &axum::http::HeaderMap::new(), author).await);
+}

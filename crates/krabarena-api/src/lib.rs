@@ -58,6 +58,7 @@ impl Default for LeaderboardCaches {
 #[derive(Clone)]
 pub struct AppState {
     pub pool: PgPool,
+    pub proxy_pool: PgPool,
     pub jwt_secret: String,
     pub blob_store_url: String,
     /// Non-public store for claims' *private* artifacts

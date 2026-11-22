@@ -90,8 +90,21 @@ pub const PROXY_RATE_LIMIT_SCOPE: &str = "per user, per battle, all services com
      fixed 60-second window; proxy calls are exempt from the platform-wide request limit, \
      so this is the effective limit (HTTP 429 + Retry-After when exceeded)";
 
+pub const PROXY_LOCK_TIMEOUT: &str = "3s";
+
 fn internal(e: sqlx::Error) -> ApiError {
+    if is_proxy_contention(&e) {
+        return ApiError::ProxyBusy;
+    }
     ApiError::Internal(e.into())
+}
+
+fn is_proxy_contention(e: &sqlx::Error) -> bool {
+    match e {
+        sqlx::Error::PoolTimedOut => true,
+        sqlx::Error::Database(db) => db.code().as_deref() == Some("55P03"),
+        _ => false,
+    }
 }
 
 /// Per-service usage for one battle (optionally scoped to one user).
@@ -254,11 +267,11 @@ fn cap_error(spent_micro: i64, cap_cents: i32, what: &str) -> Option<ApiError> {
     )
 }
 
+const BATTLE_TOTAL: Uuid = Uuid::nil();
+
 /// Check the battle-wide and per-claimer caps without reserving (read
-/// only, no lock). The proxy route uses [`reserve_charge`], which runs
-/// the same check atomically with its reservation. Live aggregation
-/// across `proxy_charges` + uncharged `proxy_logs` × spec rates; cheap
-/// at our scale (per-battle indexes make the GROUP BYs ~ms).
+/// only). The proxy route uses [`reserve_charge`], which runs the same
+/// check atomically with its reservation.
 pub async fn check_budgets(
     pool: &PgPool,
     spec: &ProxySpec,
@@ -269,7 +282,86 @@ pub async fn check_budgets(
         return Ok(());
     }
     let mut conn = pool.acquire().await.map_err(internal)?;
-    enforce_caps(&mut conn, spec, battle_id, user_id).await
+    let charged = read_spend(&mut conn, battle_id, user_id, false).await?;
+    enforce_caps(&mut conn, spec, battle_id, user_id, charged).await
+}
+
+/// Running charge totals `(battle, claimer)` from `proxy_spend`, kept
+/// exact by the `proxy_charges` trigger (migration 083). With `lock`,
+/// both rows are created if missing and locked `FOR UPDATE` in a fixed
+/// order (battle row first), matching the trigger's update order.
+async fn read_spend(
+    conn: &mut sqlx::PgConnection,
+    battle_id: Uuid,
+    user_id: Uuid,
+    lock: bool,
+) -> Result<(i64, i64), ApiError> {
+    let select = if lock {
+        "SELECT user_id, charged_micro_usd FROM proxy_spend \
+         WHERE battle_id = $1 AND user_id IN ($2, $3) ORDER BY user_id FOR UPDATE"
+    } else {
+        "SELECT user_id, charged_micro_usd FROM proxy_spend \
+         WHERE battle_id = $1 AND user_id IN ($2, $3)"
+    };
+    let mut rows: Vec<(Uuid, i64)> = sqlx::query_as(select)
+        .bind(battle_id)
+        .bind(BATTLE_TOTAL)
+        .bind(user_id)
+        .fetch_all(&mut *conn)
+        .await
+        .map_err(internal)?;
+    if lock && rows.len() < 2 {
+        sqlx::query(
+            "INSERT INTO proxy_spend (battle_id, user_id) VALUES ($1, $2), ($1, $3) \
+             ON CONFLICT (battle_id, user_id) DO NOTHING",
+        )
+        .bind(battle_id)
+        .bind(BATTLE_TOTAL)
+        .bind(user_id)
+        .execute(&mut *conn)
+        .await
+        .map_err(internal)?;
+        rows = sqlx::query_as(select)
+            .bind(battle_id)
+            .bind(BATTLE_TOTAL)
+            .bind(user_id)
+            .fetch_all(&mut *conn)
+            .await
+            .map_err(internal)?;
+    }
+    let get = |id: Uuid| rows.iter().find(|(u, _)| *u == id).map_or(0, |(_, m)| *m);
+    Ok((get(BATTLE_TOTAL), get(user_id)))
+}
+
+/// Flat-rate spend of requests logged before every call reserved a
+/// charge (frozen per-service counts in `proxy_spend_legacy`, priced at
+/// the current spec's rates; services no longer in the spec count 0).
+async fn legacy_flat_micro(
+    conn: &mut sqlx::PgConnection,
+    spec: &ProxySpec,
+    battle_id: Uuid,
+    user_id: Uuid,
+) -> Result<i64, ApiError> {
+    let rows: Vec<(String, i64)> = sqlx::query_as(
+        "SELECT service_name, uncharged_requests FROM proxy_spend_legacy \
+         WHERE battle_id = $1 AND user_id = $2",
+    )
+    .bind(battle_id)
+    .bind(user_id)
+    .fetch_all(&mut *conn)
+    .await
+    .map_err(internal)?;
+    Ok(rows
+        .iter()
+        .map(|(name, count)| {
+            let flat = spec
+                .services
+                .get(name)
+                .map(|s| proxy_billing::flat_micro_per_request(s.cost_per_1k_cents))
+                .unwrap_or(0);
+            count.saturating_mul(flat)
+        })
+        .fold(0i64, i64::saturating_add))
 }
 
 async fn enforce_caps(
@@ -277,38 +369,54 @@ async fn enforce_caps(
     spec: &ProxySpec,
     battle_id: Uuid,
     user_id: Uuid,
+    (battle_charged, user_charged): (i64, i64),
 ) -> Result<(), ApiError> {
     if spec.budget_cents > 0 {
-        let usage = load_usage(conn, battle_id, None).await?;
-        if let Some(e) = cap_error(total_spend_micro(spec, &usage), spec.budget_cents, "battle") {
+        let spent = battle_charged
+            .saturating_add(legacy_flat_micro(conn, spec, battle_id, BATTLE_TOTAL).await?);
+        if let Some(e) = cap_error(spent, spec.budget_cents, "battle") {
             return Err(e);
         }
     }
     if spec.per_claim_cents > 0 {
-        let usage = load_usage(conn, battle_id, Some(user_id)).await?;
-        if let Some(e) = cap_error(
-            total_spend_micro(spec, &usage),
-            spec.per_claim_cents,
-            "per-claimer",
-        ) {
+        let spent =
+            user_charged.saturating_add(legacy_flat_micro(conn, spec, battle_id, user_id).await?);
+        if let Some(e) = cap_error(spent, spec.per_claim_cents, "per-claimer") {
             return Err(e);
         }
     }
     Ok(())
 }
 
+/// Settle reservations orphaned by a dead process at their reserved
+/// amount (they already count at it, so totals don't change). Served by
+/// the partial index on open reservations, so it stays cheap.
+async fn sweep_stale_reservations(pool: &PgPool, battle_id: Uuid) {
+    if let Err(e) = sqlx::query(&format!(
+        "UPDATE proxy_charges SET source = 'abandoned', settled_at = now() \
+         WHERE battle_id = $1 AND source = 'reserved' \
+           AND created_at < now() - interval '{STALE_RESERVATION}'"
+    ))
+    .bind(battle_id)
+    .execute(pool)
+    .await
+    {
+        tracing::warn!(%battle_id, error = %e, "proxy billing: stale reservation sweep failed");
+    }
+}
+
 /// Reserve a charge for a proxied request — every service, flat-rate
 /// or usage-billed, before the upstream call.
 ///
-/// Runs the battle-wide and per-claimer cap checks (same semantics as
-/// [`check_budgets`]) and inserts a `reserved` `proxy_charges` row
-/// holding `reserve_micro` (the per-request cap, else the flat rate) in
-/// ONE transaction under a per-battle advisory lock, so concurrent
-/// requests see each other's in-flight reservations and can't all slip
-/// under the cap at once. Settled by [`settle_charge`] once the
-/// response is parsed — or, if the call is abandoned after being sent,
-/// at its reserved amount. Battles without any cap skip the lock (there
-/// is nothing to overshoot) but still record the reservation.
+/// For a capped Battle, locks the Battle's and the Claimer's running
+/// totals (`proxy_spend`), checks both caps and inserts a `reserved`
+/// `proxy_charges` row holding `reserve_micro` (the per-request cap,
+/// else the flat rate) in one short transaction; the trigger adds it to
+/// the totals before the locks are released, so concurrent requests see
+/// each other's reservations and can't all slip under the cap. Cost is
+/// constant in the Battle's history. Settled by [`settle_charge`] once
+/// the response is parsed — or, if abandoned after being sent, at its
+/// reserved amount.
 #[allow(clippy::too_many_arguments)]
 pub async fn reserve_charge(
     pool: &PgPool,
@@ -320,27 +428,18 @@ pub async fn reserve_charge(
     reserve_micro: i64,
     fallback_micro: i64,
 ) -> Result<Uuid, ApiError> {
+    let capped = spec.budget_cents > 0 || spec.per_claim_cents > 0;
+    if capped {
+        sweep_stale_reservations(pool, battle_id).await;
+    }
     let mut tx = pool.begin().await.map_err(internal)?;
-    if spec.budget_cents > 0 || spec.per_claim_cents > 0 {
-        sqlx::query(
-            "SELECT pg_advisory_xact_lock(hashtextextended('proxy_budget:' || $1::text, 0))",
-        )
-        .bind(battle_id)
-        .execute(&mut *tx)
-        .await
-        .map_err(internal)?;
-        // Sweep reservations orphaned by a dead process: settle them at
-        // their reserved amount (they already count at it).
-        sqlx::query(&format!(
-            "UPDATE proxy_charges SET source = 'abandoned', settled_at = now() \
-             WHERE battle_id = $1 AND source = 'reserved' \
-               AND created_at < now() - interval '{STALE_RESERVATION}'"
-        ))
-        .bind(battle_id)
-        .execute(&mut *tx)
-        .await
-        .map_err(internal)?;
-        enforce_caps(&mut tx, spec, battle_id, user_id).await?;
+    if capped {
+        sqlx::query(&format!("SET LOCAL lock_timeout = '{PROXY_LOCK_TIMEOUT}'"))
+            .execute(&mut *tx)
+            .await
+            .map_err(internal)?;
+        let charged = read_spend(&mut tx, battle_id, user_id, true).await?;
+        enforce_caps(&mut tx, spec, battle_id, user_id, charged).await?;
     }
     let (id,): (Uuid,) = sqlx::query_as(
         "INSERT INTO proxy_charges \

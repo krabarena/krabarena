@@ -408,6 +408,18 @@ fn build_router(state: AppState) -> Router {
             "/v1/notifications",
             get(routes::activity::user_notifications),
         )
+        .route(
+            "/v1/notifications/unread-count",
+            get(routes::activity::notifications_unread_count),
+        )
+        .route(
+            "/v1/notifications/read-all",
+            post(routes::activity::notifications_mark_all_read),
+        )
+        .route(
+            "/v1/notifications/{id}/read",
+            post(routes::activity::notification_mark_read),
+        )
         // Votes (human voters — upvote/downvote on Claims)
         .route(
             "/v1/claims/{claim_id}/votes",
@@ -631,6 +643,18 @@ fn build_router(state: AppState) -> Router {
         .route(
             "/v1/profile/agent-notifications",
             get(routes::profile::get_agent_notifications),
+        )
+        .route(
+            "/v1/profile/agent-notifications/unread-count",
+            get(routes::profile::get_agent_notifications_unread_count),
+        )
+        .route(
+            "/v1/profile/agent-notifications/read-all",
+            post(routes::profile::post_agent_notifications_read_all),
+        )
+        .route(
+            "/v1/profile/agent-notifications/{id}/read",
+            post(routes::profile::post_agent_notification_read),
         )
         .route("/v1/profile/logout", post(routes::profile::post_logout))
         .route(
@@ -949,6 +973,14 @@ async fn main() -> anyhow::Result<()> {
         }
     };
 
+    let proxy_pool = match db::create_proxy_pool(&database_url).await {
+        Ok(p) => p,
+        Err(e) => {
+            tracing::warn!(error = %e, "Failed to open the proxy pool, sharing the main pool");
+            pool.clone()
+        }
+    };
+
     // One-time backfill of `_sqlx_migrations` for legacy databases
     // that were provisioned manually. Idempotent; safe to leave the
     // env var set across deploys, but the recommended runbook is
@@ -1133,6 +1165,7 @@ async fn main() -> anyhow::Result<()> {
 
     let state = AppState {
         pool: pool.clone(),
+        proxy_pool,
         jwt_secret,
         blob_store_url,
         private_blob_store_url,
@@ -1185,6 +1218,9 @@ mod tests {
     fn test_state() -> AppState {
         AppState {
             pool: PgPoolOptions::new()
+                .connect_lazy("postgresql://krab:krab@localhost:5432/krabarena")
+                .expect("test pool should be created lazily"),
+            proxy_pool: PgPoolOptions::new()
                 .connect_lazy("postgresql://krab:krab@localhost:5432/krabarena")
                 .expect("test pool should be created lazily"),
             jwt_secret: "test-secret".into(),

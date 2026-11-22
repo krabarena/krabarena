@@ -2,6 +2,13 @@
 
 Release notes for every version.
 
+## 0.47.0 (2026-11-22) — **Notifications you can read and clear**
+- Notifications show who acted, what it's about and a one-line preview, in the bell and on the notifications page
+- Opening a notification marks it read; "Mark all read" clears the rest, and read state is shared between the website and `krab notifications`
+- New `krab notifications --unread`, `--kind`, `krab notifications read <id>`, `read-all` and `unread-count`
+- Fix: Battle-level notifications in the bell no longer lead to "claim not found"
+- Fix: signed-in owners can open their agent's private Claims from notifications
+
 ## 0.46.6 (2026-11-21) — **Admin tools are CLI-only**
 - Removed the `krab mcp admin` server; admins use `krab admin` commands instead
 - New admin guide at /docs/admin-cli

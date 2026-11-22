@@ -19,7 +19,7 @@
 //! to localStorage). No agent JWT is required to *view* this data.
 
 use axum::Json;
-use axum::extract::{Query, State};
+use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
 use serde::{Deserialize, Serialize};
@@ -129,6 +129,9 @@ pub async fn get_me(
 pub struct NotificationsQuery {
     pub limit: Option<i64>,
     pub cursor: Option<String>,
+    #[serde(default)]
+    pub unread: bool,
+    pub kind: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -140,11 +143,10 @@ pub struct ProfileNotificationsResponse {
     pub has_more: bool,
 }
 
-/// `GET /v1/profile/agent-notifications` — voter-authenticated, read-only.
+/// `GET /v1/profile/agent-notifications` — voter-authenticated.
 ///
-/// Returns the same data `krab notifications` would for the matched
-/// agent. No state is mutated — the voter is just viewing what the
-/// agent sees.
+/// Returns the same data `krab notifications` would for the agent that
+/// shares the voter's email, including each item's shared `read` flag.
 pub async fn get_agent_notifications(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -174,11 +176,19 @@ pub async fn get_agent_notifications(
     };
 
     let limit = q.limit.unwrap_or(50);
-    let (items, pagination) = crate::services::activity_service::user_notifications(
+    let filter = crate::routes::activity::NotificationQuery {
+        cursor: None,
+        limit: None,
+        unread: q.unread,
+        kind: q.kind.clone(),
+    }
+    .filter();
+    let (items, pagination) = crate::services::activity_service::user_notifications_filtered(
         &state.pool,
         agent.user_id,
         q.cursor.as_deref(),
         limit,
+        &filter,
     )
     .await?;
 
@@ -440,4 +450,63 @@ async fn fetch_company_agents(
             total_refute: r,
         })
         .collect())
+}
+
+/// The agent account linked to the signed-in voter (same email), if any.
+async fn linked_agent_id(state: &AppState, headers: &HeaderMap) -> Result<Option<Uuid>, ApiError> {
+    let token = extract_voter_token(headers)?;
+    let voter = voter_service::get_voter_by_session(&state.pool, &token)
+        .await?
+        .ok_or(ApiError::Unauthorized)?;
+    let Some(email) = voter.email.as_deref() else {
+        return Ok(None);
+    };
+    Ok(fetch_agent_by_email(state, email).await?.map(|a| a.user_id))
+}
+
+/// `GET /v1/profile/agent-notifications/unread-count` — voter-authenticated.
+pub async fn get_agent_notifications_unread_count(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<impl IntoResponse, ApiError> {
+    let n = match linked_agent_id(&state, &headers).await? {
+        Some(agent) => crate::services::activity_service::unread_count(&state.pool, agent).await?,
+        None => 0,
+    };
+    Ok(Json(ApiResponse::new(
+        crate::routes::activity::UnreadCount::new(n),
+    )))
+}
+
+/// `POST /v1/profile/agent-notifications/{id}/read` — voter-authenticated.
+pub async fn post_agent_notification_read(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(item_id): Path<Uuid>,
+) -> Result<impl IntoResponse, ApiError> {
+    let agent = linked_agent_id(&state, &headers)
+        .await?
+        .ok_or(ApiError::NotFound(
+            "No agent is linked to this account".into(),
+        ))?;
+    crate::services::activity_service::mark_read(&state.pool, agent, &[item_id]).await?;
+    Ok(Json(ApiResponse::new(
+        crate::routes::activity::MarkedRead { marked: 1 },
+    )))
+}
+
+/// `POST /v1/profile/agent-notifications/read-all` — voter-authenticated.
+pub async fn post_agent_notifications_read_all(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<impl IntoResponse, ApiError> {
+    let agent = linked_agent_id(&state, &headers)
+        .await?
+        .ok_or(ApiError::NotFound(
+            "No agent is linked to this account".into(),
+        ))?;
+    crate::services::activity_service::mark_all_read(&state.pool, agent).await?;
+    Ok(Json(ApiResponse::new(
+        crate::routes::activity::UnreadCount::new(0),
+    )))
 }

@@ -309,7 +309,20 @@ pub struct NotificationItem {
     /// Relative web path of the target (`/claims/…` or `/battles/…`).
     #[serde(skip)]
     pub path: String,
+    /// Whether the user has read this item (opened it, or marked it /
+    /// everything read) — shared across the CLI, API and web.
+    pub read: bool,
 }
+
+/// Optional narrowing of the notification feed.
+#[derive(Debug, Default, Clone)]
+pub struct NotificationFilter {
+    pub unread_only: bool,
+    pub kinds: Option<Vec<String>>,
+}
+
+/// Unread count reported to the UI is capped here ("99+").
+pub const UNREAD_COUNT_CAP: i64 = 99;
 
 /// Raw UNION row — one projection shared by every leg.
 #[derive(Debug, sqlx::FromRow)]
@@ -427,6 +440,7 @@ impl NotificationRow {
             summary: self.summary,
             url,
             path,
+            read: false,
         }
     }
 }
@@ -460,7 +474,12 @@ fn url_path(url: &str) -> String {
 /// - `mention`: `idx_comment_mentions_user` (migration 073) → `comments` PK.
 fn notifications_sql() -> String {
     let keyset = |ts: &str, id: &str| {
-        format!("($2::timestamptz IS NULL OR {ts} < $2 OR ({ts} = $2 AND {id} < $3::uuid))")
+        format!(
+            "($2::timestamptz IS NULL OR {ts} < $2 OR ({ts} = $2 AND {id} < $3::uuid)) \
+             AND (NOT $5::bool OR ({ts} > COALESCE($6::timestamptz, '-infinity'::timestamptz) \
+               AND NOT EXISTS (SELECT 1 FROM notification_reads nr \
+                               WHERE nr.user_id = $1 AND nr.item_id = {id})))"
+        )
     };
     // Dedupe (since 0.43.6): one item per comment per user, priority
     // `reply` > `mention` > `comment` / `battle_comment`. A comment that
@@ -481,6 +500,7 @@ fn notifications_sql() -> String {
     let summary_max = NOTIFICATION_SUMMARY_MAX_CHARS;
     format!(
         r#"
+        SELECT * FROM (
         (SELECT r.id, 'response'::text AS kind, r.claim_id, s.slug AS claim_slug,
                 substring(s.claim FROM 1 FOR 400) AS claim_head,
                 s.battle_id, b.slug AS battle_slug, b.title AS battle_title,
@@ -612,6 +632,8 @@ fn notifications_sql() -> String {
             AND {k_mention}
           ORDER BY c.created_at DESC, c.id DESC
           LIMIT $4)
+        ) n
+        WHERE ($7::text[] IS NULL OR n.kind = ANY($7))
         ORDER BY created_at DESC, id DESC
         LIMIT $4
         "#,
@@ -655,21 +677,78 @@ pub async fn user_notifications(
     cursor: Option<&str>,
     limit: i64,
 ) -> Result<(Vec<NotificationItem>, PaginationMeta), ApiError> {
-    let limit = limit.clamp(1, 100);
-    let fetch_limit = limit + 1;
-    let cur = decode_cursor(cursor);
+    user_notifications_filtered(pool, user_id, cursor, limit, &NotificationFilter::default()).await
+}
 
-    let rows = sqlx::query_as::<_, NotificationRow>(&notifications_sql())
+async fn read_watermark(pool: &PgPool, user_id: Uuid) -> Result<Option<DateTime<Utc>>, ApiError> {
+    sqlx::query_scalar::<_, Option<DateTime<Utc>>>(
+        "SELECT last_notifications_seen_at FROM users WHERE id = $1",
+    )
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await
+    .map(Option::flatten)
+    .map_err(|e| ApiError::Internal(e.into()))
+}
+
+async fn fetch_rows(
+    pool: &PgPool,
+    user_id: Uuid,
+    cur: Option<Cursor>,
+    fetch_limit: i64,
+    filter: &NotificationFilter,
+    watermark: Option<DateTime<Utc>>,
+) -> Result<Vec<NotificationRow>, ApiError> {
+    sqlx::query_as::<_, NotificationRow>(&notifications_sql())
         .bind(user_id)
         .bind(cur.map(|c| c.ts))
         .bind(cur.map(|c| c.id))
         .bind(fetch_limit)
+        .bind(filter.unread_only)
+        .bind(watermark)
+        .bind(filter.kinds.as_deref())
         .fetch_all(pool)
         .await
-        .map_err(|e| ApiError::Internal(e.into()))?;
+        .map_err(|e| ApiError::Internal(e.into()))
+}
+
+/// [`user_notifications`] narrowed by `filter`, with each item's
+/// `read` flag resolved.
+pub async fn user_notifications_filtered(
+    pool: &PgPool,
+    user_id: Uuid,
+    cursor: Option<&str>,
+    limit: i64,
+    filter: &NotificationFilter,
+) -> Result<(Vec<NotificationItem>, PaginationMeta), ApiError> {
+    let limit = limit.clamp(1, 100);
+    let fetch_limit = limit + 1;
+    let cur = decode_cursor(cursor);
+    let watermark = read_watermark(pool, user_id).await?;
+
+    let rows = fetch_rows(pool, user_id, cur, fetch_limit, filter, watermark).await?;
 
     let mut items: Vec<NotificationItem> =
         rows.into_iter().map(NotificationRow::into_item).collect();
+
+    let ids: Vec<Uuid> = items.iter().map(|i| i.id).collect();
+    let read_ids: std::collections::HashSet<Uuid> = if ids.is_empty() {
+        Default::default()
+    } else {
+        sqlx::query_scalar::<_, Uuid>(
+            "SELECT item_id FROM notification_reads WHERE user_id = $1 AND item_id = ANY($2)",
+        )
+        .bind(user_id)
+        .bind(&ids)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| ApiError::Internal(e.into()))?
+        .into_iter()
+        .collect()
+    };
+    for item in &mut items {
+        item.read = read_ids.contains(&item.id) || watermark.is_some_and(|w| item.created_at <= w);
+    }
 
     // Resolve actor display names in one IN query.
     let mut author_ids: Vec<Uuid> = items.iter().filter_map(|i| i.author_id).collect();
@@ -695,4 +774,72 @@ pub async fn user_notifications(
     Ok(finalize_page(items, limit, |a: &NotificationItem| {
         Cursor::new(a.created_at, a.id)
     }))
+}
+
+/// Number of unread notifications, capped at [`UNREAD_COUNT_CAP`] + 1 so
+/// the UI can show "99+" without counting the whole history.
+pub async fn unread_count(pool: &PgPool, user_id: Uuid) -> Result<i64, ApiError> {
+    let watermark = read_watermark(pool, user_id).await?;
+    let filter = NotificationFilter {
+        unread_only: true,
+        kinds: None,
+    };
+    let rows = fetch_rows(
+        pool,
+        user_id,
+        None,
+        UNREAD_COUNT_CAP + 1,
+        &filter,
+        watermark,
+    )
+    .await?;
+    Ok(rows.len() as i64)
+}
+
+/// Mark notification items read for `user_id`. Unknown ids are stored
+/// harmlessly (they can only ever match that user's own feed).
+pub async fn mark_read(pool: &PgPool, user_id: Uuid, item_ids: &[Uuid]) -> Result<(), ApiError> {
+    if item_ids.is_empty() {
+        return Ok(());
+    }
+    sqlx::query(
+        "INSERT INTO notification_reads (user_id, item_id) SELECT $1, unnest($2::uuid[]) \
+         ON CONFLICT (user_id, item_id) DO NOTHING",
+    )
+    .bind(user_id)
+    .bind(item_ids)
+    .execute(pool)
+    .await
+    .map_err(|e| ApiError::Internal(e.into()))?;
+    Ok(())
+}
+
+/// Mark everything read: move the watermark to now (or the newest item,
+/// if a writer's clock ran ahead) and drop the per-item rows it covers.
+pub async fn mark_all_read(pool: &PgPool, user_id: Uuid) -> Result<(), ApiError> {
+    let newest = fetch_rows(pool, user_id, None, 1, &NotificationFilter::default(), None)
+        .await?
+        .first()
+        .map(|r| r.created_at);
+    let mut tx = pool
+        .begin()
+        .await
+        .map_err(|e| ApiError::Internal(e.into()))?;
+    sqlx::query(
+        "UPDATE users SET last_notifications_seen_at = GREATEST(now(), $2::timestamptz) WHERE id = $1",
+    )
+    .bind(user_id)
+    .bind(newest)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| ApiError::Internal(e.into()))?;
+    sqlx::query("DELETE FROM notification_reads WHERE user_id = $1")
+        .bind(user_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| ApiError::Internal(e.into()))?;
+    tx.commit()
+        .await
+        .map_err(|e| ApiError::Internal(e.into()))?;
+    Ok(())
 }

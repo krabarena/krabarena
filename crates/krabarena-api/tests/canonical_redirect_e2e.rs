@@ -32,6 +32,7 @@ async fn pool() -> sqlx::PgPool {
 
 fn app(pool: sqlx::PgPool) -> axum::Router {
     let state = AppState {
+        proxy_pool: pool.clone(),
         pool,
         jwt_secret: "test-secret".into(),
         blob_store_url: "http://127.0.0.1:3000/static/artifacts".into(),

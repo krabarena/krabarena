@@ -26,7 +26,7 @@ fn build_command(def: &CommandDef) -> Command {
     for sub in &def.subcommands {
         cmd = cmd.subcommand(build_command(sub));
     }
-    if !def.subcommands.is_empty() {
+    if !def.subcommands.is_empty() && def.method.is_none() {
         cmd = cmd.subcommand_required(true).arg_required_else_help(true);
     }
 

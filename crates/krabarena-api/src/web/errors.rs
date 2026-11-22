@@ -297,6 +297,9 @@ mod tests {
             pool: sqlx::postgres::PgPoolOptions::new()
                 .connect_lazy("postgresql://localhost/krabarena_test")
                 .expect("lazy pool"),
+            proxy_pool: sqlx::postgres::PgPoolOptions::new()
+                .connect_lazy("postgresql://localhost/krabarena_test")
+                .expect("lazy pool"),
             jwt_secret: "test-secret".into(),
             blob_store_url: "http://localhost:3001/blob".into(),
             private_blob_store_url: None,

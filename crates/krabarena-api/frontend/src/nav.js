@@ -1,15 +1,23 @@
-import { getAgentNotifications, logoutVoter } from "./api.js";
+import {
+  getAgentNotifications,
+  getAgentNotificationsUnreadCount,
+  logoutVoter,
+  markAgentNotificationRead,
+  markAllAgentNotificationsRead
+} from "./api.js";
 import { HTTP_STATUS } from "./http-status.js";
 import {
-  clearAuthSession,
-  clearVoterSession,
-  getAuthSession,
-  getSessionValue,
-  setLoginReturn,
-  setSessionValue
-} from "./session.js";
+  notificationActor,
+  notificationBody,
+  notificationHref,
+  notificationLabel,
+  openNotification,
+  unreadBadgeText
+} from "./notification-format.js";
+import { clearAuthSession, clearVoterSession, getAuthSession, setLoginReturn } from "./session.js";
 
-const NOTIFICATIONS_SEEN_KEY = "profile_agent_notifications_seen_at";
+const BELL_POLL_MS = 60_000;
+const BELL_ROWS = 20;
 
 export function initNav() {
   const session = getAuthSession();
@@ -140,41 +148,62 @@ function initNotificationBell(voterToken) {
     .filter((instance) => instance.btn && instance.dropdown);
   if (!instances.length) return;
 
-  let notificationData = null;
+  let items = null;
+  let count = { unread: 0, capped: false };
   instances.forEach((instance) => {
     instance.btn.hidden = false;
   });
 
-  const renderAllLists = () => {
-    const unread = renderBellLists(instances, notificationData);
-    instances.forEach((instance) => {
-      if (instance.markAll) instance.markAll.hidden = unread === 0;
-    });
+  const signedOut = () => {
+    clearVoterSession();
+    items = null;
+    resetNotificationUi(instances);
+    syncSignedOutNav();
   };
 
   const updateBadges = () => {
-    const count = notificationData?.items ? unreadCount(notificationData.items) : 0;
+    const text = unreadBadgeText(count);
     instances.forEach((instance) => {
-      if (!instance.badge) return;
-      instance.badge.textContent = count > 9 ? "9+" : String(count);
-      instance.badge.hidden = count === 0;
+      if (instance.badge) {
+        instance.badge.textContent = text;
+        instance.badge.hidden = !text;
+      }
+      if (instance.markAll) instance.markAll.hidden = !text;
     });
   };
 
-  const loadNotifications = async ({ renderList = false } = {}) => {
+  const markOne = (item) => {
+    if (!item.read && !count.capped) count = { ...count, unread: Math.max(0, count.unread - 1) };
+    updateBadges();
+    return markAgentNotificationRead(item.id);
+  };
+
+  const renderLists = () => {
+    instances.forEach((instance) => {
+      if (!instance.list) return;
+      instance.list.replaceChildren(bellListFragment(items, markOne));
+    });
+  };
+
+  const loadCount = async () => {
     try {
-      const response = await getAgentNotifications({ limit: 50 });
-      if (response.status === HTTP_STATUS.UNAUTHORIZED) {
-        clearVoterSession();
-        notificationData = null;
-        resetNotificationUi(instances);
-        syncSignedOutNav();
-        return;
-      }
+      const response = await getAgentNotificationsUnreadCount();
+      if (response.status === HTTP_STATUS.UNAUTHORIZED) return signedOut();
       if (!response.ok || !response.data?.data) return;
-      notificationData = response.data.data;
+      count = response.data.data;
       updateBadges();
-      if (renderList) renderAllLists();
+    } catch {
+      // Header notification failures should not affect page navigation.
+    }
+  };
+
+  const loadItems = async () => {
+    try {
+      const response = await getAgentNotifications({ limit: BELL_ROWS });
+      if (response.status === HTTP_STATUS.UNAUTHORIZED) return signedOut();
+      if (!response.ok || !response.data?.data) return;
+      items = response.data.data;
+      renderLists();
     } catch {
       // Header notification failures should not affect page navigation.
     }
@@ -195,15 +224,24 @@ function initNotificationBell(voterToken) {
       instance.btn.setAttribute("aria-expanded", wasOpen ? "false" : "true");
       instance.dropdown.hidden = wasOpen;
       if (!wasOpen) {
-        instance.list?.replaceChildren(emptyBellNode("Loading..."));
-        loadNotifications({ renderList: true });
+        if (!items) instance.list?.replaceChildren(emptyBellNode("Loading..."));
+        loadItems();
+        loadCount();
       }
     });
-    instance.markAll?.addEventListener("click", (event) => {
+    instance.markAll?.addEventListener("click", async (event) => {
       event.stopPropagation();
-      setSessionValue(NOTIFICATIONS_SEEN_KEY, new Date().toISOString());
+      items?.items?.forEach((item) => {
+        item.read = true;
+      });
+      count = { unread: 0, capped: false };
       updateBadges();
-      renderAllLists();
+      renderLists();
+      try {
+        await markAllAgentNotificationsRead();
+      } catch {
+        loadCount();
+      }
     });
   });
 
@@ -212,7 +250,10 @@ function initNotificationBell(voterToken) {
     closeAll(null);
   });
 
-  loadNotifications();
+  loadCount();
+  window.setInterval(() => {
+    if (document.visibilityState === "visible") loadCount();
+  }, BELL_POLL_MS);
 }
 
 function resetNotificationUi(instances) {
@@ -265,34 +306,27 @@ function syncSignedOutNav() {
   if (drawerLogin) drawerLogin.hidden = false;
 }
 
-function renderBellLists(instances, data) {
-  let unread = 0;
-  instances.forEach((instance) => {
-    if (!instance.list) return;
-    const fragment = document.createDocumentFragment();
-    if (!data?.agent || !data.items?.length) {
-      fragment.append(emptyBellNode("No notifications yet."));
-    } else {
-      unread = unreadCount(data.items);
-      data.items.slice(0, 20).forEach((item) => {
-        fragment.append(bellItemNode(item));
-      });
-    }
-    instance.list.replaceChildren(fragment);
+export function bellListFragment(data, markOne) {
+  const fragment = document.createDocumentFragment();
+  if (!data?.agent || !data.items?.length) {
+    fragment.append(emptyBellNode("No notifications yet."));
+    return fragment;
+  }
+  data.items.slice(0, BELL_ROWS).forEach((item) => {
+    fragment.append(bellItemNode(item, markOne));
   });
-  return unread;
+  return fragment;
 }
 
-function bellItemNode(item) {
+function bellItemNode(item, markOne) {
   const link = document.createElement("a");
   link.className = "bell-row";
-  link.href = `/claims/${item.claim_id}`;
+  link.href = notificationHref(item);
+  if (!item.read) link.classList.add("is-unread");
 
   const dot = document.createElement("span");
   dot.className = "bell-dot";
-  if (new Date(item.created_at).getTime() <= notificationsSeenCutoff()) {
-    dot.classList.add("is-seen");
-  }
+  if (item.read) dot.classList.add("is-seen");
   link.append(dot);
 
   const main = document.createElement("span");
@@ -300,30 +334,53 @@ function bellItemNode(item) {
 
   const meta = document.createElement("span");
   meta.className = "bell-row-meta";
-  if (item.kind) {
-    const kind = document.createElement("span");
-    kind.className = "bell-row-kind";
-    kind.textContent = item.kind;
-    meta.append(kind);
+  const kind = document.createElement("span");
+  kind.className = "bell-row-kind";
+  kind.textContent = notificationLabel(item);
+  meta.append(kind);
+  if (item.kind === "response") {
+    const verdict = verdictNode(item.verdict);
+    if (verdict) meta.append(verdict);
   }
-  const verdict = verdictNode(item.verdict);
-  if (verdict) meta.append(verdict);
-
+  const actor = notificationActor(item);
+  if (actor) {
+    const who = document.createElement("span");
+    who.className = "bell-row-actor";
+    who.textContent = actor;
+    meta.append(who);
+  }
   const time = document.createElement("span");
   time.className = "bell-row-time";
   time.textContent = relativeShortTime(item.created_at);
   meta.append(time);
   main.append(meta);
 
-  const body = item.body || item.failure_reason || "";
-  if (body) {
+  if (item.title) {
+    const title = document.createElement("span");
+    title.className = "bell-row-title";
+    title.textContent = item.title;
+    main.append(title);
+  }
+
+  const preview = notificationBody(item);
+  if (preview) {
     const text = document.createElement("span");
     text.className = "bell-row-body";
-    text.textContent = body.slice(0, 120);
+    text.textContent = preview;
     main.append(text);
   }
 
   link.append(main);
+  link.addEventListener("click", (event) => {
+    link.classList.remove("is-unread");
+    dot.classList.add("is-seen");
+    openNotification(event, item, {
+      markRead: () => markOne(item),
+      navigate: (href) => {
+        window.location.href = href;
+      }
+    });
+  });
   return link;
 }
 
@@ -340,16 +397,6 @@ function emptyBellNode(text) {
   node.className = "bell-empty";
   node.textContent = text;
   return node;
-}
-
-function notificationsSeenCutoff() {
-  const value = getSessionValue(NOTIFICATIONS_SEEN_KEY);
-  return value ? new Date(value).getTime() : 0;
-}
-
-function unreadCount(items) {
-  const cutoff = notificationsSeenCutoff();
-  return items.filter((item) => new Date(item.created_at).getTime() > cutoff).length;
 }
 
 function relativeShortTime(iso) {
