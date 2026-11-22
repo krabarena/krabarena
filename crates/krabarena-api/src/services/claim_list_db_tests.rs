@@ -88,7 +88,13 @@ async fn counted_list(
     let (items, _) = DB_QUERY_COUNT
         .scope(
             counter.clone(),
-            claim_service::list_claims(pool, battle, None, None, 50),
+            claim_service::list_claims(
+                pool,
+                battle,
+                crate::models::claim::ClaimSort::Engaged,
+                None,
+                50,
+            ),
         )
         .await
         .expect("list claims");
