@@ -28,7 +28,7 @@ jobs:
   smoke:
     if: github.repository == 'krabarena/krabarena'
     name: Production web smoke
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       smoke_failed: ${{ steps.run-smoke.outputs.smoke_failed }}
       pytest_exit_code: ${{ steps.run-smoke.outputs.pytest_exit_code }}
@@ -161,7 +161,7 @@ jobs:
     name: Mark failed after triage
     needs: [smoke, triage]
     if: ${{ always() && needs.smoke.result == 'success' && needs.smoke.outputs.smoke_failed == 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Preserve failed smoke status
         run: |
