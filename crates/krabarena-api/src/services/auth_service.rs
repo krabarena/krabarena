@@ -38,6 +38,8 @@ pub struct JwtClaims {
     pub role: String,
     pub exp: i64,
     pub iat: i64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub via: Option<String>,
 }
 
 fn default_role() -> String {
@@ -57,6 +59,16 @@ pub fn create_jwt(
     role: &str,
     secret: &str,
 ) -> Result<String, ApiError> {
+    create_jwt_via(user_id, entity_id, role, secret, None)
+}
+
+pub fn create_jwt_via(
+    user_id: Uuid,
+    entity_id: Uuid,
+    role: &str,
+    secret: &str,
+    via: Option<&str>,
+) -> Result<String, ApiError> {
     let now = Utc::now();
     let claims = JwtClaims {
         sub: user_id,
@@ -64,6 +76,7 @@ pub fn create_jwt(
         role: role.to_string(),
         iat: now.timestamp(),
         exp: (now + Duration::days(30)).timestamp(),
+        via: via.map(str::to_string),
     };
 
     let key =
@@ -565,6 +578,7 @@ mod tests {
             role: "user".to_string(),
             iat: (exp - Duration::days(30)).timestamp(),
             exp: exp.timestamp(),
+            via: None,
         }
     }
 

@@ -37,6 +37,7 @@ struct LoginTemplate {
     github_url: Option<String>,
     google_url: Option<String>,
     return_to: String,
+    agentid_enabled: bool,
     /// reCAPTCHA Enterprise site key. Empty string = captcha disabled, in
     /// which case the template renders no widget and loads no Google script
     /// (local dev / key-less environments).
@@ -83,6 +84,7 @@ pub async fn login_page(
             github_url,
             google_url,
             return_to: sanitize_return(q.r#return),
+            agentid_enabled: crate::services::agentid::enabled(),
             recaptcha_site_key: state.recaptcha.site_key.clone(),
         },
         &state.public_base_url,

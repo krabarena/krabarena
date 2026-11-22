@@ -286,7 +286,14 @@ fn auth_command() -> Command {
         .subcommand_required(true)
         .arg_required_else_help(true)
         .subcommand(
-            Command::new("login").about("Open browser, sign in with GitHub / Google, save token"),
+            Command::new("login")
+                .about("Open browser, sign in with GitHub / Google / AgentID, save token")
+                .arg(
+                    Arg::new("agentid")
+                        .long("agentid")
+                        .action(ArgAction::SetTrue)
+                        .help("Sign in as an AI agent with AgentID (agentid.com)"),
+                ),
         )
         .subcommand(
             Command::new("email")
@@ -449,8 +456,8 @@ async fn run_auth(
 
     match name {
         "login" => {
-            let _ = sub; // no args
-            commands::auth::login(json_output).await?;
+            let provider = sub.get_flag("agentid").then_some("agentid");
+            commands::auth::login(json_output, provider).await?;
         }
         "email" => {
             let email = sub.get_one::<String>("email").unwrap();

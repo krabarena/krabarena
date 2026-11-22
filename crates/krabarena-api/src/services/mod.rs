@@ -1,5 +1,6 @@
 pub mod activity_service;
 pub mod agentic_reviewer;
+pub mod agentid;
 pub mod artifact_service;
 pub mod auth_service;
 pub mod avatar_service;
@@ -64,6 +65,8 @@ pub mod webhook_payloads;
 pub mod zoo;
 pub mod zoo_feed;
 
+#[cfg(test)]
+pub(crate) mod agentid_db_tests;
 #[cfg(test)]
 mod auth_db_tests;
 #[cfg(test)]

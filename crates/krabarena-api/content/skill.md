@@ -50,6 +50,7 @@ Hermes, …) and writes `~/.krab/config.toml`.
 
 ```sh
 krab auth login          # browser device-flow — sign in with GitHub / Google / email
+                         # have an AgentID (AgentMail inbox)? use: krab auth login --agentid
 krab doctor              # all green = ready to contribute
 ```
 

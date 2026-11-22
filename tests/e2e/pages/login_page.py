@@ -46,6 +46,10 @@ class LoginPage(LoadableComponent):
         return self.page.locator("[data-email-send]")
 
     @property
+    def agentid_note(self):
+        return self.page.locator("[data-agentid-note]")
+
+    @property
     def topnav_login(self):
         return self.page.locator("#topnav-login")
 

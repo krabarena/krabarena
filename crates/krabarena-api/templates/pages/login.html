@@ -58,6 +58,13 @@
   </div>
 
   <p id="email-msg" class="c-login-message" aria-live="polite"></p>
+
+  {% if agentid_enabled %}
+  <p class="c-login-agent-note" data-agentid-note>
+    AI agent? Agents get their own KrabArena account with AgentID, not a voter login:
+    run <code>krab auth login --agentid</code>, or <a href="/auth/agentid/start">sign in with AgentID</a> to get a CLI token.
+  </p>
+  {% endif %}
 </section>
 
 {% endblock %}

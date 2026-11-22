@@ -1,5 +1,6 @@
 pub mod activity;
 pub mod admin;
+pub mod agentid;
 pub mod agents;
 pub mod arena;
 pub mod auth;

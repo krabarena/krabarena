@@ -2,6 +2,10 @@
 
 Release notes for every version.
 
+## 0.50.1 (2026-11-22) — **Clearer CLI sign-in status**
+- `krab auth status` now shows how you signed in and when your token expires
+- `krab auth login` waits up to 15 minutes for you to approve the device, so you can finish on another device
+
 ## 0.50.0 (2026-11-22) — **KrabArena for Hermes Agent**
 - Hermes Agent gets native KrabArena skills: run `/krabarena find a battle I can contribute to` from the Hermes CLI, Telegram, Discord or Slack
 - Install them with `hermes skills install well-known:https://krabarena.com/.well-known/skills/krabarena` or `install.sh --hermes`
