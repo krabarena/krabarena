@@ -427,18 +427,18 @@ async fn proxy_request(
     {
         return Ok(resp);
     }
-    let (battle_id, spec) = match resolve_proxy_target(&state.pool, &battle_id_raw, &service).await
-    {
-        Ok(v) => v,
-        Err(e) => {
-            if !matches!(e, ApiError::Internal(_))
-                && let Some(limiter) = state.rate_limiter.as_ref()
-            {
-                limiter.record_proxy_miss(user_id).await;
+    let (battle_id, spec) =
+        match resolve_proxy_target(&state.proxy_pool, &battle_id_raw, &service).await {
+            Ok(v) => v,
+            Err(e) => {
+                if !matches!(e, ApiError::Internal(_))
+                    && let Some(limiter) = state.rate_limiter.as_ref()
+                {
+                    limiter.record_proxy_miss(user_id).await;
+                }
+                return Err(e);
             }
-            return Err(e);
-        }
-    };
+        };
     let svc = &spec.services[&service];
 
     // Sponsor-defined endpoint allowlist: without it a Claimer can call
@@ -507,7 +507,7 @@ async fn proxy_request(
     let flat_micro = proxy_billing::flat_micro_per_request(svc.cost_per_1k_cents);
     let abandon_micro = proxy_billing::abandoned_micro(svc.billing.as_ref(), flat_micro);
     let charge_id = proxy_service::reserve_charge(
-        &state.pool,
+        &state.proxy_pool,
         &spec,
         battle_id,
         user_id,
@@ -518,7 +518,7 @@ async fn proxy_request(
     )
     .await?;
     let log_ctx = ProxyLogCtx {
-        pool: state.pool.clone(),
+        pool: state.proxy_pool.clone(),
         log_id,
         battle_id,
         user_id,
@@ -722,7 +722,7 @@ async fn proxy_request(
     // Settle the reservation, then log (async, non-blocking). The legacy
     // per-row `cost_cents` reflects what was actually charged (rounded
     // up to a whole cent, 0 for a deduped poll).
-    let pool = state.pool.clone();
+    let pool = state.proxy_pool.clone();
     tokio::spawn(async move {
         let micro = proxy_service::settle_charge(&pool, charge_id, &decision).await;
         log_ctx

@@ -949,6 +949,14 @@ async fn main() -> anyhow::Result<()> {
         }
     };
 
+    let proxy_pool = match db::create_proxy_pool(&database_url).await {
+        Ok(p) => p,
+        Err(e) => {
+            tracing::warn!(error = %e, "Failed to open the proxy pool, sharing the main pool");
+            pool.clone()
+        }
+    };
+
     // One-time backfill of `_sqlx_migrations` for legacy databases
     // that were provisioned manually. Idempotent; safe to leave the
     // env var set across deploys, but the recommended runbook is
@@ -1133,6 +1141,7 @@ async fn main() -> anyhow::Result<()> {
 
     let state = AppState {
         pool: pool.clone(),
+        proxy_pool,
         jwt_secret,
         blob_store_url,
         private_blob_store_url,
@@ -1185,6 +1194,9 @@ mod tests {
     fn test_state() -> AppState {
         AppState {
             pool: PgPoolOptions::new()
+                .connect_lazy("postgresql://krab:krab@localhost:5432/krabarena")
+                .expect("test pool should be created lazily"),
+            proxy_pool: PgPoolOptions::new()
                 .connect_lazy("postgresql://krab:krab@localhost:5432/krabarena")
                 .expect("test pool should be created lazily"),
             jwt_secret: "test-secret".into(),
