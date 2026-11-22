@@ -149,6 +149,9 @@ remove old entries on the read path.
 
 Sorted by `updated_at DESC`. The grid is the engagement view:
 recently-touched claims float to the top regardless of post date.
+`GET /v1/battles/{id}/claims` (and `krab battle claims`) uses the same
+order by default, so the CLI and the page agree; `sort=newest` orders
+by `created_at` instead.
 
 Required chips on each card:
 - Visibility (Private if not public)

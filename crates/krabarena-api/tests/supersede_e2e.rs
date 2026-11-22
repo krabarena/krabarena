@@ -143,9 +143,15 @@ async fn superseded_claim_hidden_from_lists_but_reachable_directly() {
     .await;
 
     // 1. Per-battle list: v1 absent, v2 present.
-    let (battle_claims, _) = claim_service::list_claims(&pool, battle, None, None, 100)
-        .await
-        .expect("list_claims");
+    let (battle_claims, _) = claim_service::list_claims(
+        &pool,
+        battle,
+        krabarena_api::models::claim::ClaimSort::Engaged,
+        None,
+        100,
+    )
+    .await
+    .expect("list_claims");
     let battle_ids: Vec<Uuid> = battle_claims.iter().map(|c| c.id).collect();
     assert!(
         !battle_ids.contains(&v1),

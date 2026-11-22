@@ -62,7 +62,7 @@ pub async fn get_battle(
         ("status" = Option<String>, Query, description = "Filter by status (open|active|settled)"),
         ("domain" = Option<String>, Query, description = "Filter by domain tag"),
         ("limit"  = Option<i64>,    Query, description = "Page size (default 20)"),
-        ("cursor" = Option<String>, Query, description = "Pagination cursor (RFC3339 updated_at)"),
+        ("cursor" = Option<String>, Query, description = "Opaque pagination cursor from pagination.next_cursor"),
     ),
     responses((status = 200, description = "Battle list page")),
 )]
@@ -71,9 +71,10 @@ pub async fn list_battles(
     Query(query): Query<ListBattlesQuery>,
 ) -> Result<impl IntoResponse, ApiError> {
     let limit = query.limit.unwrap_or(20);
+    let status = battle_service::normalize_status_filter(query.status.as_deref())?;
     let (items, pagination) = battle_service::list_battles(
         &state.pool,
-        query.status.as_deref(),
+        status.as_deref(),
         query.domain.as_deref(),
         query.cursor.as_deref(),
         limit,
