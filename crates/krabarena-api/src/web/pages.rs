@@ -3878,6 +3878,9 @@ struct BattleTemplate {
     /// Page number the sentinel requests next (always 2 from the SSR
     /// first page).
     claims_next_page: i64,
+    parent_battle: Option<crate::web::page_extras::LinkedBattle>,
+    sub_battles: Vec<crate::web::page_extras::LinkedBattle>,
+    battle_comment_threads: Vec<crate::web::comment_threads::CommentView>,
 }
 
 #[derive(Template)]
@@ -3922,6 +3925,7 @@ struct ClaimTemplate {
     /// Comments flattened into threads (top-level newest first, each
     /// followed by its replies oldest first) — see `web::comment_threads`.
     comment_threads: Vec<crate::web::comment_threads::CommentView>,
+    superseded_by_href: Option<String>,
     user_names: std::collections::HashMap<String, String>,
     /// `user_id (string) → avatar URL` for every author touching this
     /// claim (the claim author plus every verifier / refuter /
@@ -7347,6 +7351,9 @@ pub async fn battle_detail(
         .cloned()
         .collect();
 
+    let extras =
+        crate::web::page_extras::load_battle_extras(&state.pool, battle.id, battle.parent_id).await;
+
     let html = BattleTemplate {
         meta: meta.clone(),
         share_url,
@@ -7363,6 +7370,9 @@ pub async fn battle_detail(
         battle_uuid: battle.id.to_string(),
         claims_has_more,
         claims_next_page: 2,
+        parent_battle: extras.parent,
+        sub_battles: extras.sub_battles,
+        battle_comment_threads: extras.comment_threads,
     };
     let md = BattleMdTemplate {
         meta,
@@ -8000,6 +8010,9 @@ pub async fn claim_detail(
         .filter(|t| !t.is_empty())
         .unwrap_or_else(|| claim_view.claim_title.clone());
 
+    let superseded_by_href =
+        crate::web::page_extras::load_claim_successor_href(&state.pool, claim_row.id).await;
+
     let html = ClaimTemplate {
         meta: meta.clone(),
         share_url,
@@ -8013,6 +8026,7 @@ pub async fn claim_detail(
         refutes: refutes.clone(),
         verification_timeline,
         comment_threads: comment_threads.clone(),
+        superseded_by_href,
         user_names: user_names.clone(),
         user_avatars,
     };
@@ -11661,6 +11675,7 @@ mod tests {
                 refutes: Vec::new(),
                 verification_timeline: Vec::new(),
                 comment_threads: Vec::new(),
+                superseded_by_href: None,
                 user_names: std::collections::HashMap::new(),
                 user_avatars: std::collections::HashMap::new(),
             }
@@ -11676,6 +11691,41 @@ mod tests {
             assert!(html.contains("<h2>Leaderboard</h2>"));
             assert!(!html.contains("All results"));
             assert!(html.contains("lb-fold\" open>"));
+        }
+
+        #[test]
+        fn claim_page_shows_superseded_banner_only_when_a_successor_exists() {
+            let html = minimal_claim_template(None).render().expect("renders");
+            assert!(!html.contains("data-claim-superseded"));
+
+            let mut t = minimal_claim_template(None);
+            t.superseded_by_href = Some("/claims/newer-version".to_string());
+            let html = t.render().expect("renders");
+            assert!(html.contains("data-claim-superseded"));
+            assert!(html.contains("href=\"/claims/newer-version\""));
+        }
+
+        #[test]
+        fn claim_page_renders_vote_counts_and_buttons() {
+            let mut t = minimal_claim_template(None);
+            t.claim.upvote_count = 7;
+            t.claim.downvote_count = 3;
+            let html = t.render().expect("renders");
+            assert!(html.contains("data-claim-votes"));
+            assert!(html.contains("data-claim-vote=\"up\""));
+            assert!(html.contains("data-claim-vote=\"down\""));
+            assert!(html.contains("data-vote-count=\"up\">7<"));
+            assert!(html.contains("data-vote-count=\"down\">3<"));
+        }
+
+        #[test]
+        fn claim_and_battle_pages_name_the_real_login_command() {
+            let html = minimal_claim_template(None).render().expect("renders");
+            assert!(html.contains("krab auth login"));
+            assert!(!html.contains("<code>krab login</code>"));
+            let battle_tpl = include_str!("../../templates/pages/battle.html");
+            assert!(battle_tpl.contains("<code>krab auth login</code>"));
+            assert!(!battle_tpl.contains("<code>krab login</code>"));
         }
 
         #[test]

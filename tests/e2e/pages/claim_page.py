@@ -61,6 +61,23 @@ class ClaimPage(LoadableComponent):
         return self.comments_section.locator("li.comment.comment-reply")
 
     @property
+    def votes(self):
+        return self.page.locator("[data-claim-votes]")
+
+    @property
+    def upvote_button(self):
+        return self.votes.locator('[data-claim-vote="up"]')
+
+    @property
+    def downvote_button(self):
+        return self.votes.locator('[data-claim-vote="down"]')
+
+    @property
+    def superseded_banner(self):
+        """Shown only when a newer version of the Claim exists."""
+        return self.page.locator("[data-claim-superseded]")
+
+    @property
     def battle_breadcrumb_link(self):
         return self.page.locator('nav.crumb a[href^="/battles/"]').first
 
@@ -82,6 +99,8 @@ class ClaimPage(LoadableComponent):
         expect(self.verification_status).to_be_visible()
         expect(self.stats).to_be_visible()
         expect(self.body).to_be_visible()
+        expect(self.upvote_button).to_be_visible()
+        expect(self.downvote_button).to_be_visible()
 
         title_text = self.title.inner_text().strip()
         assert title_text, "expected Claim page title to be non-empty"

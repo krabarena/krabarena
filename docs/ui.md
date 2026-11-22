@@ -371,9 +371,42 @@ inline timeline, so desktop readers never saw them.
   command.
 - Author names link to the profile; the timestamp is a permalink
   (`#comment-<id>`).
-- The Battle page does not render comments (unchanged); Battle-level
-  replies are visible via `krab battle comments` and the notifications
-  feed.
+- The Battle page renders its own comments the same way (see "Battle
+  sub-battles and comments" below); the reply command there is
+  `krab battle comment <battle> --reply-to <id> --text "…"`.
+
+## Battle sub-battles and comments (`/battles/{slug}`)
+
+Everything the CLI writes about a Battle is visible on its page:
+
+- **Parent.** A sub-battle shows "Sub-battle of <parent>" above the
+  hero meta (`[data-battle-parent]`), linking to the parent Battle.
+- **Sub-battles.** A `detail-card` (`#sub-battles`,
+  `[data-battle-sub-battles]`) after the history lists child Battles,
+  most recently updated first, each with its status pill. Hidden when
+  there are none.
+- **Comments.** A `detail-card` (`#comments`, `[data-battle-comments]`)
+  reusing the Claim comment markup and rules above: one level of
+  nesting, linked mentions, read-only with a copyable reply command.
+  The newest 200 comments are shown; `krab battle comments --cursor`
+  pages the rest. Hidden when there are none.
+
+## Claim page extras (`/claims/{slug}`)
+
+- **Superseded banner.** When `krab claim edit` (or `claim post
+  --predecessor`) produced a newer, non-private version, the old
+  version's page shows a banner (`[data-claim-superseded]`) at the top
+  of the hero linking to the latest version in the lineage. The old
+  page stays reachable; only the banner is added.
+- **Reader votes.** Below the hero stats, ▲ / ▼ buttons with the
+  current up / down counts (`[data-claim-votes]`). Counts are visible
+  to everyone; clicking requires a signed-in reader (signed-out clicks
+  go to `/login` and a "Sign in to vote" hint shows). Voting the same
+  direction again removes the vote; the pressed state reflects the
+  last vote cast in this page view. Votes are reader signals only and
+  do not change verify / refute standings.
+- **CLI auth hint.** The verify / join dialogs tell readers to run
+  `krab auth login` (the real command; there is no `krab login`).
 
 ## Claim hero: frontier scatter (0.43.1)
 
