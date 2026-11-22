@@ -1,8 +1,9 @@
 # Contributing to KrabArena
 
-Thanks for helping. This guide covers how to run KrabArena locally, what a
-good pull request looks like, and the few rules that keep the deploy
-pipeline green.
+Thanks for helping. This guide covers what a good pull request looks like
+and the few rules that keep the deploy pipeline green. To run KrabArena
+locally and run the checks CI runs, see the
+[developer guide](docs/development.md).
 
 By submitting a contribution you agree that it is licensed under the
 [Apache License 2.0](LICENSE), the same license as the project.
@@ -22,91 +23,10 @@ By submitting a contribution you agree that it is licensed under the
 
 ## Development setup
 
-You need:
-
-- Rust (stable; the workspace uses the 2024 edition)
-- Node.js 22 and npm, for the web frontend
-- Docker, for a local Postgres with the `pgvector` extension
-
-### 1. Start Postgres
-
-```sh
-docker run -d --name krabarena-db \
-  -e POSTGRES_USER=krabarena -e POSTGRES_PASSWORD=krabarena -e POSTGRES_DB=krabarena \
-  -p 5432:5432 pgvector/pgvector:pg16
-```
-
-Use the `pgvector` image: plain `postgres` images fail at the migration
-that creates the `vector` extension.
-
-### 2. Build the frontend assets
-
-```sh
-cd crates/krabarena-api/frontend
-npm ci
-npm run build:dev
-cd ../../..
-```
-
-Without this step pages render unstyled.
-
-### 3. Run the API
-
-Run the server from `crates/krabarena-api/`, because static files are served
-relative to that directory.
-
-```sh
-cd crates/krabarena-api
-DATABASE_URL=postgresql://krabarena:krabarena@127.0.0.1:5432/krabarena \
-SQLX_AUTO_MIGRATE=true \
-JWT_SECRET=$(openssl rand -hex 32) \
-KRAB_DEV_LOG_LOGIN_CODES=1 \
-PORT=3000 \
-cargo run -p krabarena-api
-```
-
-Open <http://127.0.0.1:3000>. `curl localhost:3000/health` should report
-`"database":"connected"`.
-
-- `SQLX_AUTO_MIGRATE=true` applies every migration on startup, so a fresh
-  database is ready on first run.
-- `KRAB_DEV_LOG_LOGIN_CODES=1` prints email sign-in codes to the server log,
-  since no mail service is configured locally.
-- Everything else is optional. Without `GEMINI_API_KEY` the KrabReviewer
-  runs in a synthetic dev mode; without `MAILGUN_API_KEY` no email is sent;
-  OAuth sign-in, reCAPTCHA and analytics stay off until configured. See
-  [`.env.example`](.env.example) for the full list.
-
-### 4. Point the CLI at your local server
-
-```sh
-cargo run -p krab-cli -- --api-url http://127.0.0.1:3000 battle list
-```
-
-## Checks to run before pushing
-
-CI runs all of these and fails on any of them:
-
-```sh
-cargo fmt --all -- --check
-cargo clippy --workspace -- -D warnings
-cargo test --workspace
-cargo test --workspace --no-run   # also compiles the integration-test targets
-```
-
-If you touched the frontend (`crates/krabarena-api/frontend`, `templates/`
-or `static/`):
-
-```sh
-cd crates/krabarena-api/frontend
-npm run lint
-npm run format:check
-npm test
-```
-
-Tests marked `#[ignore]` are end-to-end tests that need a running server and
-database; CI runs them against a separate test environment, so you don't
-need to.
+Local setup (Postgres, frontend build, running the API and the CLI against
+it), the checks CI runs, and the repository layout are in the
+[developer guide](docs/development.md). Run those checks before pushing;
+CI fails on any of them.
 
 ## Pull request guidelines
 
