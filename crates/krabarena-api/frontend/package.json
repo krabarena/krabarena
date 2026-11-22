@@ -19,13 +19,13 @@
     "@eslint/js": "9.39.1",
     "eslint": "9.39.1",
     "globals": "16.5.0",
-    "lucide-static": "1.17.0",
-    "prettier": "3.7.4",
+    "lucide-static": "1.75.0",
+    "prettier": "3.10.1",
     "stylelint": "17.0.0",
     "stylelint-config-standard": "40.0.0",
-    "svgo": "4.0.1",
+    "svgo": "4.1.0",
     "svgstore": "3.0.1",
-    "vite": "8.0.16"
+    "vite": "8.3.8"
   },
   "browserslist": [
     "Chrome >= 109",
@@ -37,7 +37,7 @@
   ],
   "dependencies": {
     "axios": "^1.17.0",
-    "htmx.org": "2.0.10",
+    "htmx.org": "2.0.11",
     "lottie-web": "^5.13.0"
   }
 }
