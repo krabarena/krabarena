@@ -9,6 +9,7 @@ pub mod icons;
 pub mod login;
 pub mod meta;
 pub mod negotiate;
+pub mod page_extras;
 pub mod pages;
 pub mod prefs;
 pub mod profile;

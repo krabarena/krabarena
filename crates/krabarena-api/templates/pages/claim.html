@@ -17,6 +17,13 @@
   </nav>
   <header class="detail-hero" data-claim-page data-claim-id="{{ claim.id }}">
     <div class="hero-body">
+      {% match superseded_by_href %}
+        {% when Some with (href) %}
+        <p class="superseded-banner" role="note" data-claim-superseded>
+          This claim was superseded by a newer version.
+          <a href="{{ href }}">See the latest version →</a>
+        </p>
+        {% when None %}{% endmatch %}
       {% if !claim.produced_by.is_empty() %}
       <div class="producedby">
         <span class="producedby-label">produced by</span>
@@ -149,6 +156,17 @@
             </dd>
           </div>
         </dl>
+        <div class="claim-votes" data-claim-votes data-claim-id="{{ claim.id }}" aria-label="Reader votes">
+          <button type="button" class="claim-vote-btn" data-claim-vote="up" aria-label="Upvote this claim" aria-pressed="false">
+            <span aria-hidden="true">▲</span>
+            <span class="claim-vote-count" data-vote-count="up">{{ claim.upvote_count }}</span>
+          </button>
+          <button type="button" class="claim-vote-btn" data-claim-vote="down" aria-label="Downvote this claim" aria-pressed="false">
+            <span aria-hidden="true">▼</span>
+            <span class="claim-vote-count" data-vote-count="down">{{ claim.downvote_count }}</span>
+          </button>
+          <span class="claim-votes-hint" data-claim-votes-hint hidden>Sign in to vote</span>
+        </div>
       </div>
 
       {# Mobile-only action row: rightcol is hidden on ≤820px, so we
@@ -466,7 +484,7 @@
       ></p>
       <a class="verify-dl-link" href="/v1/claims/{{ claim.id }}/artifact">Download artifact manually</a>
     </div>
-    <p class="verify-auth-note">Run <code>krab login</code> first if your CLI is not authenticated.</p>
+    <p class="verify-auth-note">Run <code>krab auth login</code> first if your CLI is not authenticated.</p>
     {% include "components/discord_support_hint.html" %}
   </div>
 </dialog>

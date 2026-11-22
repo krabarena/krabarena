@@ -97,3 +97,16 @@ export function voteBattleCandidate({ candidateId }, options = {}) {
 export function unvoteBattleCandidate({ candidateId }, options = {}) {
   return postJson(`/v1/battle-candidates/${candidateId}/unvote`, undefined, VOTER_AUTH, options);
 }
+
+export function castClaimVote({ claimId, voteType }, options = {}) {
+  return postJson(
+    `/v1/claims/${encodeURIComponent(claimId)}/votes`,
+    { vote_type: voteType },
+    VOTER_AUTH,
+    options
+  );
+}
+
+export function getClaimVotes({ claimId }, options = {}) {
+  return getJson(`/v1/claims/${encodeURIComponent(claimId)}/votes`, {}, options);
+}

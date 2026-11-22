@@ -109,10 +109,14 @@ async fn docs_index_markdown_returns_link_list() {
         .to_string();
     assert!(ct.contains("text/markdown"), "want markdown, got {ct}");
     let body = resp.text().await.expect("md body");
-    assert!(body.starts_with("# KrabArena docs"), "has heading");
     assert!(
-        body.contains("[Battle Proxy Spec](/docs/proxy-spec)"),
-        "proxy-spec entry"
+        body.starts_with("> Documentation index: "),
+        "llms.txt pointer"
+    );
+    assert!(body.contains("\n# KrabArena docs\n"), "has heading");
+    assert!(
+        body.contains("[Battle Proxy Spec](") && body.contains("/docs/proxy-spec.md)"),
+        "proxy-spec entry links the markdown variant"
     );
     assert!(
         !body.contains("/docs/og-render"),
@@ -203,9 +207,13 @@ async fn curl_get_proxy_spec_returns_raw_markdown() {
         ct.starts_with("text/markdown"),
         "expected text/markdown, got: {ct}"
     );
-    // Raw markdown — starts with the `# Title` heading, not HTML.
     assert!(
-        body.trim_start().starts_with("# Battle Proxy Spec"),
+        body.starts_with("> Documentation index: ") && body.contains("/llms.txt"),
+        "markdown docs start with the llms.txt pointer, got: {}",
+        &body[..body.len().min(200)]
+    );
+    assert!(
+        body.contains("\n\n# Battle Proxy Spec\n"),
         "expected raw markdown, got: {}",
         &body[..body.len().min(200)]
     );
@@ -238,7 +246,7 @@ async fn explicit_md_extension_always_returns_markdown() {
         "expected text/markdown for `.md` URL, got: {ct}"
     );
     assert!(
-        body.trim_start().starts_with("# Claim Structure"),
+        body.contains("\n\n# Claim Structure\n"),
         "expected raw `# Claim Structure` markdown body"
     );
     assert!(
@@ -321,4 +329,133 @@ async fn llms_txt_serves_plain_index() {
     assert!(ct.contains("text/plain"), "expected plain text, got {ct}");
     assert!(body.starts_with("# KrabArena"));
     assert!(body.contains("https://krabarena.com/skill.md"));
+}
+
+const PUBLIC_STEMS: &[&str] = &[
+    "agent",
+    "battles",
+    "battle-structure",
+    "claim-structure",
+    "proxy-spec",
+    "containerised-battles",
+    "webhooks",
+];
+
+async fn get_resp(path: &str, ua: &str) -> reqwest::Response {
+    client()
+        .get(format!("{}{}", base(), path))
+        .header(USER_AGENT, ua)
+        .send()
+        .await
+        .expect("HTTP request failed")
+}
+
+fn header_all(resp: &reqwest::Response, name: &str) -> String {
+    resp.headers()
+        .get_all(name)
+        .iter()
+        .filter_map(|v| v.to_str().ok())
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+#[tokio::test]
+#[ignore]
+async fn doc_html_advertises_markdown_alternate_and_llms_txt() {
+    let resp = get_resp("/docs/proxy-spec", BROWSER_UA).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert!(header_all(&resp, "vary").contains("Accept"));
+    assert!(header_all(&resp, "link").contains("</llms.txt>; rel=\"describedby\""));
+    let body = resp.text().await.unwrap();
+    assert!(
+        body.contains("<link rel=\"alternate\" type=\"text/markdown\" href=\"")
+            && body.contains("/docs/proxy-spec.md\">"),
+        "doc page must link its markdown variant"
+    );
+
+    let index = get_resp("/docs", BROWSER_UA).await;
+    assert!(header_all(&index, "vary").contains("Accept"));
+    let body = index.text().await.unwrap();
+    assert!(body.contains("/docs.md\">"), "docs index links /docs.md");
+}
+
+#[tokio::test]
+#[ignore]
+async fn negotiated_doc_markdown_varies_on_accept() {
+    let resp = get_resp("/docs/proxy-spec", CURL_UA).await;
+    assert!(header_all(&resp, "vary").contains("Accept"));
+    assert!(header_all(&resp, "link").contains("</llms.txt>"));
+}
+
+#[tokio::test]
+#[ignore]
+async fn unknown_markdown_doc_returns_markdown_404() {
+    for (path, ua) in [
+        ("/docs/this-doc-does-not-exist.md", BROWSER_UA),
+        ("/docs/this-doc-does-not-exist", CURL_UA),
+    ] {
+        let (status, ct, body) = fetch_with_ua(path, ua).await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "{path}");
+        assert!(ct.starts_with("text/markdown"), "{path}: got {ct}");
+        assert!(body.starts_with("# Doc not found"), "{path}");
+        assert!(body.contains("/llms.txt") && body.contains("/docs.md"));
+    }
+}
+
+#[tokio::test]
+#[ignore]
+async fn markdown_docs_index_and_bundle_cover_every_public_doc() {
+    let (status, ct, index) = fetch_with_ua("/docs.md", BROWSER_UA).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(ct.starts_with("text/markdown"), "got {ct}");
+    let (status, ct, bundle) = fetch_with_ua("/docs/llms-full.txt", BROWSER_UA).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(ct.starts_with("text/plain"), "got {ct}");
+    for stem in PUBLIC_STEMS {
+        assert!(
+            index.contains(&format!("/docs/{stem}.md)")),
+            "index: {stem}"
+        );
+        assert!(
+            bundle.contains(&format!("/docs/{stem}.md\n\n#")),
+            "bundle: {stem}"
+        );
+    }
+    assert!(bundle.contains("\n# Battle Proxy Spec\n"));
+    assert!(!bundle.contains("# KrabArena Admin CLI"));
+}
+
+#[tokio::test]
+#[ignore]
+async fn llms_txt_lists_docs_first_with_bundle_and_manifest() {
+    let (_, _, body) = fetch_with_ua("/llms.txt", CURL_UA).await;
+    let docs = body.find("\n## Docs\n").expect("Docs section");
+    let start = body.find("\n## Start here\n").expect("Start here");
+    assert!(docs < start, "Docs section comes first");
+    for stem in PUBLIC_STEMS {
+        assert!(body.contains(&format!("/docs/{stem}.md)")), "{stem}");
+    }
+    assert!(body.contains("/docs/llms-full.txt)"));
+    assert!(body.contains("/v1/cli/manifest)"));
+}
+
+#[tokio::test]
+#[ignore]
+async fn sitemap_lists_public_docs_only() {
+    let (_, _, body) = fetch_with_ua("/sitemap.xml", CURL_UA).await;
+    for stem in PUBLIC_STEMS {
+        assert!(body.contains(&format!("/docs/{stem}</loc>")), "{stem}");
+    }
+    assert!(!body.contains("/docs/admin-cli</loc>"));
+}
+
+#[tokio::test]
+#[ignore]
+async fn unlisted_doc_is_reachable_but_noindex() {
+    let (status, _, body) = fetch_with_ua("/docs/admin-cli", BROWSER_UA).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        body.contains("noindex"),
+        "unlisted docs carry robots noindex"
+    );
 }
