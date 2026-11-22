@@ -113,27 +113,7 @@ pub fn security_body(base: &str, expires: DateTime<Utc>) -> String {
 
 pub async fn sitemap_xml(State(state): State<AppState>) -> Response {
     let base = state.public_base_url.trim_end_matches('/');
-    let mut urls: Vec<SitemapEntry> = Vec::new();
-
-    // Static pages.
-    for (path, priority) in [
-        ("/", "1.0"),
-        ("/agents", "0.7"),
-        ("/arena", "0.7"),
-        ("/about", "0.5"),
-        ("/docs", "0.5"),
-        ("/claims/standalone", "0.4"),
-        ("/changelog", "0.3"),
-        ("/zoo", "0.6"),
-        ("/zoo/leaderboard", "0.5"),
-    ] {
-        urls.push(SitemapEntry {
-            loc: format!("{}{}", base, path),
-            lastmod: None,
-            priority: Some(priority.to_string()),
-        });
-    }
-
+    let mut urls = static_sitemap_entries(base);
     // Battles: prefer slug, fall back to UUID.
     let battles = sqlx::query_as::<_, (Option<String>, Uuid, DateTime<Utc>)>(
         "SELECT slug, id, updated_at FROM battles WHERE deleted_at IS NULL ORDER BY updated_at DESC LIMIT 5000",
@@ -226,6 +206,33 @@ struct SitemapEntry {
     priority: Option<String>,
 }
 
+fn static_sitemap_entries(base: &str) -> Vec<SitemapEntry> {
+    let pages = [
+        ("/", "1.0"),
+        ("/agents", "0.7"),
+        ("/arena", "0.7"),
+        ("/about", "0.5"),
+        ("/docs", "0.5"),
+        ("/claims/standalone", "0.4"),
+        ("/changelog", "0.3"),
+        ("/zoo", "0.6"),
+        ("/zoo/leaderboard", "0.5"),
+    ]
+    .into_iter()
+    .map(|(path, priority)| (path.to_string(), priority));
+    let docs = crate::routes::docs::PUBLIC_DOCS
+        .iter()
+        .map(|d| (format!("/docs/{}", d.stem), "0.5"));
+    pages
+        .chain(docs)
+        .map(|(path, priority)| SitemapEntry {
+            loc: format!("{base}{path}"),
+            lastmod: None,
+            priority: Some(priority.to_string()),
+        })
+        .collect()
+}
+
 fn xml_escape(s: &str) -> String {
     s.replace('&', "&amp;")
         .replace('<', "&lt;")
@@ -289,6 +296,23 @@ mod tests {
             "nothing is blocked wholesale"
         );
         assert!(body.contains("\nSitemap: https://krabarena.com/sitemap.xml\n"));
+    }
+
+    #[test]
+    fn sitemap_lists_every_public_doc_and_no_unlisted_ones() {
+        let locs: Vec<String> = static_sitemap_entries("https://krabarena.com")
+            .into_iter()
+            .map(|e| e.loc)
+            .collect();
+        for d in crate::routes::docs::PUBLIC_DOCS {
+            let want = format!("https://krabarena.com/docs/{}", d.stem);
+            assert!(locs.contains(&want), "missing {want}");
+        }
+        assert!(locs.contains(&"https://krabarena.com/docs".to_string()));
+        for stem in ["admin-cli", "ui", "og-render"] {
+            let unwanted = format!("https://krabarena.com/docs/{stem}");
+            assert!(!locs.contains(&unwanted), "{unwanted} must stay unlisted");
+        }
     }
 
     #[test]
