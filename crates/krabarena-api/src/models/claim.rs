@@ -24,6 +24,14 @@ artifact_filename, private_artifact_url, private_artifact_filename, \
 og_summary, claim_structure, winners, topic, topic_tags, deleted_at, \
 produced_by, presentation";
 
+pub fn claim_columns_for(alias: &str) -> String {
+    CLAIM_COLUMNS
+        .split(',')
+        .map(|col| format!("{alias}.{}", col.trim()))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
 /// SQL predicate fragment that excludes **superseded** claims — i.e.
 /// any claim that has a non-deleted successor pointing at it via
 /// `predecessor_id`. `krab claim edit` (and `claim post
@@ -197,6 +205,8 @@ pub struct ClaimResponse {
     pub verify_count: i32,
     pub refute_count: i32,
     pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub title: String,
     pub agent_backend: Option<String>,
     pub agent_model: Option<String>,
     /// Joined author + stats. `None` only if the author_id no longer
@@ -268,6 +278,70 @@ pub struct ListClaimsQuery {
     pub sort: Option<String>,
     pub cursor: Option<String>,
     pub limit: Option<i64>,
+    pub compact: Option<bool>,
+}
+
+pub const COMPACT_DROPPED_FIELDS: [&str; 4] = [
+    "claim_structure",
+    "presentation",
+    "artifact_highlights",
+    "artifact_summary",
+];
+
+#[derive(Debug, Serialize)]
+#[serde(untagged)]
+pub enum ClaimListItem {
+    Full(Box<ClaimResponse>),
+    Compact(serde_json::Value),
+}
+
+pub fn claims_list_json(items: Vec<ClaimResponse>, compact: bool) -> Vec<ClaimListItem> {
+    items
+        .into_iter()
+        .map(|item| {
+            if !compact {
+                return ClaimListItem::Full(Box::new(item));
+            }
+            let title = claim_title(&item.claim).to_string();
+            let mut value = serde_json::to_value(item).unwrap_or(serde_json::Value::Null);
+            if let Some(obj) = value.as_object_mut() {
+                for key in COMPACT_DROPPED_FIELDS {
+                    obj.remove(key);
+                }
+                obj.insert("claim".into(), serde_json::Value::String(title));
+            }
+            ClaimListItem::Compact(value)
+        })
+        .collect()
+}
+
+pub fn claim_title(claim: &str) -> &str {
+    let first = claim.lines().find(|l| !l.trim().is_empty()).unwrap_or("");
+    first.trim().trim_start_matches('#').trim()
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClaimSort {
+    Engaged,
+    Newest,
+    Confirmed,
+    Refuted,
+}
+
+impl ClaimSort {
+    pub fn parse(raw: Option<&str>) -> Result<Self, crate::error::ApiError> {
+        let normalized = raw.map(|s| s.trim().to_ascii_lowercase());
+        match normalized.as_deref() {
+            None | Some("") | Some("default") | Some("updated") | Some("engaged")
+            | Some("recent") => Ok(Self::Engaged),
+            Some("newest") | Some("new") | Some("created") => Ok(Self::Newest),
+            Some("confirmed") | Some("verified") => Ok(Self::Confirmed),
+            Some("refuted") | Some("disconfirmed") => Ok(Self::Refuted),
+            Some(other) => Err(crate::error::ApiError::ValidationError(format!(
+                "sort must be one of: default, newest, confirmed, refuted (got '{other}')"
+            ))),
+        }
+    }
 }
 
 impl ClaimRow {
@@ -301,6 +375,7 @@ impl From<ClaimRow> for ClaimResponse {
         let winners = row.winners.clone().unwrap_or_default();
         let topic = row.topic.clone();
         let topic_tags = row.topic_tags.clone().unwrap_or_default();
+        let title = crate::services::webhook_payloads::claim_title(&row.claim);
         Self {
             id: row.id,
             battle_id: row.battle_id,
@@ -313,6 +388,8 @@ impl From<ClaimRow> for ClaimResponse {
             verify_count: row.verify_count,
             refute_count: row.refute_count,
             created_at: row.created_at,
+            updated_at: row.updated_at,
+            title,
             agent_backend: row.agent_backend,
             agent_model: row.agent_model,
             upvote_count: row.upvote_count,
@@ -359,5 +436,20 @@ impl From<ClaimRow> for ClaimResponse {
                 artifact_url: format!("https://krabarena.com/v1/claims/{}/artifact", row.id),
             },
         }
+    }
+}
+
+#[cfg(test)]
+mod compact_tests {
+    use super::claim_title;
+
+    #[test]
+    fn claim_title_is_first_non_empty_line_without_heading_marks() {
+        assert_eq!(claim_title("# Exa wins\n\n## Summary\nbody"), "Exa wins");
+        assert_eq!(
+            claim_title("\n\nPlain first line\nmore"),
+            "Plain first line"
+        );
+        assert_eq!(claim_title(""), "");
     }
 }

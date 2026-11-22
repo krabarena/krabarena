@@ -751,3 +751,69 @@ async fn reserving_stays_fast_on_a_battle_with_a_large_history() {
         aggregate_rows(&pool, battle).await
     );
 }
+
+#[tokio::test]
+#[ignore]
+async fn proxy_info_on_a_large_log_history_costs_about_one_scan() {
+    let pool = pool().await;
+    let (battle, user) = fixture(&pool).await;
+    sqlx::query(
+        "INSERT INTO proxy_logs (battle_id, user_id, service_name, method, path, response_status, response_body) \
+         SELECT $1, $2, CASE WHEN g % 2 = 0 THEN 'keenable' ELSE 'openrouter' END, \
+                'POST', '/search', 200, repeat('x', 400) \
+         FROM generate_series(1, 120000) g",
+    )
+    .bind(battle)
+    .bind(user)
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO proxy_charges (battle_id, user_id, service_name, proxy_log_id, amount_micro_usd, source) \
+         SELECT battle_id, user_id, service_name, id, 10, 'actual' FROM proxy_logs \
+         WHERE battle_id = $1 AND service_name = 'openrouter'",
+    )
+    .bind(battle)
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query("ANALYZE proxy_logs")
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("ANALYZE proxy_charges")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let s = spec(0, 0);
+
+    let mut info_best = std::time::Duration::MAX;
+    let mut scan_best = std::time::Duration::MAX;
+    let mut info = None;
+    for _ in 0..3 {
+        let started = std::time::Instant::now();
+        sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM proxy_logs WHERE battle_id = $1 GROUP BY service_name LIMIT 1",
+        )
+        .bind(battle)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        scan_best = scan_best.min(started.elapsed());
+        let started = std::time::Instant::now();
+        info = Some(
+            proxy_service::get_proxy_info_with_spec(&pool, battle, &s)
+                .await
+                .unwrap(),
+        );
+        info_best = info_best.min(started.elapsed());
+    }
+    let info = info.unwrap();
+    assert_eq!(service(&info, "keenable").request_count, 60_000);
+    assert_eq!(service(&info, "openrouter").request_count, 60_000);
+    assert_eq!(info.spent_cents, 6_000 + 60);
+    assert!(
+        info_best < scan_best * 3,
+        "proxy-info took {info_best:?}; a plain scan of the same logs took {scan_best:?}"
+    );
+}

@@ -13,8 +13,20 @@ jobs:
   check:
     name: Check, Clippy & Test
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_PASSWORD: pw
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install Rust
         run: |
           rustup toolchain install stable --profile minimal --component clippy,rustfmt
@@ -35,6 +47,8 @@ jobs:
       - name: Clippy
         run: cargo clippy --workspace -- -D warnings
       - name: Test
+        env:
+          TEST_DATABASE_URL: postgres://postgres:pw@localhost:5432/postgres
         run: cargo test --workspace
       - name: Format
         run: cargo fmt --all -- --check
@@ -48,7 +62,7 @@ jobs:
     name: Installer test (Linux)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install shellcheck
         run: sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
       - name: shellcheck install.sh
@@ -72,6 +86,6 @@ jobs:
     name: Installer test (macOS)
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Run scripts/test-install.sh
         run: ./scripts/test-install.sh
