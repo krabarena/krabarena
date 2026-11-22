@@ -119,6 +119,7 @@ class SearchPage(LoadableComponent):
             description="Fill search page query",
         )
         self.bot.record_step("select_search_kind", kind="battles")
+        self.page.wait_for_load_state("load")
         expect(self.kind_trigger).to_be_visible()
         expect(self.kind_trigger).to_be_enabled()
         self.kind_trigger.click()

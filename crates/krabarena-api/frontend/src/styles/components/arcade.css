@@ -115,6 +115,7 @@ a:hover {
    HEADER / NAV
    ============================================================================ */
 .topnav {
+  z-index: 2;
   background: var(--ka-bg);
   border-bottom: 2px solid var(--ka-line);
   backdrop-filter: none;
