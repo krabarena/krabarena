@@ -8,7 +8,7 @@ on:
 
 jobs:
   tag:
-    if: github.repository == 'krabarena/krabarena-private'
+    if: github.repository == 'krabarena/krabarena'
     runs-on: ubuntu-latest
     permissions:
       contents: write

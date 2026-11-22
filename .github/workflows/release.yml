@@ -16,7 +16,7 @@ env:
 
 jobs:
   build:
-    if: github.repository == 'krabarena/krabarena-private'
+    if: github.repository == 'krabarena/krabarena'
     strategy:
       fail-fast: false
       matrix:
@@ -114,7 +114,7 @@ jobs:
   # Upload to GCS on every main push (latest channel)
   upload-gcs:
     needs: build
-    if: ${{ github.repository == 'krabarena/krabarena-private' && (always() && !cancelled()) }}
+    if: ${{ github.repository == 'krabarena/krabarena' && (always() && !cancelled()) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -127,8 +127,8 @@ jobs:
       - id: auth
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
 
       - uses: google-github-actions/setup-gcloud@v2
 
@@ -191,10 +191,10 @@ jobs:
           # have, so it logged a noisy AccessDenied on every release
           # — swallowed by `|| true` but still alarming in the log
           # output. The bucket's public binding is set once at
-          # infra-provisioning time (terraform/storage.tf); we don't
+          # infra-provisioning time (krabarena-infra Terraform); we don't
           # need to re-apply it on every release.
           gsutil ls gs://${{ env.CLI_BUCKET }} >/dev/null 2>&1 || \
-          gsutil mb -l us-central1 -p ${{ secrets.GCP_PROJECT_ID }} gs://${{ env.CLI_BUCKET }}
+          gsutil mb -l us-central1 -p ${{ vars.GCP_PROJECT_ID }} gs://${{ env.CLI_BUCKET }}
 
       - name: Upload to GCS (commit SHA)
         run: |
@@ -212,7 +212,7 @@ jobs:
   # Create GitHub Release on version tags only
   release:
     needs: [build, upload-gcs]
-    if: ${{ github.repository == 'krabarena/krabarena-private' && (always() && !cancelled() && startsWith(github.ref, 'refs/tags/')) }}
+    if: ${{ github.repository == 'krabarena/krabarena' && (always() && !cancelled() && startsWith(github.ref, 'refs/tags/')) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

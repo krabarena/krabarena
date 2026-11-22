@@ -31,7 +31,7 @@ on:
 env:
   REGION: us-central1
   SERVICE: krabarena-api
-  # Test env lives in its own GCP project (see terraform/cloud_run_test.tf).
+  # Test env lives in its own GCP project (Terraform in krabarena/krabarena-infra).
   TEST_PROJECT: krabarena-test
   # Image source stays in prod's registry; test project SA has
   # artifactregistry.reader on it. Prevents image drift between envs.
@@ -42,7 +42,8 @@ jobs:
   deploy-test:
     name: Deploy to test + E2E
     runs-on: ubuntu-latest
-    if: ${{ github.repository == 'krabarena/krabarena-private' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success') }}
+    environment: test
+    if: ${{ github.repository == 'krabarena/krabarena' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success') }}
     permissions:
       contents: read
       id-token: write
@@ -53,8 +54,8 @@ jobs:
       - id: auth
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
 
       - uses: google-github-actions/setup-gcloud@v2
 
@@ -72,12 +73,12 @@ jobs:
           BOOTSTRAP: ${{ github.event.inputs.bootstrap_migrations == 'true' && 'true' || 'false' }}
         run: |
           IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ env.REPO_PROJECT }}/${{ env.REPO }}/krabarena-api:${{ steps.tag.outputs.tag }}"
-          EXTRA_FLAGS=()
+          REMOVE_VARS="DATABASE_URL,JWT_SECRET,TEST_AUTH_SECRET,GEMINI_API_KEY"
           if [ "$BOOTSTRAP" = "true" ]; then
             MIGRATE_VARS=",BOOTSTRAP_SQLX_MIGRATIONS=true,SQLX_AUTO_MIGRATE=true"
           else
             MIGRATE_VARS=",SQLX_AUTO_MIGRATE=true"
-            EXTRA_FLAGS+=(--remove-env-vars BOOTSTRAP_SQLX_MIGRATIONS)
+            REMOVE_VARS="BOOTSTRAP_SQLX_MIGRATIONS,$REMOVE_VARS"
           fi
           gcloud run deploy ${{ env.SERVICE }} \
             --image "${IMAGE}" \
@@ -86,8 +87,9 @@ jobs:
             --port 8080 \
             --memory 512Mi \
             --allow-unauthenticated \
-            --update-env-vars "DATABASE_URL=${{ secrets.TEST_DATABASE_URL }},JWT_SECRET=${{ secrets.TEST_JWT_SECRET }},TEST_AUTH_SECRET=${{ secrets.TEST_AUTH_SECRET }},BLOB_STORE_URL=gs://krabarena-artifacts,PRIVATE_BLOB_STORE_URL=gs://krabarena-test-artifacts-private,NODE_ENV=${{ vars.TEST_NODE_ENV }},GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }},DISCORD_SUPPORT_INVITE_URL=https://discord.gg/K3zmyrqBSz,GITHUB_REPO_URL=https://github.com/krabarena/krabarena,GA_MEASUREMENT_ID=${{ vars.TEST_GA_MEASUREMENT_ID }},DISCORD_MONITOR_ENABLED=false,NOTIFICATION_EMAILS_ENABLED=false${MIGRATE_VARS}" \
-            "${EXTRA_FLAGS[@]}" \
+            --set-secrets "DATABASE_URL=database-url:latest,JWT_SECRET=jwt-secret:latest,TEST_AUTH_SECRET=test-auth-secret:latest,GEMINI_API_KEY=gemini-api-key:latest" \
+            --update-env-vars "BLOB_STORE_URL=gs://krabarena-artifacts,PRIVATE_BLOB_STORE_URL=gs://krabarena-test-artifacts-private,NODE_ENV=${{ vars.TEST_NODE_ENV }},DISCORD_SUPPORT_INVITE_URL=https://discord.gg/K3zmyrqBSz,GITHUB_REPO_URL=https://github.com/krabarena/krabarena,GA_MEASUREMENT_ID=${{ vars.TEST_GA_MEASUREMENT_ID }},DISCORD_MONITOR_ENABLED=false,NOTIFICATION_EMAILS_ENABLED=false${MIGRATE_VARS}" \
+            --remove-env-vars "$REMOVE_VARS" \
             --quiet
 
       - name: Resolve test URL + health
@@ -139,8 +141,10 @@ jobs:
       - name: E2E against test URL
         env:
           KRAB_TEST_BASE: ${{ steps.url.outputs.url }}
-          TEST_AUTH_SECRET: ${{ secrets.TEST_AUTH_SECRET }}
         run: |
+          TEST_AUTH_SECRET=$(gcloud secrets versions access latest --secret test-auth-secret --project ${{ env.TEST_PROJECT }})
+          echo "::add-mask::${TEST_AUTH_SECRET}"
+          export TEST_AUTH_SECRET
           # `tee` + pipefail so the step exit code mirrors cargo's.
           # The summary step below runs `if: always()` so a failing
           # test still produces a readable report.
