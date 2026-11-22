@@ -6,7 +6,7 @@ use sqlx::PgPool;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
 
-use crate::services::agentid::tests::{TestKey, agent_claims, mock_issuer};
+use crate::services::agentid::tests::{TestKey, agent_claims, mock_issuer, mock_path};
 
 const SECRET: &str = "test-secret";
 
@@ -109,20 +109,20 @@ async fn routes_are_404_when_agentid_is_not_configured() {
 #[tokio::test]
 async fn start_redirects_with_pkce_and_sets_state_cookie() {
     let key = TestKey::generate("k1");
-    let (server, cfg) = mock_issuer(&[&key]).await;
+    let (_server, cfg) = mock_issuer(&[&key]).await;
     let resp = start_with(
         &lazy_state(),
         &cfg,
         StartQuery {
             login_hint: Some("agent@agentmail.to".into()),
-            iss: Some(server.uri()),
+            iss: Some(cfg.issuer.clone()),
             ..Default::default()
         },
     )
     .await;
     assert!(resp.status().is_redirection(), "{}", resp.status());
     let url = location(&resp);
-    assert!(url.starts_with(&format!("{}/v0/authorize?", server.uri())));
+    assert!(url.starts_with(&format!("{}/v0/authorize?", cfg.issuer)));
     let nonce = set_cookie_nonce(&resp).expect("state cookie");
     assert_eq!(
         query_param(&url, "state").as_deref(),
@@ -194,7 +194,7 @@ async fn callback_without_matching_state_cookie_is_refused_before_any_exchange()
     let key = TestKey::generate("k1");
     let (server, cfg) = mock_issuer(&[&key]).await;
     Mock::given(method("POST"))
-        .and(path("/v0/token"))
+        .and(path(mock_path(&cfg.issuer, "/v0/token")))
         .respond_with(ResponseTemplate::new(500))
         .expect(0)
         .mount(&server)
@@ -336,9 +336,14 @@ async fn signed_in_page_has_token_steps_and_machine_readable_variants() {
     );
 }
 
-async fn mount_token_endpoint(server: &wiremock::MockServer, id_token: String, sub: &str) {
+async fn mount_token_endpoint(
+    server: &wiremock::MockServer,
+    issuer: &str,
+    id_token: String,
+    sub: &str,
+) {
     Mock::given(method("POST"))
-        .and(path("/v0/token"))
+        .and(path(mock_path(issuer, "/v0/token")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "id_token": id_token, "access_token": "access", "token_type": "Bearer", "expires_in": 600
         })))
@@ -346,7 +351,7 @@ async fn mount_token_endpoint(server: &wiremock::MockServer, id_token: String, s
         .mount(server)
         .await;
     Mock::given(method("GET"))
-        .and(path("/v0/userinfo"))
+        .and(path(mock_path(issuer, "/v0/userinfo")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "sub": sub, "owner_email": "maya@acme.com", "owner_email_verified": true
         })))
@@ -370,7 +375,7 @@ async fn web_sign_in_end_to_end_issues_an_agent_token_and_reuses_the_account() {
         let nonce = set_cookie_nonce(&started).unwrap();
         let mut claims = agent_claims(&cfg, &sub, Some(&agentid::oidc_nonce(SECRET, &nonce)));
         claims.as_object_mut().unwrap().remove("owner_email");
-        mount_token_endpoint(&server, key.sign(&claims), &sub).await;
+        mount_token_endpoint(&server, &cfg.issuer, key.sign(&claims), &sub).await;
         let resp = callback_with(
             &state,
             &cfg,
@@ -378,7 +383,7 @@ async fn web_sign_in_end_to_end_issues_an_agent_token_and_reuses_the_account() {
             CallbackQuery {
                 code: "code".into(),
                 state: query_param(&location(&started), "state").unwrap(),
-                iss: Some(server.uri()),
+                iss: Some(cfg.issuer.clone()),
                 ..Default::default()
             },
         )
@@ -441,6 +446,7 @@ async fn device_sign_in_stages_the_token_behind_confirmation() {
     let sub = Uuid::new_v4().simple().to_string();
     mount_token_endpoint(
         &server,
+        &cfg.issuer,
         key.sign(&agent_claims(
             &cfg,
             &sub,

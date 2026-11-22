@@ -96,11 +96,24 @@ pub(crate) fn agent_claims(cfg: &AgentIdConfig, sub: &str, nonce: Option<&str>) 
     c
 }
 
-pub(crate) async fn mock_issuer(keys: &[&TestKey]) -> (MockServer, AgentIdConfig) {
+pub(crate) async fn unique_issuer() -> (MockServer, String) {
     let server = MockServer::start().await;
-    let issuer = server.uri();
+    let issuer = format!("{}/{}", server.uri(), Uuid::new_v4().simple());
+    (server, issuer)
+}
+
+pub(crate) fn mock_path(issuer: &str, suffix: &str) -> String {
+    let url = reqwest::Url::parse(issuer).unwrap();
+    format!("{}{suffix}", url.path().trim_end_matches('/'))
+}
+
+pub(crate) async fn mock_issuer(keys: &[&TestKey]) -> (MockServer, AgentIdConfig) {
+    let (server, issuer) = unique_issuer().await;
     Mock::given(method("GET"))
-        .and(path("/.well-known/openid-configuration"))
+        .and(path(mock_path(
+            &issuer,
+            "/.well-known/openid-configuration",
+        )))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "issuer": issuer,
             "authorization_endpoint": format!("{issuer}/v0/authorize"),
@@ -113,7 +126,7 @@ pub(crate) async fn mock_issuer(keys: &[&TestKey]) -> (MockServer, AgentIdConfig
         .mount(&server)
         .await;
     Mock::given(method("GET"))
-        .and(path("/v0/jwks.json"))
+        .and(path(mock_path(&issuer, "/v0/jwks.json")))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "keys": keys.iter().map(|k| k.jwk.clone()).collect::<Vec<_>>()
         })))
@@ -441,7 +454,7 @@ async fn token_exchange_uses_basic_auth_and_pkce_then_verifies() {
     let (server, cfg) = mock_issuer(&[&key]).await;
     let id_token = key.sign(&agent_claims(&cfg, "sub-x", Some("n1")));
     Mock::given(method("POST"))
-        .and(path("/v0/token"))
+        .and(path(mock_path(&cfg.issuer, "/v0/token")))
         .and(header_exists("authorization"))
         .and(wiremock::matchers::body_string_contains(
             "code_verifier=verifier-123",
@@ -471,7 +484,7 @@ async fn token_endpoint_rejection_is_a_validation_error() {
     let key = TestKey::generate("k1");
     let (server, cfg) = mock_issuer(&[&key]).await;
     Mock::given(method("POST"))
-        .and(path("/v0/token"))
+        .and(path(mock_path(&cfg.issuer, "/v0/token")))
         .respond_with(ResponseTemplate::new(400).set_body_json(json!({"error": "invalid_grant"})))
         .mount(&server)
         .await;
@@ -484,9 +497,12 @@ async fn token_endpoint_rejection_is_a_validation_error() {
 
 #[tokio::test]
 async fn discovery_with_foreign_issuer_is_rejected() {
-    let server = MockServer::start().await;
+    let (server, issuer) = unique_issuer().await;
     Mock::given(method("GET"))
-        .and(path("/.well-known/openid-configuration"))
+        .and(path(mock_path(
+            &issuer,
+            "/.well-known/openid-configuration",
+        )))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "issuer": "https://evil.example",
             "authorization_endpoint": "https://evil.example/a",
@@ -495,7 +511,7 @@ async fn discovery_with_foreign_issuer_is_rejected() {
         })))
         .mount(&server)
         .await;
-    let cfg = registered_config(&server.uri());
+    let cfg = registered_config(&issuer);
     assert!(discovery(&cfg).await.is_err());
 }
 
@@ -503,10 +519,12 @@ async fn discovery_with_foreign_issuer_is_rejected() {
 async fn rotated_signing_key_triggers_one_jwks_refresh() {
     let old = TestKey::generate("old");
     let new = TestKey::generate("new");
-    let server = MockServer::start().await;
-    let issuer = server.uri();
+    let (server, issuer) = unique_issuer().await;
     Mock::given(method("GET"))
-        .and(path("/.well-known/openid-configuration"))
+        .and(path(mock_path(
+            &issuer,
+            "/.well-known/openid-configuration",
+        )))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "issuer": issuer,
             "authorization_endpoint": format!("{issuer}/v0/authorize"),
@@ -516,7 +534,7 @@ async fn rotated_signing_key_triggers_one_jwks_refresh() {
         .mount(&server)
         .await;
     Mock::given(method("GET"))
-        .and(path("/v0/jwks.json"))
+        .and(path(mock_path(&issuer, "/v0/jwks.json")))
         .respond_with(
             ResponseTemplate::new(200).set_body_json(json!({ "keys": [old.jwk.clone()] })),
         )
@@ -524,7 +542,7 @@ async fn rotated_signing_key_triggers_one_jwks_refresh() {
         .mount(&server)
         .await;
     Mock::given(method("GET"))
-        .and(path("/v0/jwks.json"))
+        .and(path(mock_path(&issuer, "/v0/jwks.json")))
         .respond_with(
             ResponseTemplate::new(200)
                 .set_body_json(json!({ "keys": [old.jwk.clone(), new.jwk.clone()] })),
