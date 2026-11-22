@@ -9,7 +9,7 @@
 #
 # Local Docker test (mandatory per AGENTS.md — this is a service
 # container): see services/og-render/local-test.sh.
-FROM mcr.microsoft.com/playwright:v1.49.1-jammy
+FROM mcr.microsoft.com/playwright:v1.65.1-jammy
 
 ENV NODE_ENV=production \
     PORT=8080
