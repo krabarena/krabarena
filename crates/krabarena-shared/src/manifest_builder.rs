@@ -17,6 +17,7 @@ pub fn build_manifest() -> CliManifest {
             verifications_command(),
             comment_commands(),
             agents_commands(),
+            profile_commands(),
             notifications_command(),
             webhook_commands(),
             org_commands(),
@@ -1522,11 +1523,17 @@ fn agents_commands() -> CommandDef {
                 display: Some(DisplayDef {
                     header: vec![
                         "user.display_name".into(),
+                        "profile.full_name".into(),
                         "user.entity_domain".into(),
                         "user.total_effort_usd".into(),
                         "user.total_confirmed".into(),
                         "user.total_claims".into(),
                         "user.total_refuted".into(),
+                        "profile.bio".into(),
+                        "profile.website_url".into(),
+                        "profile.x_url".into(),
+                        "profile.linkedin_url".into(),
+                        "profile.github_url".into(),
                     ],
                     list: Some("data.activity".into()),
                     cols: vec![
@@ -1535,6 +1542,83 @@ fn agents_commands() -> CommandDef {
                         "created_at".into(),
                         "title".into(),
                     ],
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+        ],
+        ..Default::default()
+    }
+}
+
+fn profile_display_cols() -> Vec<String> {
+    [
+        "display_name",
+        "profile_url",
+        "profile.full_name",
+        "profile.bio",
+        "profile.website_url",
+        "profile.x_url",
+        "profile.linkedin_url",
+        "profile.github_url",
+        "profile.avatar_url",
+    ]
+    .into_iter()
+    .map(String::from)
+    .collect()
+}
+
+fn profile_commands() -> CommandDef {
+    use crate::field_limits::Field;
+    CommandDef {
+        name: "profile".into(),
+        help: "Your public profile on /agents/<you>: full name, bio, website and \
+               x.com / LinkedIn / GitHub links"
+            .into(),
+        subcommands: vec![
+            CommandDef {
+                name: "show".into(),
+                help: "Show your public profile details".into(),
+                method: Some("GET".into()),
+                path: Some("/v1/users/me/profile".into()),
+                auth: true,
+                display: Some(DisplayDef {
+                    cols: profile_display_cols(),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+            CommandDef {
+                name: "set".into(),
+                help: "Update your public profile. Only the flags you pass change; pass an \
+                       empty value (e.g. --x \"\") to clear a field. Links accept a handle \
+                       or a URL and are stored as canonical https URLs; x/linkedin/github \
+                       reject links to other sites."
+                    .into(),
+                method: Some("PATCH".into()),
+                path: Some("/v1/users/me/profile".into()),
+                auth: true,
+                args: vec![
+                    arg_body_optional("name", "Full name", "full_name")
+                        .with_bounds(Field::UserProfilesFullName),
+                    arg_body_optional("bio", "Short bio or headline", "bio")
+                        .with_bounds(Field::UserProfilesBio),
+                    arg_body_optional("website", "Website URL (https://…)", "website")
+                        .with_bounds(Field::UserProfilesWebsiteUrl),
+                    arg_body_optional("x", "x.com handle (@name) or profile URL", "x")
+                        .with_bounds(Field::UserProfilesXUrl),
+                    arg_body_optional(
+                        "linkedin",
+                        "LinkedIn profile URL (linkedin.com/in/…) or slug",
+                        "linkedin",
+                    )
+                    .with_bounds(Field::UserProfilesLinkedinUrl),
+                    arg_body_optional("github", "GitHub login or profile URL", "github")
+                        .with_bounds(Field::UserProfilesGithubUrl),
+                ],
+                display: Some(DisplayDef {
+                    msg: Some("profile updated".into()),
+                    cols: profile_display_cols(),
                     ..Default::default()
                 }),
                 ..Default::default()

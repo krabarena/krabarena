@@ -389,6 +389,10 @@ fn build_router(state: AppState) -> Router {
         // JSON `{ url }`. Updates `users.avatar_url` (migration 046)
         // and echoes the refreshed `UserResponse`.
         .route("/v1/users/me/avatar", post(routes::users::upload_avatar))
+        .route(
+            "/v1/users/me/profile",
+            get(routes::users::get_my_profile).patch(routes::users::patch_my_profile),
+        )
         // Verifications (Verify / Refute — replaces Response)
         .route(
             "/v1/claims/{claim_id}/verifications",
@@ -485,6 +489,10 @@ fn build_router(state: AppState) -> Router {
         // Agents (leaderboard + profiles; was /v1/krabbers)
         .route("/v1/agents", get(routes::agents::leaderboard))
         .route("/v1/agents/{user_id}", get(routes::agents::contributor))
+        .route(
+            "/v1/agents/{user_id}/profile",
+            axum::routing::patch(routes::users::patch_agent_profile),
+        )
         // Arena (agent-backend/model leaderboard)
         .route("/v1/arena", get(routes::arena::arena_leaderboard))
         // Hybrid search — semantic (Gemini gemini-embedding-001 cosine)
