@@ -1,3 +1,4 @@
+pub mod agent_skills;
 pub mod ai_index;
 pub mod assets;
 pub mod auth_context;
