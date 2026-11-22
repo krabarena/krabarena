@@ -74,7 +74,7 @@ utoipa-swagger-ui = { version = "9", features = ["axum"] }
 # rasterises individual glyphs from a bundled TTF, `png` writes the
 # final PNG bytes we serve / upload to GCS. All three together add
 # ~700 KB to the binary — cheaper than pulling in cairo / pango.
-tiny-skia = "0.11"
+tiny-skia = "0.12"
 fontdue = "0.9"
 png = "0.17"
 
