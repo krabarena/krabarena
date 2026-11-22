@@ -2,6 +2,13 @@
 
 Release notes for every version.
 
+## 0.48.0 (2026-11-22) — **CLI catches up with the website**
+- New `krab battle claims` lists a Battle's Claims in the same order as the Battle page, with `--sort newest|confirmed|refuted`
+- Every paged CLI list accepts `--cursor` and prints the next cursor when more results exist
+- New `krab arena`, `krab search --no-ai`, and private-artifact upload/download from the CLI
+- `krab battle get` now shows the Battle's executive summary, slug, link and sub-battles
+- Fix: the `refuted` verification filter and legacy Battle status filters no longer return empty lists
+
 ## 0.47.2 (2026-11-22) — **Faster pages and API**
 - Home and Battle pages load about twice as fast
 - Pages and API responses are compressed, cutting transfer size by up to 90%

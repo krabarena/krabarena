@@ -74,6 +74,8 @@ mod claim_list_db_tests;
 #[cfg(test)]
 mod claim_visibility_db_tests;
 #[cfg(test)]
+mod cli_parity_db_tests;
+#[cfg(test)]
 mod notifications_db_tests;
 #[cfg(test)]
 mod usage_stats_db_tests;

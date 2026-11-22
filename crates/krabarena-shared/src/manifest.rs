@@ -132,6 +132,9 @@ pub struct DisplayDef {
     /// Columns to display in list mode.
     #[serde(default)]
     pub cols: Vec<String>,
+    /// Single-object fields printed as `label: value` before a list.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub header: Vec<String>,
     /// JSON path to an ID field to print to stdout.
     #[serde(default)]
     pub id: Option<String>,
@@ -217,6 +220,7 @@ mod tests {
                 display: Some(DisplayDef {
                     list: None,
                     cols: vec![],
+                    header: vec![],
                     id: Some("data.id".into()),
                     msg: Some("Done".into()),
                     download: false,

@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use crate::envelope::PaginationMeta;
 use crate::error::ApiError;
-use crate::models::claim::{CLAIM_COLUMNS, ClaimResponse, ClaimRow, not_superseded};
+use crate::models::claim::{CLAIM_COLUMNS, ClaimResponse, ClaimRow, ClaimSort, not_superseded};
 use crate::pagination::{Cursor, RankCursor, decode_cursor, decode_rank_cursor, finalize_page};
 
 pub struct CreateClaimParams<'a> {
@@ -468,26 +468,13 @@ pub async fn attach_authors(pool: &PgPool, items: &mut [ClaimResponse]) {
 pub async fn list_claims(
     pool: &PgPool,
     battle_id: Uuid,
-    sort: Option<&str>,
+    sort: ClaimSort,
     cursor: Option<&str>,
     limit: i64,
 ) -> Result<(Vec<ClaimResponse>, PaginationMeta), ApiError> {
     let limit = limit.clamp(1, 100);
     let fetch_limit = limit + 1;
 
-    // Explicit CLAIM_COLUMNS (not `SELECT *`) — cached-plan trap, see
-    // AGENTS.md. `deleted_at IS NULL` hides soft-deleted claims from
-    // the public battle claim list (migration 053).
-    // `not_superseded("c")` hides the old version of an edited claim
-    // (the predecessor that `claim edit` superseded) from the public
-    // battle list — only the lineage HEAD is listed.
-    //
-    // The `confirmed`/`refuted` sorts rank by a mutable integer metric,
-    // so they keyset on `(count, created_at, id)` via `RankCursor`; the
-    // default chronological sort keysets on `(created_at, id)`. Both add
-    // `id` (and `created_at`) as deterministic tie-breakers so rows
-    // never straddle a page boundary. See `crate::pagination`.
-    // Private claims never appear in the public battle list.
     let superseded = format!(
         "{} {}",
         not_superseded("c"),
@@ -495,8 +482,8 @@ pub async fn list_claims(
     );
 
     let (items, pagination) = match sort {
-        Some(metric @ ("confirmed" | "refuted")) => {
-            let count_col = if metric == "confirmed" {
+        ClaimSort::Confirmed | ClaimSort::Refuted => {
+            let count_col = if sort == ClaimSort::Confirmed {
                 "verify_count"
             } else {
                 "refute_count"
@@ -523,7 +510,7 @@ pub async fn list_claims(
                 .map_err(|e| ApiError::Internal(e.into()))?;
             let items: Vec<ClaimResponse> = rows.into_iter().map(ClaimResponse::from).collect();
             let rank_of = |c: &ClaimResponse| {
-                let rank = if metric == "confirmed" {
+                let rank = if sort == ClaimSort::Confirmed {
                     c.verify_count
                 } else {
                     c.refute_count
@@ -532,14 +519,19 @@ pub async fn list_claims(
             };
             finalize_page(items, limit, rank_of)
         }
-        _ => {
+        ClaimSort::Engaged | ClaimSort::Newest => {
+            let ts_col = if sort == ClaimSort::Engaged {
+                "updated_at"
+            } else {
+                "created_at"
+            };
             let cur = decode_cursor(cursor);
             let query = format!(
                 "SELECT {CLAIM_COLUMNS} FROM claims c \
                  WHERE c.battle_id = $1 AND c.deleted_at IS NULL {superseded} \
-                   AND ($2::timestamptz IS NULL OR c.created_at < $2 \
-                        OR (c.created_at = $2 AND c.id < $3)) \
-                 ORDER BY c.created_at DESC, c.id DESC \
+                   AND ($2::timestamptz IS NULL OR c.{ts_col} < $2 \
+                        OR (c.{ts_col} = $2 AND c.id < $3)) \
+                 ORDER BY c.{ts_col} DESC, c.id DESC \
                  LIMIT $4"
             );
             let rows = sqlx::query_as::<_, ClaimRow>(&query)
@@ -552,7 +544,12 @@ pub async fn list_claims(
                 .map_err(|e| ApiError::Internal(e.into()))?;
             let items: Vec<ClaimResponse> = rows.into_iter().map(ClaimResponse::from).collect();
             finalize_page(items, limit, |c: &ClaimResponse| {
-                Cursor::new(c.created_at, c.id)
+                let ts = if sort == ClaimSort::Engaged {
+                    c.updated_at
+                } else {
+                    c.created_at
+                };
+                Cursor::new(ts, c.id)
             })
         }
     };

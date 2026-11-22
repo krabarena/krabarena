@@ -4,7 +4,7 @@ use uuid::Uuid;
 use crate::envelope::PaginationMeta;
 use crate::error::ApiError;
 use crate::models::battle::{
-    BATTLE_COLUMNS, BattleListItem, BattleResponse, BattleRow, CreateBattleRequest,
+    BATTLE_COLUMNS, BattleListItem, BattleResponse, BattleRow, BattleTotals, CreateBattleRequest,
     UpdateBattleRequest,
 };
 use crate::models::claim::not_superseded;
@@ -144,20 +144,11 @@ pub async fn create_battle(
     );
     crate::services::webhook_dispatch::dispatch_event(pool.clone(), event, payload);
 
-    Ok(BattleResponse {
-        id: row.id,
-        author_id: row.author_id,
-        parent_id: row.parent_id,
-        title: row.title,
-        description: row.description,
-        domain_tags: row.domain_tags,
-        status: row.status,
-        claim_count: 0,
-        total_confirmed: 0,
-        total_refuted: 0,
-        created_at: row.created_at,
-        updated_at: row.updated_at,
-    })
+    Ok(BattleResponse::from_row(
+        row,
+        BattleTotals::default(),
+        Vec::new(),
+    ))
 }
 
 pub async fn update_battle(
@@ -291,20 +282,44 @@ pub async fn update_battle(
     .await
     .map_err(|e| ApiError::Internal(e.into()))?;
 
-    Ok(BattleResponse {
-        id: updated.id,
-        author_id: updated.author_id,
-        parent_id: updated.parent_id,
-        title: updated.title,
-        description: updated.description,
-        domain_tags: updated.domain_tags,
-        status: updated.status,
+    let sub_battle_ids = sub_battle_ids(pool, battle_id).await?;
+    Ok(BattleResponse::from_row(
+        updated,
+        totals_from(stats),
+        sub_battle_ids,
+    ))
+}
+
+fn totals_from(stats: (i64, i64, i64)) -> BattleTotals {
+    BattleTotals {
         claim_count: stats.0,
         total_confirmed: stats.1,
         total_refuted: stats.2,
-        created_at: updated.created_at,
-        updated_at: updated.updated_at,
-    })
+    }
+}
+
+async fn sub_battle_ids(pool: &PgPool, parent_id: Uuid) -> Result<Vec<Uuid>, ApiError> {
+    sqlx::query_scalar(
+        "SELECT id FROM battles WHERE parent_id = $1 AND deleted_at IS NULL \
+         ORDER BY updated_at DESC, id DESC",
+    )
+    .bind(parent_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| ApiError::Internal(e.into()))
+}
+
+pub fn normalize_status_filter(raw: Option<&str>) -> Result<Option<String>, ApiError> {
+    let Some(raw) = raw.map(str::trim).filter(|s| !s.is_empty()) else {
+        return Ok(None);
+    };
+    krabarena_shared::domain::BattleStatus::parse_lenient(&raw.to_ascii_lowercase())
+        .map(|s| Some(s.to_string()))
+        .ok_or_else(|| {
+            ApiError::ValidationError(format!(
+                "status must be one of: open, active, settled (got '{raw}')"
+            ))
+        })
 }
 
 pub async fn get_battle(pool: &PgPool, battle_id: Uuid) -> Result<BattleResponse, ApiError> {
@@ -337,20 +352,12 @@ pub async fn get_battle(pool: &PgPool, battle_id: Uuid) -> Result<BattleResponse
     .await
     .map_err(|e| ApiError::Internal(e.into()))?;
 
-    Ok(BattleResponse {
-        id: row.id,
-        author_id: row.author_id,
-        parent_id: row.parent_id,
-        title: row.title,
-        description: row.description,
-        domain_tags: row.domain_tags,
-        status: row.status,
-        claim_count: stats.0,
-        total_confirmed: stats.1,
-        total_refuted: stats.2,
-        created_at: row.created_at,
-        updated_at: row.updated_at,
-    })
+    let sub_battle_ids = sub_battle_ids(pool, battle_id).await?;
+    Ok(BattleResponse::from_row(
+        row,
+        totals_from(stats),
+        sub_battle_ids,
+    ))
 }
 
 pub async fn list_battles(
@@ -393,6 +400,7 @@ pub async fn list_battles(
         .into_iter()
         .map(|row| BattleListItem {
             id: row.id,
+            slug: row.slug,
             author_id: row.author_id,
             parent_id: row.parent_id,
             title: row.title,
@@ -429,6 +437,7 @@ pub async fn list_sub_battles(
         .into_iter()
         .map(|row| BattleListItem {
             id: row.id,
+            slug: row.slug,
             author_id: row.author_id,
             parent_id: row.parent_id,
             title: row.title,
