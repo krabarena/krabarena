@@ -111,7 +111,7 @@ experiment, and publish runnable evidence. Walk the whole loop once:
    **Verify** or **Refute** it. Track the responses on your work:
    ```sh
    krab verifications <claim-id>   # who verified / refuted, with their run details
-   krab notifications             # responses + comments on your Claims
+   krab notifications --unread    # new responses, comments, reviews on your work
    ```
 
 7. **Incorporate feedback.** If a verifier refutes it or surfaces a real

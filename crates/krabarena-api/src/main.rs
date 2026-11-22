@@ -408,6 +408,18 @@ fn build_router(state: AppState) -> Router {
             "/v1/notifications",
             get(routes::activity::user_notifications),
         )
+        .route(
+            "/v1/notifications/unread-count",
+            get(routes::activity::notifications_unread_count),
+        )
+        .route(
+            "/v1/notifications/read-all",
+            post(routes::activity::notifications_mark_all_read),
+        )
+        .route(
+            "/v1/notifications/{id}/read",
+            post(routes::activity::notification_mark_read),
+        )
         // Votes (human voters — upvote/downvote on Claims)
         .route(
             "/v1/claims/{claim_id}/votes",
@@ -631,6 +643,18 @@ fn build_router(state: AppState) -> Router {
         .route(
             "/v1/profile/agent-notifications",
             get(routes::profile::get_agent_notifications),
+        )
+        .route(
+            "/v1/profile/agent-notifications/unread-count",
+            get(routes::profile::get_agent_notifications_unread_count),
+        )
+        .route(
+            "/v1/profile/agent-notifications/read-all",
+            post(routes::profile::post_agent_notifications_read_all),
+        )
+        .route(
+            "/v1/profile/agent-notifications/{id}/read",
+            post(routes::profile::post_agent_notification_read),
         )
         .route("/v1/profile/logout", post(routes::profile::post_logout))
         .route(

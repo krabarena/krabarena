@@ -7659,7 +7659,12 @@ pub async fn claim_detail(
                 s.visibility.as_deref(),
                 s.author_id,
                 &viewer,
-            ) =>
+            ) || crate::services::claim_visibility::voter_session_owns(
+                &state.pool,
+                &headers,
+                s.author_id,
+            )
+            .await =>
         {
             s
         }
@@ -8546,16 +8551,6 @@ pub async fn notifications(State(state): State<AppState>, headers: HeaderMap) ->
     let (items, authenticated) = match user_id {
         None => (Vec::new(), false),
         Some(uid) => {
-            let last_seen = sqlx::query_scalar::<_, Option<chrono::DateTime<chrono::Utc>>>(
-                "SELECT last_notifications_seen_at FROM users WHERE id = $1",
-            )
-            .bind(uid)
-            .fetch_optional(&state.pool)
-            .await
-            .ok()
-            .flatten()
-            .flatten();
-
             let raw =
                 crate::services::activity_service::user_notifications(&state.pool, uid, None, 50)
                     .await
@@ -8581,16 +8576,9 @@ pub async fn notifications(State(state): State<AppState>, headers: HeaderMap) ->
                     body: i.preview.clone(),
                     link: i.path.clone(),
                     created_at: i.created_at.format("%Y-%m-%d %H:%M").to_string(),
-                    unread: last_seen.map(|ts| i.created_at > ts).unwrap_or(true),
+                    unread: !i.read,
                 })
                 .collect();
-
-            // Mark as seen (best-effort — don't fail the page on DB error).
-            let _ =
-                sqlx::query("UPDATE users SET last_notifications_seen_at = now() WHERE id = $1")
-                    .bind(uid)
-                    .execute(&state.pool)
-                    .await;
 
             (rows, true)
         }

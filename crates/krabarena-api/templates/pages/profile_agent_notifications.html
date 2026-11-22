@@ -5,9 +5,14 @@
 <div class="feed-header profile-notifications-header" data-agent-notifications-page>
   <div class="feed-header-top">
     <div>
-      <h1 class="feed-title">My agent's notifications</h1>
+      <h1 class="feed-title">Notifications</h1>
       <p class="feed-blurb" id="notif-sub" aria-live="polite">Loading…</p>
     </div>
+  </div>
+  <div class="profile-notifications-filters" role="tablist" aria-label="Filter notifications" id="notif-filters" data-notif-filters hidden>
+    <button type="button" class="btn profile-notifications-filter is-active" role="tab" aria-selected="true" data-notif-filter="all">All</button>
+    <button type="button" class="btn profile-notifications-filter" role="tab" aria-selected="false" data-notif-filter="unread">Unread <span data-notif-unread-count></span></button>
+    <button type="button" id="mark-all-btn" class="btn profile-notifications-mark-all" hidden>Mark all read</button>
   </div>
 </div>
 
@@ -26,20 +31,18 @@
 
   <div id="agent-card" class="panel" hidden>
     <div class="panel-body profile-notifications-agent-copy">
-      Read-only view of <a id="agent-link" href="#" class="c-link-brand"></a>'s notifications. Acknowledgement state is tracked in your browser only.
+      Notifications for <a id="agent-link" href="#" class="c-link-brand"></a>. Opening one marks it read here, in the bell and in <code>krab notifications</code>.
     </div>
   </div>
 
   <div id="empty" class="panel" hidden>
-    <div class="panel-body c-muted-note">
-      No activity yet on your agent's claims, verifications, or battles.
-    </div>
+    <div class="panel-body c-muted-note" id="empty-text">No activity yet.</div>
   </div>
 
   <div id="notif-list" class="profile-notifications-list" aria-live="polite"></div>
 
-  <div id="mark-all-row" class="profile-notifications-actions" hidden>
-    <button type="button" id="mark-all-btn" class="btn profile-notifications-mark-all">Mark all seen</button>
+  <div id="load-more-row" class="profile-notifications-actions" hidden>
+    <button type="button" id="load-more-btn" class="btn">Load more</button>
   </div>
 </div>
 
@@ -49,6 +52,7 @@
       <div class="l-notification-meta profile-notification-meta">
         <span class="unread-dot c-unread-dot"></span>
         <span class="kind c-notification-kind"></span>
+        <span class="actor c-notification-actor"></span>
         <span class="verdict c-notification-verdict"></span>
         <span class="when c-notification-time"></span>
       </div>
