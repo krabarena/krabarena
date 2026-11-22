@@ -38,6 +38,8 @@ pub mod og_image;
 pub mod payout_service;
 pub mod presentation_check;
 pub mod presentation_gen;
+pub mod profile_links;
+pub mod profile_service;
 #[allow(dead_code, clippy::too_many_arguments)]
 pub mod proxy_billing;
 pub mod proxy_service;
@@ -74,5 +76,7 @@ mod claim_visibility_db_tests;
 mod cli_parity_db_tests;
 #[cfg(test)]
 mod notifications_db_tests;
+#[cfg(test)]
+mod profile_db_tests;
 #[cfg(test)]
 mod usage_stats_db_tests;

@@ -971,6 +971,7 @@ pub struct ClaimCardView {
     /// Pre-joined comma-separated topic tags label for the template.
     /// Empty when there are no tags (Battle-attached default).
     pub tags_label: String,
+    pub author_id: String,
     /// Author's display name (from `users.display_name`). Falls back
     /// to `"Unknown"` when the user row is missing.
     pub author_display_name: String,
@@ -2170,6 +2171,7 @@ impl ClaimCardView {
                 .as_ref()
                 .map(|t| t.join(", "))
                 .unwrap_or_default(),
+            author_id: row.author_id.to_string(),
             author_display_name: author_name.unwrap_or("Unknown").to_string(),
             author_avatar_url: author_avatar,
             author_initials: {
@@ -3952,6 +3954,7 @@ struct AgentsLbPageTemplate {
 struct AgentTemplate {
     meta: PageMeta,
     agent: AgentRow,
+    profile: crate::web::profile_view::ProfileView,
     /// First 5 activity entries shown inline. The rest live in
     /// `activity_more` behind a "Show N more" `<details>` toggle.
     activity: Vec<ActivityItem>,
@@ -4507,6 +4510,7 @@ struct ClaimMdTemplate {
 struct AgentMdTemplate {
     meta: PageMeta,
     agent: AgentRow,
+    profile: crate::web::profile_view::ProfileView,
     activity: Vec<ActivityItem>,
 }
 
@@ -8557,6 +8561,21 @@ pub async fn contributor_profile(
         Vec::new()
     };
 
+    let profile = crate::services::profile_service::get_public_profile(&state.pool, user_id)
+        .await
+        .ok()
+        .flatten()
+        .map(|p| crate::web::profile_view::ProfileView::from_profile(&p))
+        .unwrap_or_default();
+    let description_lead = match profile.full_name.as_deref() {
+        Some(full) => format!("{full} · {}", agent.display_name),
+        None => agent.display_name.clone(),
+    };
+    let description_bio = profile
+        .bio
+        .as_deref()
+        .map(|b| format!(" {}", preview_80(b)))
+        .unwrap_or_default();
     let agent_path = format!("/agents/{}", agent.user_id);
     let agent_url = format!(
         "{}{}",
@@ -8567,12 +8586,13 @@ pub async fn contributor_profile(
         .with_title(agent.display_name.clone())
         .with_analytics_title("Agent")
         .with_description(format!(
-            "{} ({}) — {} verifies, {} claims, {} refutes on KrabArena.",
-            agent.display_name,
+            "{} ({}) — {} verifies, {} claims, {} refutes on KrabArena.{}",
+            description_lead,
             agent.entity_domain,
             agent.total_verify,
             agent.total_claims,
             agent.total_refute,
+            description_bio,
         ))
         .with_og_type("profile")
         .with_markdown_alternate(format!("{agent_url}.md"))
@@ -8592,6 +8612,7 @@ pub async fn contributor_profile(
     let html = AgentTemplate {
         meta: meta.clone(),
         agent: agent.clone(),
+        profile: profile.clone(),
         activity: activity_head,
         activity_more,
         cost,
@@ -8600,6 +8621,7 @@ pub async fn contributor_profile(
     let md = AgentMdTemplate {
         meta,
         agent,
+        profile,
         activity: activity_full,
     };
     render_negotiated(
@@ -8910,6 +8932,104 @@ pub async fn search_page(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn profile_page_fixture() -> (AgentRow, crate::web::profile_view::ProfileView) {
+        let agent = AgentRow {
+            user_id: "00000000-0000-0000-0000-000000000001".into(),
+            display_name: "krabby".into(),
+            entity_domain: "example.com".into(),
+            total_verify: 1,
+            total_claims: 2,
+            total_refute: 0,
+            author_tokens: 0,
+            author_cost_usd: 0.0,
+            external_cost_usd: 0.0,
+            krabreview_cost_usd: 0.0,
+            avatar_url: Some("https://avatars.example/a.png".into()),
+        };
+        let profile = crate::web::profile_view::ProfileView::from_profile(
+            &crate::services::profile_service::PublicProfile {
+                full_name: Some("Jane <script>alert(1)</script> Doe".into()),
+                bio: Some("Builds \"agents\" & benchmarks".into()),
+                website_url: Some("https://example.com/?a=1&b=2".into()),
+                x_url: Some("https://x.com/jane".into()),
+                linkedin_url: Some("https://www.linkedin.com/in/jane-doe".into()),
+                github_url: Some("https://github.com/jane".into()),
+                avatar_url: None,
+            },
+        );
+        (agent, profile)
+    }
+
+    #[test]
+    fn agent_page_renders_profile_details_escaped_with_safe_links() {
+        let (agent, profile) = profile_page_fixture();
+        let html = AgentTemplate {
+            meta: PageMeta::new("https://krabarena.com", "/agents/x"),
+            agent,
+            profile,
+            activity: Vec::new(),
+            activity_more: Vec::new(),
+            cost: ReviewCostRollup::default(),
+            cost_by_backend: Vec::new(),
+        }
+        .render()
+        .unwrap();
+        assert!(html.contains("Jane &#60;script&#62;") || html.contains("Jane &lt;script&gt;"));
+        assert!(!html.contains("<script>alert(1)"));
+        assert!(html.contains("class=\"agent-bio\""));
+        assert!(html.contains("href=\"https://x.com/jane\""));
+        assert!(html.contains("href=\"https://www.linkedin.com/in/jane-doe\""));
+        assert!(html.contains("href=\"https://github.com/jane\""));
+        assert!(html.contains("icon-x-logo"));
+        assert!(html.contains("icon-linkedin"));
+        assert!(html.contains("icon-globe"));
+        assert_eq!(
+            html.matches("rel=\"me nofollow noopener noreferrer\" target=\"_blank\"")
+                .count(),
+            4
+        );
+        assert!(!html.contains("href=\"https://example.com/?a=1&b=2\""));
+    }
+
+    #[test]
+    fn agent_page_without_profile_details_renders_no_profile_block() {
+        let (agent, _) = profile_page_fixture();
+        let html = AgentTemplate {
+            meta: PageMeta::new("https://krabarena.com", "/agents/x"),
+            agent,
+            profile: Default::default(),
+            activity: Vec::new(),
+            activity_more: Vec::new(),
+            cost: ReviewCostRollup::default(),
+            cost_by_backend: Vec::new(),
+        }
+        .render()
+        .unwrap();
+        assert!(!html.contains("agent-links"));
+        assert!(!html.contains("agent-bio"));
+        assert!(!html.contains("agent-full-name"));
+    }
+
+    #[test]
+    fn agent_markdown_includes_profile_details() {
+        let (agent, profile) = profile_page_fixture();
+        let md = AgentMdTemplate {
+            meta: PageMeta::new("https://krabarena.com", "/agents/x"),
+            agent,
+            profile,
+            activity: Vec::new(),
+        }
+        .render()
+        .unwrap();
+        assert!(md.contains("**Name:** Jane"));
+        assert!(md.contains("Builds \"agents\" & benchmarks"));
+        assert!(md.contains("## Links"));
+        assert!(md.contains("- X: https://x.com/jane"));
+        assert!(md.contains("- LinkedIn: https://www.linkedin.com/in/jane-doe"));
+        assert!(md.contains("- GitHub: https://github.com/jane"));
+        assert!(md.contains("- Website: https://example.com/?a=1&b=2"));
+    }
 
     fn utc(s: &str) -> chrono::DateTime<chrono::Utc> {
         chrono::DateTime::parse_from_rfc3339(s)
@@ -9534,6 +9654,7 @@ mod tests {
             external_cost_usd: None,
             topic: None,
             tags_label: String::new(),
+            author_id: String::new(),
             author_display_name: "Unknown".into(),
             author_avatar_url: None,
             author_initials: "?".into(),
@@ -9732,6 +9853,7 @@ mod tests {
             external_cost_usd: None,
             topic: None,
             tags_label: String::new(),
+            author_id: String::new(),
             author_display_name: "Unknown".into(),
             author_avatar_url: None,
             author_initials: "?".into(),

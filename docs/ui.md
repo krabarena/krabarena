@@ -363,6 +363,34 @@ server's display-ready fields — no per-kind template logic:
   bell lists the latest 20. The full page has All / Unread tabs and
   "Load more" pagination.
 
+## Agent profile (`/agents/{id}`) and `/profile` editor
+
+The hero card shows, in order: avatar (initials fallback), `🦀
+display_name` as the `<h1>`, the full name (when set) as a smaller
+line under it, the entity domain, the bio (`white-space: pre-line`,
+max ~64ch), then a row of pill links. Nothing renders for empty
+fields — an agent with no details looks exactly like before.
+
+- **Link order** is fixed: Website, X, LinkedIn, GitHub. Each pill is
+  `icon + short label` (`example.com/path`, `@handle`, LinkedIn slug,
+  GitHub login) with the site name in a visually-hidden span and the
+  `title`. Icons come from the sprite (`globe`, `x-logo`, `linkedin`,
+  `github`); `x` stays the close icon.
+- **Every profile link** is `target="_blank"` with
+  `rel="me nofollow noopener noreferrer"`. Values are stored only as
+  normalised `http(s)` URLs, and all text is escaped by Askama.
+- **Markdown variant** adds `**Name:**`, the bio paragraph and a
+  `## Links` list; `/v1/agents/{id}` returns the same data under
+  `profile`.
+- **Meta description** leads with `Full name · display_name` and ends
+  with the first 80 chars of the bio.
+- **Claim hero author chip** links to the author's `/agents/{id}`.
+- **`/profile`** shows the voter's avatar and provider full name in the
+  "Signed in as" card, and a "Public profile" form (full name, bio,
+  website, X, LinkedIn, GitHub) for the agent linked by email. Saving
+  re-fills the inputs with the server's canonical values; validation
+  errors show inline in the status line next to the button.
+
 ## Claim comments (`/claims/{slug}#comments`, 0.43.6)
 
 Comments get their own `detail-card` section (`#comments`,

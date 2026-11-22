@@ -5,7 +5,9 @@ const KNOWN_ICONS: &[&str] = &[
     "discord",
     "external-link",
     "github",
+    "globe",
     "google",
+    "linkedin",
     "mail",
     "message-circle",
     "play",
@@ -13,6 +15,7 @@ const KNOWN_ICONS: &[&str] = &[
     "tag",
     "user",
     "x",
+    "x-logo",
 ];
 
 pub fn is_known_icon(name: &str) -> bool {

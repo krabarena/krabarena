@@ -29,19 +29,23 @@ use crate::AppState;
 use crate::envelope::ApiResponse;
 use crate::error::ApiError;
 use crate::services::email_domains::{email_domain, is_personal_email_domain};
+use crate::services::profile_service;
 use crate::services::voter_service;
 
-fn extract_voter_token(headers: &HeaderMap) -> Result<String, ApiError> {
+pub fn voter_token(headers: &HeaderMap) -> Option<String> {
     // Cookie session (new) preferred; legacy `x-voter-token` header is
     // the migration-window fallback.
     if let Some(tok) = crate::web::cookies::get_cookie(headers, crate::web::cookies::SESSION) {
-        return Ok(tok);
+        return Some(tok);
     }
     headers
         .get("x-voter-token")
         .and_then(|v| v.to_str().ok())
         .map(String::from)
-        .ok_or(ApiError::Unauthorized)
+}
+
+fn extract_voter_token(headers: &HeaderMap) -> Result<String, ApiError> {
+    voter_token(headers).ok_or(ApiError::Unauthorized)
 }
 
 #[derive(Debug, Serialize)]
@@ -60,6 +64,9 @@ pub struct VoterSelf {
     pub voter_id: Uuid,
     pub email: Option<String>,
     pub display_name: String,
+    pub provider: String,
+    pub avatar_url: Option<String>,
+    pub full_name: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -80,6 +87,7 @@ pub struct ProfileMeResponse {
     /// The work domain itself, when applicable. Useful for UI copy
     /// ("Other agents at keenable.ai").
     pub company_domain: Option<String>,
+    pub my_agent_profile: Option<crate::services::profile_service::PublicProfile>,
 }
 
 /// `GET /v1/profile/me` — voter-authenticated.
@@ -93,6 +101,13 @@ pub async fn get_me(
         .ok_or(ApiError::Unauthorized)?;
 
     let voter_email = voter.email.clone();
+
+    if let Some(email) = voter_email.as_deref() {
+        if let Err(e) = profile_service::sync_agent_for_email(&state.pool, email).await {
+            tracing::warn!(error = %e, voter_id = %voter.id, "profile.agent_sync_failed");
+        }
+    }
+    let snapshot = profile_service::oauth_snapshot(&state.pool, voter.id).await?;
 
     // Resolve "my agent" by email match. Case-insensitive on email
     // because OAuth providers don't agree on casing.
@@ -111,12 +126,21 @@ pub async fn get_me(
         None => Vec::new(),
     };
 
+    let my_agent_profile = match my_agent.as_ref() {
+        Some(a) => profile_service::get_public_profile(&state.pool, a.user_id).await?,
+        None => None,
+    };
+
     let resp = ProfileMeResponse {
         voter: VoterSelf {
             voter_id: voter.id,
             email: voter_email,
             display_name: voter.display_name,
+            provider: voter.provider,
+            avatar_url: voter.avatar_url,
+            full_name: snapshot.and_then(|s| s.display_full_name()),
         },
+        my_agent_profile,
         my_agent,
         has_company_domain: work_domain.is_some(),
         company_domain: work_domain,
@@ -382,6 +406,7 @@ async fn fetch_agent_by_email(
         FROM users u
         JOIN entities e ON u.entity_id = e.id
         WHERE LOWER(u.email) = LOWER($1)
+        ORDER BY u.created_at, u.id
         LIMIT 1
         "#
     ))

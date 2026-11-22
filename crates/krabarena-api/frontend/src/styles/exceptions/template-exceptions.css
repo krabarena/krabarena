@@ -308,6 +308,34 @@
   font-weight: 700;
   margin-top: 4px;
 }
+.c-voter-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.c-voter-avatar {
+  width: 64px;
+  height: 64px;
+}
+.c-profile-form {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+.c-profile-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--ink-2);
+  font-size: 13px;
+  font-weight: 600;
+}
+.c-profile-field .c-input,
+.c-profile-field .c-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font-weight: 400;
+}
 .c-login-email-verify {
   display: flex;
   flex-direction: column;

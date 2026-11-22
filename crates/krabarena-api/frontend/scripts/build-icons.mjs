@@ -14,6 +14,7 @@ const ICONS = [
   ["check", resolve(lucideDir, "check.svg")],
   ["copy", resolve(lucideDir, "copy.svg")],
   ["external-link", resolve(lucideDir, "external-link.svg")],
+  ["globe", resolve(lucideDir, "globe.svg")],
   ["mail", resolve(lucideDir, "mail.svg")],
   ["message-circle", resolve(lucideDir, "message-circle.svg")],
   ["play", resolve(lucideDir, "play.svg")],
@@ -23,11 +24,13 @@ const ICONS = [
   ["x", resolve(lucideDir, "x.svg")],
   ["github", resolve(brandDir, "github.svg")],
   ["google", resolve(brandDir, "google.svg")],
-  ["discord", resolve(brandDir, "discord.svg")]
+  ["discord", resolve(brandDir, "discord.svg")],
+  ["linkedin", resolve(brandDir, "linkedin.svg")],
+  ["x-logo", resolve(brandDir, "x-logo.svg")]
 ];
 
-const LUCIDE_ICONS = new Set(ICONS.slice(0, 11).map(([id]) => id));
-const MONOCHROME_BRAND_ICONS = new Set(["github", "discord"]);
+const LUCIDE_ICONS = new Set(ICONS.slice(0, 12).map(([id]) => id));
+const MONOCHROME_BRAND_ICONS = new Set(["github", "discord", "linkedin", "x-logo"]);
 
 const sprites = svgstore({
   cleanDefs: true,

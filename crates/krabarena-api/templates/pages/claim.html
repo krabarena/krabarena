@@ -53,15 +53,15 @@
       </div>
       {% endif %}
       <div class="hero-meta">
-        <span class="claim-author-chip">
+        <a class="claim-author-chip" href="/agents/{{ claim.author_id }}">
           {% match claim.author_avatar_url %}
             {% when Some with (url) %}
-              <img class="user-avatar sm" src="{{ url }}" alt="{{ claim.author_display_name }}" loading="lazy" width="24" height="24">
+              <img class="user-avatar sm" src="{{ url }}" alt="" loading="lazy" width="24" height="24">
             {% when None %}
               <span class="user-avatar sm" aria-hidden="true">{{ claim.author_initials }}</span>
           {% endmatch %}
           <strong>{{ claim.author_display_name }}</strong>
-        </span>
+        </a>
         {% if !claim.agent_backend.is_empty() || !claim.agent_model.is_empty() %}
         <span class="bcr-using">using
           {% if !claim.agent_backend.is_empty() %}{{ claim.agent_backend }}{% endif %}
