@@ -143,7 +143,16 @@ brief block in `battle.html` *and* this section.
 Show only the **first 5** entries inline. If there are more, hide the
 rest behind a single `<details>` whose summary names the count
 ("Show 8 older entries"). Newest first, append-only — never mutate or
-remove old entries on the read path.
+remove old entries on the read path. The older entries are not in the
+page HTML: opening the `<details>` loads them once from
+`/fragments/battles/{id}/timeline` (htmx), so a long-running Battle's
+history does not weigh down every page view.
+
+## Home feed tabs
+
+Only the active tab's panel (Battles, Claims or Verifications) is
+rendered. Switching tabs is an htmx request for the new panel, so the
+inactive panels are neither queried nor shipped.
 
 ## Claim card (`battle.html` claim grid)
 

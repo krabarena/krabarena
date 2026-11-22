@@ -565,6 +565,10 @@ fn build_router(state: AppState) -> Router {
             "/fragments/battles/{battle_id}/claims",
             get(web::pages::battle_claims_fragment),
         )
+        .route(
+            "/fragments/battles/{battle_id}/timeline",
+            get(web::pages::battle_timeline_fragment),
+        )
         .route("/fragments/agents", get(web::pages::agents_fragment))
         .route(
             "/battles",

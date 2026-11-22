@@ -8,7 +8,7 @@ use uuid::Uuid;
 use crate::AppState;
 use crate::markdown::filters;
 use crate::models::battle::{BATTLE_COLUMNS, BattleRow, parse_solutions};
-use crate::models::claim::ClaimRow;
+use crate::models::claim::{CLAIM_COLUMNS, ClaimRow};
 use crate::models::comment::CommentRow;
 use crate::models::verification::VerificationRow;
 use crate::services::format_metric::format_metric_compact;
@@ -3241,9 +3241,6 @@ pub struct TimelineEntry {
     pub kind: &'static str,
     /// Short headline (e.g. "Verified" / "Claim posted" / "Summary updated").
     pub headline: String,
-    /// Optional longer body (the summary text, or a one-line reason
-    /// for a refute). Pre-rendered to HTML safe for `|safe`.
-    pub body_html: String,
     /// Italic detail line shown under the body — environment for
     /// verifies, conditions for refutes, etc.
     pub detail: String,
@@ -3812,9 +3809,7 @@ struct BattleTemplate {
     /// happened; older entries hide behind a `<details>` summary
     /// "Show N older entries". See `docs/ui.md` → "Battle history".
     timeline_visible: Vec<TimelineEntry>,
-    /// Entries 6+, rendered behind the `<details>` block. Empty when
-    /// there are ≤ 5 total entries.
-    timeline_hidden: Vec<TimelineEntry>,
+    timeline_hidden_count: usize,
     /// Pre-projected sparkline points (x in 0..=100, y is the raw
     /// score). Kept on the struct because the existing battle
     /// summarizer pipeline still computes them; the 0.9.0 redesign
@@ -3858,6 +3853,12 @@ struct BattleTemplate {
     /// Page number the sentinel requests next (always 2 from the SSR
     /// first page).
     claims_next_page: i64,
+}
+
+#[derive(Template)]
+#[template(path = "partials/battle_timeline_rows.html")]
+struct BattleTimelineRowsTemplate {
+    entries: Vec<TimelineEntry>,
 }
 
 #[derive(Template)]
@@ -5831,7 +5832,11 @@ pub async fn index(
             .await
         }
     };
+    let need_claims = active_tab == "claims" || (!partial_only && wants_markdown(&headers));
     let vendor_fut = async {
+        if !need_claims {
+            return Vec::new();
+        }
         crate::services::solution_names::load_vendor_patterns(&state.pool)
             .await
             .unwrap_or_default()
@@ -5871,19 +5876,31 @@ pub async fn index(
                 .bind(feed_fetch_limit)
                 .bind(feed_offset)
                 .fetch_all(&state.pool),
-            sqlx::query_as::<_, FeedClaimRow>(&claims_sql)
-                .bind(None::<&str>)
-                .bind(query.domain.as_deref())
-                .bind(&tags)
-                .bind(&q_patterns)
-                .bind(feed_fetch_limit)
-                .bind(feed_offset)
-                .fetch_all(&state.pool),
-            sqlx::query_as::<_, VerificationFeedRow>(&verifs_sql)
-                .bind(&tags)
-                .bind(&q_patterns)
-                .bind((feed_offset + feed_fetch_limit).max(VERIF_PREFILTER))
-                .fetch_all(&state.pool),
+            async {
+                if !need_claims {
+                    return Ok(Vec::new());
+                }
+                sqlx::query_as::<_, FeedClaimRow>(&claims_sql)
+                    .bind(None::<&str>)
+                    .bind(query.domain.as_deref())
+                    .bind(&tags)
+                    .bind(&q_patterns)
+                    .bind(feed_fetch_limit)
+                    .bind(feed_offset)
+                    .fetch_all(&state.pool)
+                    .await
+            },
+            async {
+                if active_tab != "verifications" {
+                    return Ok(Vec::new());
+                }
+                sqlx::query_as::<_, VerificationFeedRow>(&verifs_sql)
+                    .bind(&tags)
+                    .bind(&q_patterns)
+                    .bind((feed_offset + feed_fetch_limit).max(VERIF_PREFILTER))
+                    .fetch_all(&state.pool)
+                    .await
+            },
         );
         feed
     };
@@ -6918,11 +6935,30 @@ type TimelineVerdictRow = (
     String,
     Option<String>,
     Option<String>,
-    Option<String>,
-    Option<String>,
     Uuid,
     Option<String>,
 );
+
+type TimelineSummaryRow = (chrono::DateTime<chrono::Utc>, Option<f32>);
+
+struct TimelineClaim {
+    id: Uuid,
+    slug: Option<String>,
+    created_at: chrono::DateTime<chrono::Utc>,
+    author_display_name: Option<String>,
+}
+
+const TIMELINE_VISIBLE_ENTRIES: usize = 5;
+
+const TIMELINE_VERDICTS_SQL: &str = "SELECT v.created_at, v.verdict, v.environment, \
+            u.display_name, c.id, c.slug \
+     FROM verifications v \
+     JOIN claims c ON c.id = v.claim_id \
+     JOIN users u ON u.id = v.author_id \
+     WHERE c.battle_id = $1 AND c.deleted_at IS NULL";
+
+const TIMELINE_SUMMARIES_SQL: &str =
+    "SELECT created_at, temperature FROM battle_summary_history WHERE battle_id = $1";
 
 pub async fn battle_detail(
     State(state): State<AppState>,
@@ -7023,23 +7059,13 @@ pub async fn battle_detail(
         .bind(battle_id)
         .fetch_all(&state.pool);
 
-    let verdicts_fut = sqlx::query_as::<_, TimelineVerdictRow>(
-        "SELECT v.created_at, v.verdict, v.environment, v.failure_reason, \
-                v.conditions, u.display_name, c.id, c.slug \
-         FROM verifications v \
-         JOIN claims c ON c.id = v.claim_id \
-         JOIN users u ON u.id = v.author_id \
-         WHERE c.battle_id = $1 AND c.deleted_at IS NULL",
-    )
-    .bind(battle_id)
-    .fetch_all(&state.pool);
+    let verdicts_fut = sqlx::query_as::<_, TimelineVerdictRow>(TIMELINE_VERDICTS_SQL)
+        .bind(battle_id)
+        .fetch_all(&state.pool);
 
-    let summaries_fut = sqlx::query_as::<_, (chrono::DateTime<chrono::Utc>, String, Option<f32>)>(
-        "SELECT created_at, summary, temperature \
-         FROM battle_summary_history WHERE battle_id = $1",
-    )
-    .bind(battle_id)
-    .fetch_all(&state.pool);
+    let summaries_fut = sqlx::query_as::<_, TimelineSummaryRow>(TIMELINE_SUMMARIES_SQL)
+        .bind(battle_id)
+        .fetch_all(&state.pool);
 
     let sponsor_id = battle.sponsored_by;
     let pool_for_sponsor = state.pool.clone();
@@ -7203,7 +7229,16 @@ pub async fn battle_detail(
     // Timeline assembled from data already in hand — no extra
     // queries. Order matches the previous `build_timeline` impl
     // (newest first by `created_at`).
-    let timeline = assemble_timeline(&summary_rows, &claims_with_author, &verdict_rows);
+    let timeline_claims: Vec<TimelineClaim> = claims_with_author
+        .iter()
+        .map(|c| TimelineClaim {
+            id: c.row.id,
+            slug: c.row.slug.clone(),
+            created_at: c.row.created_at,
+            author_display_name: c.author_display_name.clone(),
+        })
+        .collect();
+    let timeline = assemble_timeline(&summary_rows, &timeline_claims, &verdict_rows);
 
     let path_seg = battle.slug.clone().unwrap_or_else(|| battle.id.to_string());
     let share_url = format!("{}/battles/{}", state.public_base_url, path_seg);
@@ -7300,12 +7335,9 @@ pub async fn battle_detail(
     // Split timeline at the 5th entry — see `docs/ui.md` →
     // "Battle history — keep it short". `split_off(5)` returns the
     // tail (entries 6+); everything before stays in `timeline`.
+    let timeline_hidden_count = timeline.len().saturating_sub(TIMELINE_VISIBLE_ENTRIES);
     let mut timeline_visible = timeline;
-    let timeline_hidden = if timeline_visible.len() > 5 {
-        timeline_visible.split_off(5)
-    } else {
-        Vec::new()
-    };
+    timeline_visible.truncate(TIMELINE_VISIBLE_ENTRIES);
 
     // Build the wins matrix — solutions × claims (since 0.13.4
     // rewrite; effort-sorted + column-capped since 0.26.1). One row
@@ -7392,7 +7424,7 @@ pub async fn battle_detail(
         battle: card.clone(),
         claims: claims_first,
         timeline_visible,
-        timeline_hidden,
+        timeline_hidden_count,
         sparkline,
         spark_max,
         wins_leaderboard,
@@ -7517,24 +7549,73 @@ pub async fn battle_claims_fragment(
     )
 }
 
-/// Escape the five HTML-significant characters. Used for fields
-/// rendered via `|safe` because we precompute their final HTML on
-/// the server side. Avoids a roundtrip through askama's filter API
-/// which wraps the result in a `Safe<…>` newtype that doesn't
-/// implement `Display`.
-fn html_escape(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    for c in s.chars() {
-        match c {
-            '&' => out.push_str("&amp;"),
-            '<' => out.push_str("&lt;"),
-            '>' => out.push_str("&gt;"),
-            '"' => out.push_str("&quot;"),
-            '\'' => out.push_str("&#39;"),
-            other => out.push(other),
-        }
-    }
-    out
+pub async fn battle_timeline_fragment(
+    State(state): State<AppState>,
+    Path(battle_id): Path<Uuid>,
+) -> Response {
+    let path = format!("/fragments/battles/{battle_id}/timeline");
+    let claims_sql = format!(
+        "SELECT c.id, c.slug, c.created_at, u.display_name \
+         FROM claims c LEFT JOIN users u ON u.id = c.author_id \
+         WHERE c.battle_id = $1 AND c.deleted_at IS NULL {superseded} \
+           AND c.visibility IS DISTINCT FROM 'private'",
+        superseded = crate::models::claim::not_superseded("c")
+    );
+    let (live, claims, verdicts, summaries) = tokio::join!(
+        sqlx::query_scalar::<_, bool>(
+            "SELECT EXISTS(SELECT 1 FROM battles WHERE id = $1 AND deleted_at IS NULL)"
+        )
+        .bind(battle_id)
+        .fetch_one(&state.pool),
+        sqlx::query_as::<
+            _,
+            (
+                Uuid,
+                Option<String>,
+                chrono::DateTime<chrono::Utc>,
+                Option<String>,
+            ),
+        >(&claims_sql)
+        .bind(battle_id)
+        .fetch_all(&state.pool),
+        sqlx::query_as::<_, TimelineVerdictRow>(TIMELINE_VERDICTS_SQL)
+            .bind(battle_id)
+            .fetch_all(&state.pool),
+        sqlx::query_as::<_, TimelineSummaryRow>(TIMELINE_SUMMARIES_SQL)
+            .bind(battle_id)
+            .fetch_all(&state.pool),
+    );
+    let claims: Vec<TimelineClaim> = claims
+        .unwrap_or_default()
+        .into_iter()
+        .map(
+            |(id, slug, created_at, author_display_name)| TimelineClaim {
+                id,
+                slug,
+                created_at,
+                author_display_name,
+            },
+        )
+        .collect();
+    let entries = if !live.unwrap_or(false) {
+        Vec::new()
+    } else {
+        assemble_timeline(
+            &summaries.unwrap_or_default(),
+            &claims,
+            &verdicts.unwrap_or_default(),
+        )
+        .into_iter()
+        .skip(TIMELINE_VISIBLE_ENTRIES)
+        .collect()
+    };
+    response_with_vary(
+        BattleTimelineRowsTemplate { entries },
+        &state.public_base_url,
+        &path,
+        "battle_timeline_rows.html",
+        "HX-Request",
+    )
 }
 
 /// Assemble the chronological battle feed from already-fetched rows.
@@ -7543,19 +7624,18 @@ fn html_escape(s: &str) -> String {
 /// parallel with everything else and hands them to this fn, so the
 /// timeline costs zero extra round-trips. Newest first.
 fn assemble_timeline(
-    summaries: &[(chrono::DateTime<chrono::Utc>, String, Option<f32>)],
-    claims: &[ClaimWithAuthor],
+    summaries: &[TimelineSummaryRow],
+    claims: &[TimelineClaim],
     verdicts: &[TimelineVerdictRow],
 ) -> Vec<TimelineEntry> {
     use chrono::SecondsFormat;
     let mut entries: Vec<TimelineEntry> = Vec::new();
 
-    for (at, summary, temperature) in summaries {
+    for (at, temperature) in summaries {
         let bucket = temperature.map(crate::services::temperature::TempBucket::from_score);
         entries.push(TimelineEntry {
             kind: "summary",
             headline: "Summary updated".into(),
-            body_html: crate::markdown::render(summary),
             detail: String::new(),
             timestamp: at.to_rfc3339_opts(SecondsFormat::Secs, true),
             sort_at: *at,
@@ -7568,20 +7648,7 @@ fn assemble_timeline(
     }
 
     for c in claims {
-        let claim_text = &c.row.claim;
-        let title = claim_text
-            .lines()
-            .find_map(|l| l.trim().strip_prefix("# ").map(str::to_string))
-            .unwrap_or_else(|| {
-                claim_text
-                    .lines()
-                    .next()
-                    .unwrap_or("Claim")
-                    .chars()
-                    .take(120)
-                    .collect()
-            });
-        let claim_path = c.row.slug.clone().unwrap_or_else(|| c.row.id.to_string());
+        let claim_path = c.slug.clone().unwrap_or_else(|| c.id.to_string());
         entries.push(TimelineEntry {
             kind: "claim",
             headline: format!(
@@ -7590,10 +7657,9 @@ fn assemble_timeline(
                     .clone()
                     .unwrap_or_else(|| "anonymous".into())
             ),
-            body_html: html_escape(&title),
             detail: String::new(),
-            timestamp: c.row.created_at.to_rfc3339_opts(SecondsFormat::Secs, true),
-            sort_at: c.row.created_at,
+            timestamp: c.created_at.to_rfc3339_opts(SecondsFormat::Secs, true),
+            sort_at: c.created_at,
             temperature: None,
             temp_class: "",
             temp_emoji: "",
@@ -7602,49 +7668,21 @@ fn assemble_timeline(
         });
     }
 
-    for (at, verdict, env, failure, conditions, author, claim_id, slug) in verdicts {
+    for (at, verdict, env, author, claim_id, slug) in verdicts {
         let author = author.clone().unwrap_or_else(|| "anonymous".into());
-        let (kind, headline, body_html, detail) = match verdict.as_str() {
+        let (kind, headline, detail) = match verdict.as_str() {
             "confirmed" | "verified" => (
                 "verify",
                 format!("Verified by {author}"),
-                String::new(),
                 env.clone().unwrap_or_default(),
             ),
-            "disconfirmed" | "refuted" => {
-                let mut body = String::new();
-                if let Some(f) = failure {
-                    body.push_str(
-                        "<div class=\"refute-section\">\
-                         <div class=\"refute-label\">Reason</div>\
-                         <div class=\"markdown-body\">",
-                    );
-                    body.push_str(&crate::markdown::render(f));
-                    body.push_str("</div></div>");
-                }
-                if let Some(c) = conditions {
-                    body.push_str(
-                        "<div class=\"refute-section\">\
-                         <div class=\"refute-label\">Conditions</div>\
-                         <div class=\"markdown-body\">",
-                    );
-                    body.push_str(&crate::markdown::render(c));
-                    body.push_str("</div></div>");
-                }
-                (
-                    "refute",
-                    format!("Refuted by {author}"),
-                    body,
-                    String::new(),
-                )
-            }
+            "disconfirmed" | "refuted" => ("refute", format!("Refuted by {author}"), String::new()),
             _ => continue,
         };
         let claim_path = slug.clone().unwrap_or_else(|| claim_id.to_string());
         entries.push(TimelineEntry {
             kind,
             headline,
-            body_html,
             detail,
             timestamp: at.to_rfc3339_opts(SecondsFormat::Secs, true),
             sort_at: *at,
@@ -7677,15 +7715,19 @@ pub async fn claim_detail(
     let looked_up_by_uuid = id_or_slug.parse::<Uuid>().is_ok();
     // `deleted_at IS NULL` — a soft-deleted claim 404s publicly (migration 053).
     let claim_row = if let Ok(uuid) = id_or_slug.parse::<Uuid>() {
-        sqlx::query_as::<_, ClaimRow>("SELECT * FROM claims WHERE id = $1 AND deleted_at IS NULL")
-            .bind(uuid)
-            .fetch_optional(&state.pool)
-            .await
+        sqlx::query_as::<_, ClaimRow>(&format!(
+            "SELECT {CLAIM_COLUMNS} FROM claims WHERE id = $1 AND deleted_at IS NULL"
+        ))
+        .bind(uuid)
+        .fetch_optional(&state.pool)
+        .await
     } else {
-        sqlx::query_as::<_, ClaimRow>("SELECT * FROM claims WHERE slug = $1 AND deleted_at IS NULL")
-            .bind(&id_or_slug)
-            .fetch_optional(&state.pool)
-            .await
+        sqlx::query_as::<_, ClaimRow>(&format!(
+            "SELECT {CLAIM_COLUMNS} FROM claims WHERE slug = $1 AND deleted_at IS NULL"
+        ))
+        .bind(&id_or_slug)
+        .fetch_optional(&state.pool)
+        .await
     };
 
     // Private claims render exactly like a missing one unless the
