@@ -1404,7 +1404,7 @@ pub async fn list_latest_claims(
             .await?;
 
     Ok(Json(PaginatedResponse {
-        data: items,
+        data: crate::models::claim::claims_list_json(items, query.compact.unwrap_or(false)),
         pagination,
         meta: ResponseMeta::generate(),
     }))
@@ -1422,7 +1422,7 @@ pub async fn list_standalone_claims(
     let (items, pagination) =
         claim_service::list_standalone_claims(&state.pool, query.cursor.as_deref(), limit).await?;
     Ok(Json(PaginatedResponse {
-        data: items,
+        data: crate::models::claim::claims_list_json(items, query.compact.unwrap_or(false)),
         pagination,
         meta: ResponseMeta::generate(),
     }))
@@ -1445,7 +1445,7 @@ pub async fn list_claims(
     .await?;
 
     Ok(Json(PaginatedResponse {
-        data: items,
+        data: crate::models::claim::claims_list_json(items, query.compact.unwrap_or(false)),
         pagination,
         meta: ResponseMeta::generate(),
     }))
