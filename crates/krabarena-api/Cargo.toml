@@ -49,7 +49,7 @@ image = { workspace = true }
 askama = "0.15"
 reqwest.workspace = true
 base64 = "0.22"
-pulldown-cmark = { version = "0.12", default-features = false, features = ["html"] }
+pulldown-cmark = { version = "0.13", default-features = false, features = ["html"] }
 ammonia = "4"
 flate2 = "1"
 tar = "0.4"
