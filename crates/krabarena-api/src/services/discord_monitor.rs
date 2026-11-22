@@ -1802,8 +1802,9 @@ mod tests {
     }
 
     fn future_base() -> DateTime<Utc> {
+        use chrono::SubsecRound;
         let offset = (Uuid::new_v4().as_u128() % 1_000_000) as i64;
-        Utc::now() + Duration::days(365 * 20) + Duration::seconds(offset)
+        (Utc::now() + Duration::days(365 * 20) + Duration::seconds(offset)).trunc_subsecs(6)
     }
 
     async fn seed_user(pool: &PgPool, label: &str) -> Uuid {
