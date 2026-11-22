@@ -53,7 +53,7 @@ class BattlePage(LoadableComponent):
 
     @property
     def claim_rows(self):
-        return self.claims_section.locator(".battle-claim-row")
+        return self.claims_section.locator(".battle-claim-card")
 
     @property
     def empty_claims_state(self):
@@ -106,8 +106,8 @@ class BattlePage(LoadableComponent):
             return None
 
         first_claim = self.claim_rows.first
-        claim_title = first_claim.locator(".bcr-title")
-        score_area = first_claim.locator(".bcr-score-vr")
+        claim_title = first_claim.locator(".bcc-title")
+        score_area = first_claim.locator(".bcc-vr")
 
         expect(first_claim).to_be_visible()
         expect(claim_title).to_be_visible()
