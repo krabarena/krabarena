@@ -48,7 +48,7 @@ jobs:
 
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Install Rust
         run: |
@@ -104,7 +104,7 @@ jobs:
             shasum -a 256 ${{ matrix.archive }} > ${{ matrix.archive }}.sha256
           fi
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ${{ matrix.archive }}
           path: |
@@ -114,10 +114,11 @@ jobs:
   # Upload to GCS on every main push (latest channel)
   upload-gcs:
     needs: build
-    if: ${{ github.repository == 'krabarena/krabarena' && (always() && !cancelled()) }}
+    if: ${{ github.repository == 'krabarena/krabarena' && github.ref == 'refs/heads/main' && (always() && !cancelled()) }}
     runs-on: ubuntu-latest
+    environment: production
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           sparse-checkout: |
             skills
@@ -125,14 +126,14 @@ jobs:
             docs
 
       - id: auth
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
         with:
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
 
-      - uses: google-github-actions/setup-gcloud@v2
+      - uses: google-github-actions/setup-gcloud@e427ad8a34f8676edf47cf7d7925499adf3eb74f # v2
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           merge-multiple: true
 
@@ -215,14 +216,14 @@ jobs:
     if: ${{ github.repository == 'krabarena/krabarena' && (always() && !cancelled() && startsWith(github.ref, 'refs/tags/')) }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           sparse-checkout: |
             skills
             crates/krabarena-shared/src
             docs
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           merge-multiple: true
 

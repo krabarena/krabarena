@@ -1,0 +1,98 @@
+name: Preview Cleanup
+
+on:
+  delete:
+  schedule:
+    - cron: "23 4 * * *"
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: Branch whose preview should be removed
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  REGION: us-central1
+  TEST_PROJECT: krabarena-test
+  MAX_AGE_DAYS: "7"
+
+jobs:
+  plan:
+    name: Pick previews to remove
+    if: github.repository == 'krabarena/krabarena' && (github.event_name != 'delete' || github.event.ref_type == 'branch')
+    runs-on: ubuntu-latest
+    environment: test
+    outputs:
+      slugs: ${{ steps.pick.outputs.slugs }}
+    steps:
+      - uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@e427ad8a34f8676edf47cf7d7925499adf3eb74f # v2
+
+      - id: pick
+        env:
+          EVENT: ${{ github.event_name }}
+          DELETED: ${{ github.event.ref }}
+          INPUT: ${{ inputs.branch }}
+        run: |
+          slugify() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//' | cut -c1-30 | sed -E 's/-+$//'; }
+          case "$EVENT" in
+            delete) SLUGS=$(slugify "$DELETED") ;;
+            workflow_dispatch) SLUGS=$(slugify "$INPUT") ;;
+            *)
+              CUTOFF=$(date -u -d "-$MAX_AGE_DAYS days" +%Y-%m-%dT%H:%M:%SZ)
+              SLUGS=$(gcloud run services list --project "$TEST_PROJECT" --region "$REGION" \
+                --filter "metadata.labels.preview=true" --format json \
+                | jq -r --arg c "$CUTOFF" '.[] | select(.metadata.creationTimestamp < $c) | .metadata.labels.slug' | sort -u | tr '\n' ' ')
+              ;;
+          esac
+          echo "slugs=$SLUGS" >> "$GITHUB_OUTPUT"
+          echo "Previews to remove: ${SLUGS:-none}"
+
+      - name: Delete Cloud Run previews
+        env:
+          TARGETS: ${{ steps.pick.outputs.slugs }}
+        run: |
+          for SLUG in $TARGETS; do
+            if gcloud run services delete "pv-$SLUG" --region "$REGION" --project "$TEST_PROJECT" --quiet 2>/dev/null; then
+              echo "Deleted pv-$SLUG"
+            else
+              echo "No Cloud Run preview pv-$SLUG"
+            fi
+          done
+
+  database:
+    name: Delete preview databases
+    needs: plan
+    if: needs.plan.outputs.slugs != '' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: neon
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@e427ad8a34f8676edf47cf7d7925499adf3eb74f # v2
+
+      - env:
+          NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+          TARGETS: ${{ needs.plan.outputs.slugs }}
+        run: |
+          NEON_API_KEY=$(gcloud secrets versions access latest --secret neon-api-key --project "${{ vars.GCP_PROJECT_ID }}")
+          echo "::add-mask::$NEON_API_KEY"
+          export NEON_API_KEY
+          for SLUG in $TARGETS; do
+            scripts/ci/neon.sh delete "preview/$SLUG"
+            if gcloud secrets delete "preview-$SLUG-database-url" --project "$TEST_PROJECT" --quiet 2>/dev/null; then
+              echo "Deleted secret preview-$SLUG-database-url"
+            fi
+          done
