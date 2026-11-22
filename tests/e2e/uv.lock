@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 2
 requires-python = "==3.13.*"
 
 [[package]]
@@ -196,7 +196,7 @@ wheels = [
 
 [[package]]
 name = "krabarena-e2e"
-version = "0.47.0"
+version = "0.47.2"
 source = { virtual = "." }
 
 [package.dev-dependencies]

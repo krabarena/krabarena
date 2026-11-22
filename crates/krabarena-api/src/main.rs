@@ -8,6 +8,8 @@ use axum::http::{HeaderName, HeaderValue, Method, header};
 use axum::middleware::Next;
 use axum::response::Response;
 use axum::routing::{any, get, post};
+use tower_http::compression::CompressionLayer;
+use tower_http::compression::predicate::{Predicate, SizeAbove};
 use tower_http::cors::CorsLayer;
 use tower_http::services::ServeFile;
 use tower_http::trace::TraceLayer;
@@ -18,7 +20,7 @@ use krabarena_api::db::DB_QUERY_COUNT;
 // Module tree + AppState live in `lib.rs` so other entry points
 // (tests, future binaries) can share the same code.
 use krabarena_api::{
-    AppState, LeaderboardCaches, RecaptchaConfig, db, openapi, routes, services, web,
+    AppState, LeaderboardCaches, RecaptchaConfig, db, openapi, routes, server_timing, services, web,
 };
 use utoipa::OpenApi;
 
@@ -563,6 +565,10 @@ fn build_router(state: AppState) -> Router {
             "/fragments/battles/{battle_id}/claims",
             get(web::pages::battle_claims_fragment),
         )
+        .route(
+            "/fragments/battles/{battle_id}/timeline",
+            get(web::pages::battle_timeline_fragment),
+        )
         .route("/fragments/agents", get(web::pages::agents_fragment))
         .route(
             "/battles",
@@ -721,6 +727,8 @@ fn build_router(state: AppState) -> Router {
         // https://krabarena.com/docs/foo.md (markdown) — no
         // per-document route.
         .route("/docs", get(routes::docs::doc_index))
+        .route("/docs.md", get(routes::docs::doc_index_md))
+        .route("/docs/llms-full.txt", get(routes::docs::docs_bundle))
         .route("/docs/{name}", get(routes::docs::doc_page))
         // Test-only token mint — inert unless TEST_AUTH_SECRET is set on
         // the server. Returns 404 in prod by default.
@@ -759,6 +767,9 @@ fn build_router(state: AppState) -> Router {
             state.clone(),
             web::errors::html_error_pages,
         ))
+        .layer(axum::middleware::from_fn(
+            web::ai_index::llms_txt_link_header,
+        ))
         // Absolute request-body ceiling (DoS backstop). Multipart
         // upload routes (claim artifacts up to 100 MB) are exempt from
         // this — axum's `Multipart` streams field-by-field and isn't
@@ -769,6 +780,10 @@ fn build_router(state: AppState) -> Router {
         // upload even if a future extractor consults it.
         .layer(DefaultBodyLimit::max(MAX_REQUEST_BODY_BYTES))
         .layer(axum::middleware::from_fn(count_db_queries))
+        .layer(
+            CompressionLayer::new()
+                .compress_when(SizeAbove::new(1024).and(is_compressible_response)),
+        )
         .layer(TraceLayer::new_for_http())
         // CORS locked to known origins (was `permissive()` ≤ 0.23).
         .layer(build_cors(&state.public_base_url))
@@ -852,6 +867,43 @@ fn build_cors(public_base_url: &str) -> CorsLayer {
         ])
 }
 
+fn is_compressible_content_type(content_type: &str) -> bool {
+    let mime = content_type
+        .split(';')
+        .next()
+        .unwrap_or("")
+        .trim()
+        .to_ascii_lowercase();
+    matches!(
+        mime.as_str(),
+        "text/html"
+            | "text/markdown"
+            | "text/plain"
+            | "text/css"
+            | "text/xml"
+            | "text/javascript"
+            | "application/javascript"
+            | "application/json"
+            | "application/feed+json"
+            | "application/xml"
+            | "application/rss+xml"
+            | "application/atom+xml"
+            | "image/svg+xml"
+    )
+}
+
+fn is_compressible_response(
+    _status: axum::http::StatusCode,
+    _version: axum::http::Version,
+    headers: &axum::http::HeaderMap,
+    _extensions: &axum::http::Extensions,
+) -> bool {
+    headers
+        .get(header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(is_compressible_content_type)
+}
+
 /// Tower middleware that scopes a fresh `DB_QUERY_COUNT` for the
 /// duration of each HTTP request and attaches the final value as
 /// `X-DB-Queries` on the response. Every sqlx query routed through
@@ -866,10 +918,22 @@ fn build_cors(public_base_url: &str) -> CorsLayer {
 async fn count_db_queries(req: Request, next: Next) -> Response {
     let counter: Arc<AtomicU64> = Arc::new(AtomicU64::new(0));
     let read = counter.clone();
-    let mut response = DB_QUERY_COUNT.scope(counter, next.run(req)).await;
+    let phases: server_timing::Phases = Arc::default();
+    let phases_read = phases.clone();
+    let started = std::time::Instant::now();
+    let mut response = server_timing::PHASES
+        .scope(phases, DB_QUERY_COUNT.scope(counter, next.run(req)))
+        .await;
     let n = read.load(Ordering::Relaxed);
     if let Ok(hv) = HeaderValue::from_str(&n.to_string()) {
         response.headers_mut().insert("x-db-queries", hv);
+    }
+    let timing = phases_read
+        .lock()
+        .map(|p| server_timing::header_value(started.elapsed(), &p))
+        .unwrap_or_default();
+    if let Ok(hv) = HeaderValue::from_str(&timing) {
+        response.headers_mut().insert("server-timing", hv);
     }
     response
 }
@@ -1300,5 +1364,114 @@ mod tests {
         );
         let page = get("/no-such-page").await.expect("router responds");
         assert!(page.headers().get("x-krab-server-version").is_none());
+    }
+
+    #[tokio::test]
+    async fn large_json_is_compressed_when_client_accepts_gzip() {
+        let get = |encoding: Option<&'static str>| {
+            let mut req = Request::builder().uri("/v1/cli/manifest");
+            if let Some(enc) = encoding {
+                req = req.header(header::ACCEPT_ENCODING, enc);
+            }
+            build_router(test_state()).oneshot(req.body(Body::empty()).expect("request builds"))
+        };
+        let gz = get(Some("gzip")).await.expect("router responds");
+        assert_eq!(gz.status(), StatusCode::OK);
+        assert_eq!(
+            gz.headers()
+                .get(header::CONTENT_ENCODING)
+                .and_then(|v| v.to_str().ok()),
+            Some("gzip")
+        );
+        assert!(gz.headers().get("server-timing").is_some());
+        let plain = get(None).await.expect("router responds");
+        assert!(plain.headers().get(header::CONTENT_ENCODING).is_none());
+    }
+
+    #[test]
+    fn only_text_like_content_types_are_compressible() {
+        assert!(is_compressible_content_type("text/html; charset=utf-8"));
+        assert!(is_compressible_content_type("application/json"));
+        assert!(is_compressible_content_type("text/markdown; charset=utf-8"));
+        assert!(!is_compressible_content_type("text/event-stream"));
+        assert!(!is_compressible_content_type("application/octet-stream"));
+        assert!(!is_compressible_content_type("image/png"));
+    }
+
+    async fn get_with(uri: &str, headers: &[(header::HeaderName, &str)]) -> Response {
+        let mut req = Request::builder().uri(uri);
+        for (k, v) in headers {
+            req = req.header(k, *v);
+        }
+        build_router(test_state())
+            .oneshot(req.body(Body::empty()).expect("request should build"))
+            .await
+            .expect("router responds")
+    }
+
+    async fn text(resp: Response) -> String {
+        let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .expect("body");
+        String::from_utf8(bytes.to_vec()).expect("utf8")
+    }
+
+    fn header_str(resp: &Response, name: header::HeaderName) -> String {
+        resp.headers()
+            .get_all(name)
+            .iter()
+            .filter_map(|v| v.to_str().ok())
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+
+    #[tokio::test]
+    async fn unknown_markdown_doc_returns_markdown_404_pointing_at_indexes() {
+        for (uri, hdrs) in [
+            ("/docs/no-such-doc.md", vec![(header::ACCEPT, "*/*")]),
+            (
+                "/docs/no-such-doc",
+                vec![(header::USER_AGENT, "curl/8.6.0")],
+            ),
+        ] {
+            let resp = get_with(uri, &hdrs).await;
+            assert_eq!(resp.status(), StatusCode::NOT_FOUND, "{uri}");
+            assert!(
+                header_str(&resp, header::CONTENT_TYPE).starts_with("text/markdown"),
+                "{uri} must stay markdown, not the HTML error page"
+            );
+            let body = text(resp).await;
+            assert!(body.starts_with("# Doc not found"), "{uri}: {body}");
+            assert!(body.contains("/llms.txt"));
+            assert!(body.contains("/docs.md"));
+        }
+    }
+
+    #[tokio::test]
+    async fn negotiated_doc_responses_vary_on_accept() {
+        let resp = get_with("/docs/no-such-doc", &[(header::ACCEPT, "text/markdown")]).await;
+        assert!(header_str(&resp, header::VARY).contains("Accept"));
+    }
+
+    #[tokio::test]
+    async fn html_and_markdown_pages_advertise_llms_txt() {
+        let html = get_with("/no-such-page", &[(header::ACCEPT, "text/html")]).await;
+        assert!(header_str(&html, header::LINK).contains("</llms.txt>; rel=\"describedby\""));
+        let md = get_with("/docs/no-such-doc.md", &[]).await;
+        assert!(header_str(&md, header::LINK).contains("</llms.txt>; rel=\"describedby\""));
+        let api = get_with("/v1/no-such-endpoint", &[]).await;
+        assert!(api.headers().get(header::LINK).is_none());
+    }
+
+    #[tokio::test]
+    async fn docs_bundle_route_serves_plain_text() {
+        let bundle = get_with("/docs/llms-full.txt", &[]).await;
+        assert_eq!(bundle.status(), StatusCode::OK);
+        assert!(header_str(&bundle, header::CONTENT_TYPE).starts_with("text/plain"));
+        assert!(
+            text(bundle)
+                .await
+                .starts_with("# KrabArena docs — full text")
+        );
     }
 }

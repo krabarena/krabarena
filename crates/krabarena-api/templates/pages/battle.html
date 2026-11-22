@@ -380,49 +380,18 @@
     <span class="sub">Battle history</span>
   </div>
   <div class="timeline">
-    {% for entry in timeline_visible %}
-    <div class="tl-row">
-      <div class="tl-icon{% if entry.kind == "open" %} open{% else if entry.kind == "summary" %} note{% else if entry.kind == "refute" %} refute{% endif %}">
-        {% if entry.kind == "verify" %}✓{% else if entry.kind == "refute" %}✗{% else if entry.kind == "open" %}○{% else if entry.kind == "summary" %}📝{% else %}+{% endif %}
+    {% for entry in timeline_visible %}{% include "partials/battle_timeline_row.html" %}{% endfor %}
+    {% if timeline_hidden_count > 0 %}
+    <details class="u-mt-sm" data-timeline-older
+             hx-get="/fragments/battles/{{ battle_uuid }}/timeline"
+             hx-trigger="toggle once"
+             hx-target="find [data-timeline-older-rows]"
+             hx-swap="innerHTML">
+      <summary class="c-timeline-disclosure-summary">Show {{ timeline_hidden_count }} older entries</summary>
+      <div data-timeline-older-rows>
+        <span class="feed-spinner" aria-hidden="true"></span>
+        <a class="u-visually-hidden" href="/fragments/battles/{{ battle_uuid }}/timeline">Load older entries</a>
       </div>
-      <div>
-        <div class="tl-text">
-          {% if !entry.link.is_empty() %}
-            <a href="{{ entry.link }}" class="c-link-inherit"><strong>{{ entry.headline }}</strong></a>
-          {% else %}
-            <strong>{{ entry.headline }}</strong>
-          {% endif %}
-        </div>
-        <span class="tl-time">{{ entry.timestamp }}</span>
-        {% if !entry.detail.is_empty() %}
-        <div class="tl-env">{{ entry.detail }}</div>
-        {% endif %}
-      </div>
-    </div>
-    {% endfor %}
-    {% if !timeline_hidden.is_empty() %}
-    <details class="u-mt-sm">
-      <summary class="c-timeline-disclosure-summary">Show {{ timeline_hidden.len() }} older entries</summary>
-      {% for entry in timeline_hidden %}
-      <div class="tl-row">
-        <div class="tl-icon{% if entry.kind == "open" %} open{% else if entry.kind == "summary" %} note{% else if entry.kind == "refute" %} refute{% endif %}">
-          {% if entry.kind == "verify" %}✓{% else if entry.kind == "refute" %}✗{% else if entry.kind == "open" %}○{% else if entry.kind == "summary" %}📝{% else %}+{% endif %}
-        </div>
-        <div>
-          <div class="tl-text">
-            {% if !entry.link.is_empty() %}
-              <a href="{{ entry.link }}" class="c-link-inherit"><strong>{{ entry.headline }}</strong></a>
-            {% else %}
-              <strong>{{ entry.headline }}</strong>
-            {% endif %}
-          </div>
-          <span class="tl-time">{{ entry.timestamp }}</span>
-          {% if !entry.detail.is_empty() %}
-          <div class="tl-env">{{ entry.detail }}</div>
-          {% endif %}
-        </div>
-      </div>
-      {% endfor %}
     </details>
     {% endif %}
   </div>
