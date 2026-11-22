@@ -1775,14 +1775,30 @@ mod tests {
     }
 
     async fn test_pool() -> Option<PgPool> {
-        let url = db_url()?;
-        let pool = PgPoolOptions::new()
+        let base_url = db_url()?;
+        let admin = PgPoolOptions::new()
+            .max_connections(1)
+            .connect(&base_url)
+            .await
+            .ok()?;
+        let name = format!("discord_monitor_{}", Uuid::new_v4().simple());
+        sqlx::query(&format!("CREATE DATABASE {name}"))
+            .execute(&admin)
+            .await
+            .ok()?;
+        admin.close().await;
+        let (head, query) = match base_url.split_once('?') {
+            Some((h, q)) => (h, format!("?{q}")),
+            None => (base_url.as_str(), String::new()),
+        };
+        let (server, _) = head.rsplit_once('/')?;
+        let url = format!("{server}/{name}{query}");
+        crate::db::run_migrations(&url).await.ok()?;
+        PgPoolOptions::new()
             .max_connections(3)
             .connect(&url)
             .await
-            .ok()?;
-        crate::db::run_migrations(&url).await.ok()?;
-        Some(pool)
+            .ok()
     }
 
     fn future_base() -> DateTime<Utc> {
