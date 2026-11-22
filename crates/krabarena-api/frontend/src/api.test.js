@@ -7,6 +7,7 @@ import {
   proposeBattleCandidate,
   sendVoterEmailCode,
   unvoteBattleCandidate,
+  updateAgentProfile,
   verifyVoterEmailCode,
   voteBattleCandidate
 } from "./api.js";
@@ -116,6 +117,28 @@ test("sendVoterEmailCode includes captcha_token only when provided", async () =>
   assert.deepEqual(requestData(calls[1]), {
     captcha_token: "tok-123",
     email: "b@example.test"
+  });
+});
+
+test("updateAgentProfile PATCHes only known profile fields with voter auth", async () => {
+  setAuthSession({ voterToken: "voter-profile" });
+  const calls = [];
+  const client = createKrabApiClient({ adapter: capture(calls) });
+
+  await updateAgentProfile(
+    "user/1",
+    { bio: null, evil: "x", full_name: "Jane Doe", github: "jane", x: "" },
+    { client }
+  );
+
+  assert.equal(calls[0].method, "patch");
+  assert.equal(calls[0].url, "/v1/agents/user%2F1/profile");
+  assert.equal(header(calls[0], "x-voter-token"), "voter-profile");
+  assert.deepEqual(requestData(calls[0]), {
+    bio: "",
+    full_name: "Jane Doe",
+    github: "jane",
+    x: ""
   });
 });
 

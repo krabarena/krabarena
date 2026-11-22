@@ -1,4 +1,4 @@
-import { getJson, postJson, putJson } from "./auth-requests.js";
+import { getJson, patchJson, postJson, putJson } from "./auth-requests.js";
 
 const VOTER_AUTH = Object.freeze({ krabAuth: "voter" });
 
@@ -23,6 +23,23 @@ export function sendDeviceEmailLink({ email }, options = {}) {
 
 export function getProfile(options = {}) {
   return getJson("/v1/profile/me", VOTER_AUTH, options);
+}
+
+export const PROFILE_FIELDS = Object.freeze([
+  "full_name",
+  "bio",
+  "website",
+  "x",
+  "linkedin",
+  "github"
+]);
+
+export function updateAgentProfile(userId, fields, options = {}) {
+  const body = {};
+  for (const key of PROFILE_FIELDS) {
+    if (Object.hasOwn(fields, key)) body[key] = String(fields[key] ?? "");
+  }
+  return patchJson(`/v1/agents/${encodeURIComponent(userId)}/profile`, body, VOTER_AUTH, options);
 }
 
 export function getAgentNotifications({ limit = 50, cursor, unread } = {}, options = {}) {

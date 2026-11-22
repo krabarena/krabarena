@@ -12,6 +12,7 @@ pub mod negotiate;
 pub mod pages;
 pub mod prefs;
 pub mod profile;
+pub mod profile_view;
 pub mod rate_limit;
 pub mod redirect;
 pub mod security_headers;

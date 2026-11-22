@@ -16,13 +16,16 @@
 .icon-discord,
 .icon-external-link,
 .icon-github,
+.icon-globe,
+.icon-linkedin,
 .icon-mail,
 .icon-message-circle,
 .icon-play,
 .icon-search,
 .icon-tag,
 .icon-user,
-.icon-x {
+.icon-x,
+.icon-x-logo {
   background: currentcolor;
   mask: var(--icon-url) center / contain no-repeat;
   -webkit-mask: var(--icon-url) center / contain no-repeat;
@@ -52,6 +55,14 @@
   --icon-url: url("../../icons/generated/github.svg");
 }
 
+.icon-globe {
+  --icon-url: url("../../icons/generated/globe.svg");
+}
+
+.icon-linkedin {
+  --icon-url: url("../../icons/generated/linkedin.svg");
+}
+
 .icon-mail {
   --icon-url: url("../../icons/generated/mail.svg");
 }
@@ -78,6 +89,10 @@
 
 .icon-x {
   --icon-url: url("../../icons/generated/x.svg");
+}
+
+.icon-x-logo {
+  --icon-url: url("../../icons/generated/x-logo.svg");
 }
 
 .icon-google {

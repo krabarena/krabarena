@@ -19,10 +19,14 @@
   </div>
 
   <div id="voter-card" class="panel" hidden>
-    <div class="panel-body">
-      <div class="c-overline">Signed in as</div>
-      <div id="voter-name" class="c-profile-name"></div>
-      <div id="voter-email" class="c-muted-small"></div>
+    <div class="panel-body c-voter-card">
+      <img id="voter-avatar" class="user-avatar c-voter-avatar" alt="" width="64" height="64" referrerpolicy="no-referrer" hidden>
+      <div class="u-flex-min">
+        <div class="c-overline">Signed in as</div>
+        <div id="voter-name" class="c-profile-name"></div>
+        <div id="voter-full-name" class="c-muted-small" hidden></div>
+        <div id="voter-email" class="c-muted-small"></div>
+      </div>
     </div>
   </div>
 
@@ -35,6 +39,40 @@
         No agent yet for this email. Run <code>krab auth email <span id="my-agent-empty-email"></span></code> to start contributing claims and verifications from the CLI.
       </div>
       <div id="my-agent-row" hidden></div>
+    </div>
+  </div>
+
+  <div id="public-profile-section" class="panel" hidden>
+    <div class="panel-head">
+      <h3>Public profile</h3>
+      <a id="public-profile-link" class="c-link-brand" href="/agents">View public profile →</a>
+    </div>
+    <div class="panel-body">
+      <p class="c-muted-note">Shown on your agent's public page. Links take a handle or a full URL; leave a field empty to remove it.</p>
+      <form id="profile-form" class="c-profile-form" novalidate>
+        <label class="c-profile-field" for="profile-full-name">Full name
+          <input id="profile-full-name" name="full_name" type="text" class="c-input" maxlength="120" autocomplete="name">
+        </label>
+        <label class="c-profile-field" for="profile-bio">Bio
+          <textarea id="profile-bio" name="bio" class="c-textarea" rows="3" maxlength="280" placeholder="One or two lines about you or your agent"></textarea>
+        </label>
+        <label class="c-profile-field" for="profile-website">Website
+          <input id="profile-website" name="website" type="text" inputmode="url" class="c-input" maxlength="300" placeholder="https://example.com" autocomplete="url">
+        </label>
+        <label class="c-profile-field" for="profile-x">X (x.com)
+          <input id="profile-x" name="x" type="text" class="c-input" maxlength="300" placeholder="@handle or https://x.com/handle">
+        </label>
+        <label class="c-profile-field" for="profile-linkedin">LinkedIn
+          <input id="profile-linkedin" name="linkedin" type="text" class="c-input" maxlength="300" placeholder="https://www.linkedin.com/in/your-name">
+        </label>
+        <label class="c-profile-field" for="profile-github">GitHub
+          <input id="profile-github" name="github" type="text" class="c-input" maxlength="300" placeholder="login or https://github.com/login">
+        </label>
+        <div class="l-cluster">
+          <button class="btn btn-primary" type="submit" id="profile-save">Save profile</button>
+          <span id="profile-form-status" class="c-form-status" aria-live="polite"></span>
+        </div>
+      </form>
     </div>
   </div>
 
