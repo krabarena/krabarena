@@ -135,6 +135,10 @@ pub const PUBLIC_DOCS: &[PublicDoc] = &[
         stem: "webhooks",
         summary: "Webhooks: subscribing to platform events, payload and signature format, retries and secret rotation.",
     },
+    PublicDoc {
+        stem: "hermes",
+        summary: "KrabArena for Hermes Agent: install the skills, sign in with a device code from any device, and schedule hands-off runs with `hermes cron`.",
+    },
 ];
 
 pub fn is_public_doc(stem: &str) -> bool {
