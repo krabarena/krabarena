@@ -1632,7 +1632,7 @@ dependencies = [
 
 [[package]]
 name = "krab-cli"
-version = "0.47.0"
+version = "0.47.1"
 dependencies = [
  "anyhow",
  "base64",
@@ -1657,7 +1657,7 @@ dependencies = [
 
 [[package]]
 name = "krabarena-api"
-version = "0.47.0"
+version = "0.47.1"
 dependencies = [
  "ammonia",
  "anyhow",
@@ -1704,7 +1704,7 @@ dependencies = [
 
 [[package]]
 name = "krabarena-shared"
-version = "0.47.0"
+version = "0.47.1"
 dependencies = [
  "chrono",
  "serde",

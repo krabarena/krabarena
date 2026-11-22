@@ -8352,9 +8352,13 @@ fn preview_80(text: &str) -> String {
 
 pub async fn contributor_profile(
     State(state): State<AppState>,
-    Path(user_id): Path<Uuid>,
+    Path(raw_user_id): Path<String>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
+    let (raw_user_id, headers, _) = split_markdown_suffix(raw_user_id, headers);
+    let Ok(user_id) = Uuid::parse_str(&raw_user_id) else {
+        return (StatusCode::NOT_FOUND, Html("Agent not found".to_string())).into_response();
+    };
     // Profile total_claims = lineage HEADs only (edited claims don't
     // double-count). See `models::claim::not_superseded`.
     let superseded = crate::models::claim::not_superseded("c");
@@ -8557,6 +8561,7 @@ pub async fn contributor_profile(
             agent.total_refute,
         ))
         .with_og_type("profile")
+        .with_markdown_alternate(format!("{agent_url}.md"))
         .with_json_ld(breadcrumb_json_ld(vec![
             BreadcrumbItem::new(
                 "KrabArena",

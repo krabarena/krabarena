@@ -33,6 +33,7 @@ updates:
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
+      - dependency-name: playwright
 
   - package-ecosystem: uv
     directory: /tests/e2e
