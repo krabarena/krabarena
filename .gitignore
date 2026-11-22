@@ -41,8 +41,6 @@ AGENTS.local.md
 # Temporary
 *.tmp
 /.artifacts/
-terraform/.terraform/
-terraform/terraform.tfvars
 
 # Dev tooling
 node_modules/

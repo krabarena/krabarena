@@ -6,18 +6,18 @@
 
 ## Release flow (mandatory)
 
-Code is developed in the public repo `krabarena/krabarena`; the private
-repo `krabarena/krabarena-private` holds deploy secrets and runs the
-pipeline. Public `main` reaches private through the hourly
-`Sync from Public` PR — see `docs/public-private-workflow.md`.
+Code is developed and deployed from this repo. Deploy jobs authenticate
+to GCP with Workload Identity (no stored keys) and every credential is
+read from GCP Secret Manager, so GitHub holds no deploy secrets.
+Terraform, IAM, secret containers and ops runbooks live in the private
+`krabarena/krabarena-infra` repo.
 
 Every change ships through the staged pipeline — no direct pushes, no
 exceptions for "small" changes:
 
 ```
-PR reviewed + CI green (public repo)
-  └─► merge to public main
-       └─► Sync from Public PR merged in private
+PR reviewed + CI green
+  └─► merge to main
        └─► Build & Push (image to krabbit-dev/krabarena-repo)
             └─► Deploy to Test (krabarena-test GCP project)
                  └─► E2E tests (review_e2e.rs against the test URL)
@@ -384,22 +384,16 @@ change a rule, update `docs/ui.md` in the same PR.
   `{"database":"connected","status":"healthy","version":"0.10.0"}`
 - **Install CLI**: `curl -fsSL https://krabarena.com/install.sh | sh`
 
-### Secrets: GitHub is the source of truth
+### Secrets: Secret Manager is the source of truth
 
-Every prod credential lives in **GitHub Actions secrets**. Prod Cloud
-Run still reads Secret Manager (`--set-secrets …:latest`), which is a
-mirror: `scripts/sync-secrets-to-gcp.sh` copies GitHub → Secret Manager
-(diffs by SHA-256, never prints a value, never pushes an empty secret).
-
-- `gh workflow run "Sync Secrets" -f mode=check` — read-only drift report
-  in the job summary.
-- `gh workflow run "Sync Secrets" -f mode=apply` — push drifted values.
-- With repo variable `SECRETS_SOURCE=github`, `Deploy` runs `apply`
-  before every revision swap. Rotation = `gh secret set NAME` + re-run
-  `Deploy`. Only flip the variable after `check` is all green.
-- Name map is in the script (`OAUTH_GITHUB_*` → `github-client-*`, since
-  GitHub forbids the `GITHUB_` prefix). Test env reads GitHub secrets
-  directly (`TEST_*`).
+Cloud Run binds every credential with `--set-secrets NAME=secret-id:latest`
+(prod secrets in `krabbit-dev`, test secrets in `krabarena-test`). The
+`Deploy to Test` E2E step reads `test-auth-secret` the same way. GitHub
+Actions only needs non-secret variables (`GCP_PROJECT_ID`,
+`GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_SERVICE_ACCOUNT`, public URLs).
+Workload Identity trusts this repo only on `main` or inside the `test`
+environment; the `production` environment only deploys from `main`.
+Rotation and the secret inventory are in `krabarena/krabarena-infra`.
 
 ### Test (CI gate, not user-facing)
 
@@ -415,8 +409,7 @@ mirror: `scripts/sync-secrets-to-gcp.sh` copies GitHub → Secret Manager
   Neon project `$NEON_PROJECT_ID`)
 - **JWT/auth**: separate JWT secret, `TEST_AUTH_SECRET` set so
   `POST /v1/test/mint-token` works here (dormant in prod)
-- **Terraform**: `terraform/cloud_run_test.tf`, provider alias
-  `google.test`
+- **Terraform**: `krabarena/krabarena-infra`
 - **Workflow**: `.github/workflows/deploy-test.yml`
 
 ### Pipeline contract
@@ -469,34 +462,6 @@ that with the designer.
 
 ### Refreshing the test-e2e Neon branch
 
-Long-lived test branches accumulate `e2e test battle — edit
-regression guard` rows from each E2E run. Re-fork from prod main
-when the noise gets in the way of designer / smoke review:
-
-```sh
-PROJECT="$NEON_PROJECT_ID"
-
-# 1. Delete the stale branch
-ID=$(neonctl branches list --project-id "$PROJECT" --output json \
-       | jq -r '.[] | select(.name=="test-e2e") | .id')
-neonctl branches delete "$ID" --project-id "$PROJECT"
-
-# 2. Re-create from current main, capture new compute host
-neonctl branches create --project-id "$PROJECT" --name test-e2e --parent main >/dev/null
-NEW_URL=$(neonctl connection-string test-e2e --project-id "$PROJECT" \
-            --role-name neondb_owner --database-name neondb --pooled)
-
-# 3. Patch Cloud Run env (creates a fresh revision)
-gcloud run services update krabarena-api \
-  --region=us-central1 --project=krabarena-test \
-  --update-env-vars="DATABASE_URL=$NEW_URL" --quiet
-
-# 4. Update the GH secret so Deploy-to-Test runs hit the new branch
-#    NOTE: omit --body, pass via stdin (--body takes a literal string,
-#    --body - stores "-" verbatim).
-printf '%s' "$NEW_URL" | gh secret set TEST_DATABASE_URL --repo krabarena/krabarena-private
-```
-
-Compute hostname changes every refork; skipping step 3 or 4 leaves
-Cloud Run / CI pointed at the deleted branch and Deploy-to-Test
-returns 503. Both updates are mandatory.
+Re-forking `test-e2e` changes its compute hostname, so the
+`database-url` secret in `krabarena-test` must be updated in the same
+step. The runbook is in `krabarena/krabarena-infra`.

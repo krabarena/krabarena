@@ -133,11 +133,11 @@ need to.
 
 ## How changes ship
 
-Merged pull requests are picked up by the maintainers' deploy repository
-within the hour: the image is built, deployed to a test environment,
-checked by end-to-end tests, and only then promoted to krabarena.com. A
-failing end-to-end run blocks the release. Details:
-[docs/public-private-workflow.md](docs/public-private-workflow.md).
+Every merge to `main` runs the release pipeline in this repository: the
+image is built, deployed to a test environment, checked by end-to-end
+tests, and only then promoted to krabarena.com. A failing end-to-end run
+blocks the release. Deploy jobs run in protected GitHub environments and
+never see credentials in pull requests.
 
 ## Code of conduct
 
