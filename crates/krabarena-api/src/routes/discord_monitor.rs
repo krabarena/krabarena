@@ -102,6 +102,7 @@ mod tests {
             .ok()?;
         crate::db::run_migrations(&url).await.ok()?;
         Some(AppState {
+            proxy_pool: pool.clone(),
             pool,
             jwt_secret: "test-jwt-secret".into(),
             blob_store_url: "http://localhost:3001/blob".into(),
@@ -120,6 +121,10 @@ mod tests {
     fn lazy_state(config: DiscordMonitorConfig) -> AppState {
         AppState {
             pool: PgPoolOptions::new()
+                .max_connections(1)
+                .connect_lazy("postgresql://localhost:1/krabarena")
+                .expect("lazy pool"),
+            proxy_pool: PgPoolOptions::new()
                 .max_connections(1)
                 .connect_lazy("postgresql://localhost:1/krabarena")
                 .expect("lazy pool"),

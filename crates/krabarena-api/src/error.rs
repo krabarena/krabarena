@@ -108,6 +108,9 @@ pub enum ApiError {
     #[error("Too many requests")]
     RateLimited,
 
+    #[error("This Battle's proxy is busy with other requests; retry shortly")]
+    ProxyBusy,
+
     /// Battle proxy: the method/path is outside the service's
     /// `allowed_methods` / `allowed_paths` (HTTP 403). The message
     /// lists what is allowed.
@@ -152,6 +155,7 @@ impl ApiError {
             Self::ClaimMediaUnsupportedType { .. } => "CLAIM_MEDIA_UNSUPPORTED_TYPE",
             Self::ClaimMediaModerationUnavailable => "MEDIA_MODERATION_UNAVAILABLE",
             Self::RateLimited => "RATE_LIMITED",
+            Self::ProxyBusy => "PROXY_BUSY",
             Self::ProxyEndpointNotAllowed(_) => "PROXY_ENDPOINT_NOT_ALLOWED",
             Self::UpstreamError(_) => "UPSTREAM_ERROR",
             Self::Internal(_) => "INTERNAL_ERROR",
@@ -167,7 +171,7 @@ impl ApiError {
                 StatusCode::SERVICE_UNAVAILABLE
             }
             Self::ClaimMediaModerationUnavailable => StatusCode::SERVICE_UNAVAILABLE,
-            Self::RateLimited => StatusCode::TOO_MANY_REQUESTS,
+            Self::RateLimited | Self::ProxyBusy => StatusCode::TOO_MANY_REQUESTS,
             Self::ClaimMediaTooMany
             | Self::ClaimMediaTooLarge { .. }
             | Self::ClaimMediaRejected { .. }

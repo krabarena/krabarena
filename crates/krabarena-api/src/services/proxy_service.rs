@@ -90,8 +90,21 @@ pub const PROXY_RATE_LIMIT_SCOPE: &str = "per user, per battle, all services com
      fixed 60-second window; proxy calls are exempt from the platform-wide request limit, \
      so this is the effective limit (HTTP 429 + Retry-After when exceeded)";
 
+pub const PROXY_LOCK_TIMEOUT: &str = "3s";
+
 fn internal(e: sqlx::Error) -> ApiError {
+    if is_proxy_contention(&e) {
+        return ApiError::ProxyBusy;
+    }
     ApiError::Internal(e.into())
+}
+
+fn is_proxy_contention(e: &sqlx::Error) -> bool {
+    match e {
+        sqlx::Error::PoolTimedOut => true,
+        sqlx::Error::Database(db) => db.code().as_deref() == Some("55P03"),
+        _ => false,
+    }
 }
 
 /// Per-service usage for one battle (optionally scoped to one user).
@@ -322,6 +335,10 @@ pub async fn reserve_charge(
 ) -> Result<Uuid, ApiError> {
     let mut tx = pool.begin().await.map_err(internal)?;
     if spec.budget_cents > 0 || spec.per_claim_cents > 0 {
+        sqlx::query(&format!("SET LOCAL lock_timeout = '{PROXY_LOCK_TIMEOUT}'"))
+            .execute(&mut *tx)
+            .await
+            .map_err(internal)?;
         sqlx::query(
             "SELECT pg_advisory_xact_lock(hashtextextended('proxy_budget:' || $1::text, 0))",
         )

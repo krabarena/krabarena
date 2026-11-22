@@ -21,6 +21,16 @@ tokio::task_local! {
     pub static DB_QUERY_COUNT: Arc<AtomicU64>;
 }
 
+pub const PROXY_POOL_MAX_CONNECTIONS: u32 = 6;
+
+pub async fn create_proxy_pool(database_url: &str) -> Result<PgPool, sqlx::Error> {
+    PgPoolOptions::new()
+        .max_connections(PROXY_POOL_MAX_CONNECTIONS)
+        .acquire_timeout(std::time::Duration::from_secs(5))
+        .connect(database_url)
+        .await
+}
+
 pub async fn create_pool(database_url: &str) -> Result<PgPool, sqlx::Error> {
     PgPoolOptions::new()
         .max_connections(20)

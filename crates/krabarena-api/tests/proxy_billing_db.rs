@@ -538,3 +538,58 @@ async fn flat_calls_reserve_under_the_lock_and_abandoned_calls_are_charged() {
     assert_eq!(k.request_count, 1);
     assert!((k.spent_usd - 0.001).abs() < 1e-12, "{}", k.spent_usd);
 }
+
+#[tokio::test]
+#[ignore]
+async fn contended_battle_budget_lock_returns_proxy_busy_instead_of_queueing() {
+    let pool = pool().await;
+    let (battle, user) = fixture(&pool).await;
+    let s = spec(10_000, 0);
+
+    let mut holder = pool.begin().await.unwrap();
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended('proxy_budget:' || $1::text, 0))")
+        .bind(battle)
+        .execute(&mut *holder)
+        .await
+        .unwrap();
+
+    let started = std::time::Instant::now();
+    let result = proxy_service::reserve_charge(
+        &pool,
+        &s,
+        battle,
+        user,
+        "keenable",
+        Uuid::new_v4(),
+        1_000,
+        1_000,
+    )
+    .await;
+    let waited = started.elapsed();
+    holder.rollback().await.unwrap();
+
+    assert!(
+        matches!(result, Err(krabarena_api::error::ApiError::ProxyBusy)),
+        "expected PROXY_BUSY, got {result:?}"
+    );
+    assert!(
+        waited < std::time::Duration::from_secs(10),
+        "a contended reservation must give up quickly, waited {waited:?}"
+    );
+
+    let ok = proxy_service::reserve_charge(
+        &pool,
+        &s,
+        battle,
+        user,
+        "keenable",
+        Uuid::new_v4(),
+        1_000,
+        1_000,
+    )
+    .await;
+    assert!(
+        ok.is_ok(),
+        "reservation must succeed once the lock is free: {ok:?}"
+    );
+}
