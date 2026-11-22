@@ -8,7 +8,7 @@ use uuid::Uuid;
 use crate::AppState;
 use crate::markdown::filters;
 use crate::models::battle::{BATTLE_COLUMNS, BattleRow, parse_solutions};
-use crate::models::claim::ClaimRow;
+use crate::models::claim::{CLAIM_COLUMNS, ClaimRow};
 use crate::models::comment::CommentRow;
 use crate::models::verification::VerificationRow;
 use crate::services::format_metric::format_metric_compact;
@@ -900,10 +900,6 @@ pub struct ClaimCardView {
     pub claim_title: String,
     /// Everything after the title line, rendered as markdown body.
     pub claim_body: String,
-    /// `claim_body` rendered to sanitised HTML so the battle/main
-    /// page's claim cards can show formatting (lists, code,
-    /// emphasis) instead of raw markdown noise. (since 0.8.20)
-    pub claim_body_html: String,
     /// "added 5m ago" — relative time since `created_at`. Computed
     /// once at render so the template doesn't need a date filter.
     pub created_relative: String,
@@ -1286,18 +1282,15 @@ fn medal_points(ranks: &[Option<u32>], gold: u32, silver: u32, bronze: u32) -> u
 /// detail-page loading exactly: review costs are NOT populated on these
 /// views (the page doesn't either before the matrix), so the effort
 /// ranking matches. Returns an empty matrix on a DB error.
-pub(crate) async fn battle_wins_matrix(
-    pool: &sqlx::PgPool,
-    blob_store_url: &str,
-    battle: &BattleRow,
-) -> WinsMatrix {
+pub(crate) async fn battle_wins_matrix(pool: &sqlx::PgPool, battle: &BattleRow) -> WinsMatrix {
     let claims_sql = format!(
-        "SELECT c.*, u.display_name AS author_display_name, \
+        "SELECT {claim_cols}, u.display_name AS author_display_name, \
                 u.avatar_url AS author_avatar_url \
          FROM claims c LEFT JOIN users u ON u.id = c.author_id \
          WHERE c.battle_id = $1 AND c.deleted_at IS NULL {superseded} \
            AND c.visibility IS DISTINCT FROM 'private' \
          ORDER BY c.updated_at DESC, c.created_at DESC",
+        claim_cols = crate::models::claim::claim_columns_for("c"),
         superseded = crate::models::claim::not_superseded("c")
     );
     let claims_with_author: Vec<ClaimWithAuthor> = sqlx::query_as(&claims_sql)
@@ -1307,7 +1300,6 @@ pub(crate) async fn battle_wins_matrix(
         .unwrap_or_default();
     wins_matrix_from_claims(
         &claims_with_author,
-        blob_store_url,
         &parse_solutions(&battle.solutions),
         battle.presentation_config.as_ref(),
     )
@@ -1324,7 +1316,6 @@ pub(crate) async fn battle_wins_matrix(
 /// directly. `battle_wins_matrix` adapts a `BattleRow` into these.
 pub(crate) fn wins_matrix_from_claims(
     claims_with_author: &[ClaimWithAuthor],
-    blob_store_url: &str,
     battle_solutions: &[crate::models::battle::BattleSolution],
     presentation_config: Option<&serde_json::Value>,
 ) -> WinsMatrix {
@@ -1333,7 +1324,6 @@ pub(crate) fn wins_matrix_from_claims(
         .map(|c| {
             ClaimCardView::from_row_with_author(
                 &c.row,
-                blob_store_url,
                 c.author_display_name.as_deref(),
                 c.author_avatar_url.clone(),
             )
@@ -2113,7 +2103,6 @@ impl ClaimCardView {
 
     fn from_row_with_author(
         row: &ClaimRow,
-        blob_store_url: &str,
         author_name: Option<&str>,
         author_avatar: Option<String>,
     ) -> Self {
@@ -2123,14 +2112,6 @@ impl ClaimCardView {
         let (benchmark, leaderboard, winners_label) =
             Self::project_structure(row.claim_structure.as_ref(), &winners);
         let external_cost_usd = Self::project_external_cost(row.claim_structure.as_ref());
-        // Resolve bundle-relative image refs (e.g. `![chart](chart.png)`)
-        // to the GCS public URL where `services::claim_media` uploaded
-        // the bundle. The upload pipeline already rewrites most of
-        // these on submit; this is the render-time fallback for legacy
-        // claims and edge cases where a relative ref slipped through.
-        // See `docs/claim-structure.md` → "Images".
-        let bundle_base = crate::markdown::bundle_image_base(blob_store_url, &row.artifact_hash);
-        let claim_body_html = crate::markdown::render_with_bundle(&claim_body, Some(&bundle_base));
         let now = chrono::Utc::now();
         let created_relative = relative_age(now, row.created_at);
         // Show "updated X ago" only when the gap between created_at and
@@ -2156,7 +2137,6 @@ impl ClaimCardView {
             claim: row.claim.clone(),
             claim_title,
             claim_body,
-            claim_body_html,
             created_relative,
             updated_relative,
             effort_usd,
@@ -3261,9 +3241,6 @@ pub struct TimelineEntry {
     pub kind: &'static str,
     /// Short headline (e.g. "Verified" / "Claim posted" / "Summary updated").
     pub headline: String,
-    /// Optional longer body (the summary text, or a one-line reason
-    /// for a refute). Pre-rendered to HTML safe for `|safe`.
-    pub body_html: String,
     /// Italic detail line shown under the body — environment for
     /// verifies, conditions for refutes, etc.
     pub detail: String,
@@ -3832,9 +3809,7 @@ struct BattleTemplate {
     /// happened; older entries hide behind a `<details>` summary
     /// "Show N older entries". See `docs/ui.md` → "Battle history".
     timeline_visible: Vec<TimelineEntry>,
-    /// Entries 6+, rendered behind the `<details>` block. Empty when
-    /// there are ≤ 5 total entries.
-    timeline_hidden: Vec<TimelineEntry>,
+    timeline_hidden_count: usize,
     /// Pre-projected sparkline points (x in 0..=100, y is the raw
     /// score). Kept on the struct because the existing battle
     /// summarizer pipeline still computes them; the 0.9.0 redesign
@@ -3878,6 +3853,12 @@ struct BattleTemplate {
     /// Page number the sentinel requests next (always 2 from the SSR
     /// first page).
     claims_next_page: i64,
+}
+
+#[derive(Template)]
+#[template(path = "partials/battle_timeline_rows.html")]
+struct BattleTimelineRowsTemplate {
+    entries: Vec<TimelineEntry>,
 }
 
 #[derive(Template)]
@@ -5610,53 +5591,333 @@ pub async fn index(
         superseded = crate::models::claim::not_superseded("c")
     );
 
-    #[allow(clippy::type_complexity)]
-    let (rows, claim_rows, verif_rows): (
-        Result<
-            Vec<(
-                uuid::Uuid,
+    let theme_q = query.theme.as_deref().map(|t| format!("theme={t}"));
+    let theme = crate::web::meta::theme_from_request(&headers, theme_q.as_deref());
+
+    // --- Arena-only data fetches. The classic theme doesn't render
+    // these sections, so we skip the queries entirely when theme is
+    // not "arena" to avoid burning roundtrips on data the page won't
+    // show. Each query is best-effort — failure logs and falls back
+    // to an empty list rather than blocking the home page render. ---
+    /// Tuple shape returned by the home page top-claims SQL — pulled
+    /// out so clippy doesn't flag the inline declaration as
+    /// `type_complexity`.
+    type TopClaimRow = (
+        uuid::Uuid,
+        String,
+        Option<String>,
+        i32,
+        i32,
+        Option<String>,
+        Option<String>,
+        String,
+        Option<String>,
+        chrono::DateTime<chrono::Utc>,
+    );
+
+    // The arena/right-rail block (top claims, live activity, top agents)
+    // renders in the sidebar — not a swapped panel — so skip it in
+    // fragment mode.
+    let sidebar_fut = async {
+        if theme == "arena" && !partial_only {
+            let now = chrono::Utc::now();
+
+            // Three independent queries — fire them concurrently via
+            // tokio::join! so the page pays one RTT, not three. Each
+            // query hits a different table set and has no data
+            // dependency on the others; the pool has 20 connections
+            // so concurrency is cheap.
+            // SQL hoisted to a `let` so the format!-built String outlives
+            // the future that borrows it across the `tokio::join!` below.
+            let top_claims_sql = format!(
+                r#"
+            SELECT c.id, c.claim, c.slug, c.verify_count, c.refute_count,
+                   c.agent_backend, c.agent_model, h.title, h.slug, c.created_at
+            FROM claims c
+            JOIN battles h ON h.id = c.battle_id
+            WHERE (c.visibility IS NULL OR c.visibility = 'public')
+              AND c.deleted_at IS NULL AND h.deleted_at IS NULL
+              {superseded}
+            ORDER BY (c.verify_count + c.refute_count) DESC, c.created_at DESC
+            LIMIT 6
+            "#,
+                superseded = crate::models::claim::not_superseded("c")
+            );
+            let top_claims_fut =
+                sqlx::query_as::<_, TopClaimRow>(&top_claims_sql).fetch_all(&state.pool);
+
+            // SQL hoisted to a `let` (same lifetime reason as top_claims).
+            let activity_sql = format!(
+                r#"
+            SELECT kind, actor, headline, link, created_at FROM (
+              SELECT 'claim' AS kind,
+                     COALESCE(u.display_name, '') AS actor,
+                     CASE WHEN c.claim ~ '^# ' THEN regexp_replace(split_part(c.claim, E'\n', 1), '^# ', '')
+                          ELSE split_part(c.claim, E'\n', 1) END AS headline,
+                     '/claims/' || COALESCE(c.slug, c.id::text) AS link,
+                     c.created_at
+              FROM claims c
+              LEFT JOIN users u ON u.id = c.author_id
+              WHERE (c.visibility IS NULL OR c.visibility = 'public')
+                AND c.deleted_at IS NULL
+                {superseded}
+              UNION ALL
+              -- Verify / refute events: surface the claim title instead of
+              -- a generic "Claim verified" string. The activity-row
+              -- template wraps the whole row in an <a href="link">, so
+              -- clicking takes the reader straight to the claim.
+              SELECT CASE WHEN v.verdict = 'confirmed' THEN 'verify' ELSE 'refute' END,
+                     COALESCE(u.display_name, ''),
+                     CASE WHEN c.claim ~ '^# '
+                          THEN regexp_replace(split_part(c.claim, E'\n', 1), '^# ', '')
+                          ELSE split_part(c.claim, E'\n', 1) END,
+                     '/claims/' || COALESCE(c.slug, c.id::text),
+                     v.created_at
+              FROM verifications v
+              JOIN claims c ON c.id = v.claim_id
+              LEFT JOIN users u ON u.id = v.author_id
+              WHERE c.deleted_at IS NULL
+            ) feed
+            ORDER BY created_at DESC
+            LIMIT 10
+            "#,
+                superseded = crate::models::claim::not_superseded("c")
+            );
+            let activity_fut = sqlx::query_as::<
+                _,
+                (
+                    String,
+                    String,
+                    String,
+                    String,
+                    chrono::DateTime<chrono::Utc>,
+                ),
+            >(&activity_sql)
+            .fetch_all(&state.pool);
+
+            // Same query as `/agents` but capped at 10. Sort = total `$ effort`
+            // (author + KrabReview), so the home block surfaces who is
+            // putting the most observable work in — same row shape as the
+            // full leaderboard so the templates share columns.
+            let top_agents_fut = cached_top_agents(&state, 10);
+
+            let (top_claims_rows, activity_rows, top_agents) =
+                tokio::join!(top_claims_fut, activity_fut, top_agents_fut);
+
+            let top_claims_rows: Vec<TopClaimRow> = top_claims_rows.unwrap_or_default();
+            let top_claims: Vec<HomeClaimCard> = top_claims_rows
+                .into_iter()
+                .map(
+                    |(
+                        id,
+                        claim,
+                        slug,
+                        verify,
+                        refute,
+                        backend,
+                        model,
+                        btitle,
+                        bslug,
+                        created_at,
+                    )| {
+                        let (title, _) = ClaimCardView::extract_title_body(&claim);
+                        HomeClaimCard {
+                            id: slug.unwrap_or_else(|| id.to_string()),
+                            claim_title: title,
+                            battle_title: btitle,
+                            battle_slug: bslug.unwrap_or_default(),
+                            agent_backend: backend.unwrap_or_default(),
+                            agent_model: model.unwrap_or_default(),
+                            verify_count: verify,
+                            refute_count: refute,
+                            age_label: relative_age(now, created_at),
+                        }
+                    },
+                )
+                .collect();
+
+            let activity_rows: Vec<(
                 String,
                 String,
                 String,
-                Vec<String>,
-                Option<chrono::DateTime<chrono::Utc>>,
-                i64,
-                i64,
-                i64,
-                Option<String>,
-                f32,
-                Option<String>,
-                f64,
-                Option<String>,
-                Option<String>,
-                serde_json::Value, // {solutions, presentation_config}
-            )>,
-            sqlx::Error,
-        >,
-        Result<Vec<FeedClaimRow>, sqlx::Error>,
-        Result<Vec<VerificationFeedRow>, sqlx::Error>,
+                String,
+                chrono::DateTime<chrono::Utc>,
+            )> = activity_rows.unwrap_or_default();
+            let activity: Vec<HomeActivityEntry> = activity_rows
+                .into_iter()
+                .map(
+                    |(kind, actor, headline, link, created_at)| HomeActivityEntry {
+                        kind: match kind.as_str() {
+                            "verify" => "verify",
+                            "refute" => "refute",
+                            _ => "claim",
+                        },
+                        actor,
+                        headline,
+                        link,
+                        age_label: relative_age(now, created_at),
+                    },
+                )
+                .collect();
+
+            (top_claims, activity, top_agents)
+        } else {
+            (vec![], vec![], vec![])
+        }
+    };
+    // Top-3 community-proposed Battle candidates by 7-day upvotes
+    // for the inline home block (added in 0.9.3). Failures degrade
+    // to zero so a regression here can't take down the home page.
+    // Server-side renders with `viewer = None` because the voter
+    // session is in localStorage, not a cookie; client-side JS
+    // refreshes the active vote state after load.
+    // Two independent candidate queries — fire concurrently so the inline
+    // "Proposed battles" block costs one RTT, not two.
+    let candidates_fut = async {
+        if active_tab == "battles" && active_page == 1 {
+            let (top_candidates, total_candidates) = tokio::join!(
+                crate::services::battle_candidates_service::list_candidates(
+                    &state.pool,
+                    None,
+                    3,
+                    0,
+                    Some(HOME_CANDIDATES_WINDOW_DAYS),
+                ),
+                crate::services::battle_candidates_service::count_open(
+                    &state.pool,
+                    Some(HOME_CANDIDATES_WINDOW_DAYS),
+                ),
+            );
+            (
+                top_candidates.unwrap_or_default(),
+                total_candidates.unwrap_or(0),
+            )
+        } else {
+            (vec![], 0)
+        }
+    };
+    // Hero counters — combined into ONE round-trip via scalar
+    // subqueries. The three counts hit different tables so the
+    // planner runs them in parallel inside Postgres; client-side we
+    // only pay a single RTT instead of three. Falls back to (0,0,0)
+    // on error.
+    // Hero "claims" counter = lineage HEADs only (edited claims don't
+    // inflate the total by counting both versions).
+    let hero_superseded = crate::models::claim::not_superseded("c");
+    // Hero counters feed the hero band (not a swapped panel) — skip in
+    // fragment mode.
+    let hero_fut = async {
+        if partial_only {
+            (0, 0, 0)
+        } else {
+            sqlx::query_as::<_, (i64, i64, i64)>(&format!(
+            "SELECT \
+               (SELECT COUNT(*) FROM battles WHERE deleted_at IS NULL)::bigint, \
+               (SELECT COUNT(*) FROM claims c WHERE c.deleted_at IS NULL {hero_superseded})::bigint, \
+               (SELECT COUNT(*) FROM verifications WHERE created_at >= NOW() - INTERVAL '24 hours')::bigint"
+        ))
+        .fetch_one(&state.pool)
+        .await
+        .unwrap_or((0, 0, 0))
+        }
+    };
+    let agent_header_fut = async {
+        if partial_only || !wants_markdown(&headers) {
+            String::new()
+        } else {
+            crate::services::cms_service::render_header(
+                &state.pool,
+                &crate::services::cms_service::PageContext::Home,
+            )
+            .await
+        }
+    };
+    let need_claims = active_tab == "claims" || (!partial_only && wants_markdown(&headers));
+    let vendor_fut = async {
+        if !need_claims {
+            return Vec::new();
+        }
+        crate::services::solution_names::load_vendor_patterns(&state.pool)
+            .await
+            .unwrap_or_default()
+    };
+    let feed_fut = async {
+        #[allow(clippy::type_complexity)]
+        let feed: (
+            Result<
+                Vec<(
+                    uuid::Uuid,
+                    String,
+                    String,
+                    String,
+                    Vec<String>,
+                    Option<chrono::DateTime<chrono::Utc>>,
+                    i64,
+                    i64,
+                    i64,
+                    Option<String>,
+                    f32,
+                    Option<String>,
+                    f64,
+                    Option<String>,
+                    Option<String>,
+                    serde_json::Value, // {solutions, presentation_config}
+                )>,
+                sqlx::Error,
+            >,
+            Result<Vec<FeedClaimRow>, sqlx::Error>,
+            Result<Vec<VerificationFeedRow>, sqlx::Error>,
+        ) = tokio::join!(
+            sqlx::query_as(&battles_sql)
+                .bind(normalized_status.as_deref())
+                .bind(query.domain.as_deref())
+                .bind(&tags)
+                .bind(&q_patterns)
+                .bind(feed_fetch_limit)
+                .bind(feed_offset)
+                .fetch_all(&state.pool),
+            async {
+                if !need_claims {
+                    return Ok(Vec::new());
+                }
+                sqlx::query_as::<_, FeedClaimRow>(&claims_sql)
+                    .bind(None::<&str>)
+                    .bind(query.domain.as_deref())
+                    .bind(&tags)
+                    .bind(&q_patterns)
+                    .bind(feed_fetch_limit)
+                    .bind(feed_offset)
+                    .fetch_all(&state.pool)
+                    .await
+            },
+            async {
+                if active_tab != "verifications" {
+                    return Ok(Vec::new());
+                }
+                sqlx::query_as::<_, VerificationFeedRow>(&verifs_sql)
+                    .bind(&tags)
+                    .bind(&q_patterns)
+                    .bind((feed_offset + feed_fetch_limit).max(VERIF_PREFILTER))
+                    .fetch_all(&state.pool)
+                    .await
+            },
+        );
+        feed
+    };
+    let (
+        (rows, claim_rows, verif_rows),
+        (top_claims, activity, top_agents),
+        (top_candidates, total_candidates),
+        (total_battles, total_claims, total_verifications_today),
+        agent_header,
+        feed_vendor_patterns,
     ) = tokio::join!(
-        sqlx::query_as(&battles_sql)
-            .bind(normalized_status.as_deref())
-            .bind(query.domain.as_deref())
-            .bind(&tags)
-            .bind(&q_patterns)
-            .bind(feed_fetch_limit)
-            .bind(feed_offset)
-            .fetch_all(&state.pool),
-        sqlx::query_as::<_, FeedClaimRow>(&claims_sql)
-            .bind(None::<&str>)
-            .bind(query.domain.as_deref())
-            .bind(&tags)
-            .bind(&q_patterns)
-            .bind(feed_fetch_limit)
-            .bind(feed_offset)
-            .fetch_all(&state.pool),
-        sqlx::query_as::<_, VerificationFeedRow>(&verifs_sql)
-            .bind(&tags)
-            .bind(&q_patterns)
-            .bind((feed_offset + feed_fetch_limit).max(VERIF_PREFILTER))
-            .fetch_all(&state.pool),
+        crate::server_timing::timed("feed", feed_fut),
+        crate::server_timing::timed("sidebar", sidebar_fut),
+        crate::server_timing::timed("candidates", candidates_fut),
+        crate::server_timing::timed("hero", hero_fut),
+        crate::server_timing::timed("cms", agent_header_fut),
+        crate::server_timing::timed("vendors", vendor_fut),
     );
     let battles_has_more = rows
         .as_ref()
@@ -5680,6 +5941,70 @@ pub async fn index(
     // (The effort temperature itself is decayed to NOW() in SQL.)
     let feed_now = chrono::Utc::now();
 
+    let feed_battle_rows = match &rows {
+        Ok(r) => &r[..r.len().min(HOME_FEED_PAGE_SIZE as usize)],
+        Err(_) => &[][..],
+    };
+    let feed_battle_ids: Vec<Uuid> = feed_battle_rows.iter().map(|r| r.0).collect();
+    let feed_stored_temps: std::collections::HashMap<Uuid, f32> =
+        feed_battle_rows.iter().map(|r| (r.0, r.10)).collect();
+    let feed_cost_ids: Vec<Uuid> = feed_battle_rows
+        .iter()
+        .filter(|r| r.6 > 0)
+        .map(|r| r.0)
+        .collect();
+    let feed_claim_ids: Vec<Uuid> = claim_rows.iter().map(|r| r.0).collect();
+    let matrix_claims_sql = format!(
+        "SELECT {claim_cols}, u.display_name AS author_display_name, \
+                u.avatar_url AS author_avatar_url \
+         FROM claims c LEFT JOIN users u ON u.id = c.author_id \
+         WHERE c.battle_id = ANY($1::uuid[]) AND c.deleted_at IS NULL {superseded} \
+           AND c.visibility IS DISTINCT FROM 'private' \
+         ORDER BY c.updated_at DESC, c.created_at DESC",
+        claim_cols = crate::models::claim::claim_columns_for("c"),
+        superseded = crate::models::claim::not_superseded("c")
+    );
+    let (live_temps, cost_agg, matrix_claims, claim_structures) = tokio::join!(
+        crate::server_timing::timed("temps", async {
+            crate::services::temperature::live_temperatures(
+                &state.pool,
+                &feed_battle_ids,
+                &feed_stored_temps,
+                feed_now,
+            )
+            .await
+            .unwrap_or_default()
+        }),
+        crate::server_timing::timed("cost", battle_cost_aggregates(&state.pool, &feed_cost_ids)),
+        crate::server_timing::timed("matrix", async {
+            if feed_cost_ids.is_empty() {
+                Vec::new()
+            } else {
+                sqlx::query_as::<_, ClaimWithAuthor>(&matrix_claims_sql)
+                    .bind(&feed_cost_ids)
+                    .fetch_all(&state.pool)
+                    .await
+                    .unwrap_or_default()
+            }
+        }),
+        crate::server_timing::timed("structures", async {
+            if feed_claim_ids.is_empty() {
+                std::collections::HashMap::new()
+            } else {
+                sqlx::query_as::<_, (Uuid, serde_json::Value)>(
+                    "SELECT id, claim_structure FROM claims \
+                     WHERE id = ANY($1) AND claim_structure IS NOT NULL",
+                )
+                .bind(&feed_claim_ids)
+                .fetch_all(&state.pool)
+                .await
+                .unwrap_or_default()
+                .into_iter()
+                .collect::<std::collections::HashMap<Uuid, serde_json::Value>>()
+            }
+        }),
+    );
+
     // `battle_temps[i]` is the live-computed effort temperature of
     // `battles[i]` (SUM of its claims' decayed author-compute dollars) —
     // the sort key when merging into the unified feed.
@@ -5695,17 +6020,6 @@ pub async fn index(
             // feed while reading Warm on its own page. The stored
             // `battles.temperature` is passed only as the per-battle
             // fallback for battles that have no events yet.
-            let battle_ids: Vec<Uuid> = rows.iter().map(|r| r.0).collect();
-            let stored_temps: std::collections::HashMap<Uuid, f32> =
-                rows.iter().map(|r| (r.0, r.10)).collect();
-            let live_temps = crate::services::temperature::live_temperatures(
-                &state.pool,
-                &battle_ids,
-                &stored_temps,
-                feed_now,
-            )
-            .await
-            .unwrap_or_default();
             let mut cards = Vec::with_capacity(rows.len());
             // Per-card (id, solutions, presentation_config) kept aside so
             // the batched mini-matrix pass below can rebuild the SAME
@@ -5793,12 +6107,6 @@ pub async fn index(
             // == 0` — no claims means tokens / $ are both 0 and the
             // template suppresses the chips anyway, so the SQL path
             // doesn't waste rows on them.
-            let battle_ids: Vec<Uuid> = cards
-                .iter()
-                .filter(|c| c.claim_count > 0)
-                .filter_map(|c| Uuid::parse_str(&c.id).ok())
-                .collect();
-            let cost_agg = battle_cost_aggregates(&state.pool, &battle_ids).await;
             for card in cards.iter_mut() {
                 if let Ok(uuid) = Uuid::parse_str(&card.id) {
                     if let Some(agg) = cost_agg.get(&uuid) {
@@ -5815,21 +6123,8 @@ pub async fn index(
             // from its slice — never N per-battle queries. Reuses the
             // claim SELECT shape from `battle_wins_matrix` /
             // `battle_detail`'s claim load.
-            if !battle_ids.is_empty() {
-                let claims_sql = format!(
-                    "SELECT c.*, u.display_name AS author_display_name, \
-                            u.avatar_url AS author_avatar_url \
-                     FROM claims c LEFT JOIN users u ON u.id = c.author_id \
-                     WHERE c.battle_id = ANY($1::uuid[]) AND c.deleted_at IS NULL {superseded} \
-           AND c.visibility IS DISTINCT FROM 'private' \
-                     ORDER BY c.updated_at DESC, c.created_at DESC",
-                    superseded = crate::models::claim::not_superseded("c")
-                );
-                let all_claims: Vec<ClaimWithAuthor> = sqlx::query_as(&claims_sql)
-                    .bind(&battle_ids)
-                    .fetch_all(&state.pool)
-                    .await
-                    .unwrap_or_default();
+            if !matrix_claims.is_empty() {
+                let all_claims = matrix_claims;
                 // Group claims by parent battle id (preserving the
                 // newest-first order the query returns).
                 let mut by_battle: std::collections::HashMap<Uuid, Vec<ClaimWithAuthor>> =
@@ -5859,12 +6154,7 @@ pub async fn index(
                     let Some((solutions, cfg)) = inputs.get(&uuid) else {
                         continue;
                     };
-                    let matrix = wins_matrix_from_claims(
-                        claims,
-                        &state.blob_store_url,
-                        solutions,
-                        cfg.as_ref(),
-                    );
+                    let matrix = wins_matrix_from_claims(claims, solutions, cfg.as_ref());
                     if let Some(mini) = mini_wins_matrix(&matrix, 3, 3) {
                         card.short_summary_view.mini_matrix = Some(mini);
                     }
@@ -5876,30 +6166,6 @@ pub async fn index(
             tracing::error!(error = %e, "failed to load battle list for index page");
             vec![]
         }
-    };
-
-    // Hero counters — combined into ONE round-trip via scalar
-    // subqueries. The three counts hit different tables so the
-    // planner runs them in parallel inside Postgres; client-side we
-    // only pay a single RTT instead of three. Falls back to (0,0,0)
-    // on error.
-    // Hero "claims" counter = lineage HEADs only (edited claims don't
-    // inflate the total by counting both versions).
-    let superseded = crate::models::claim::not_superseded("c");
-    // Hero counters feed the hero band (not a swapped panel) — skip in
-    // fragment mode.
-    let (total_battles, total_claims, total_verifications_today) = if partial_only {
-        (0, 0, 0)
-    } else {
-        sqlx::query_as::<_, (i64, i64, i64)>(&format!(
-            "SELECT \
-               (SELECT COUNT(*) FROM battles WHERE deleted_at IS NULL)::bigint, \
-               (SELECT COUNT(*) FROM claims c WHERE c.deleted_at IS NULL {superseded})::bigint, \
-               (SELECT COUNT(*) FROM verifications WHERE created_at >= NOW() - INTERVAL '24 hours')::bigint"
-        ))
-        .fetch_one(&state.pool)
-        .await
-        .unwrap_or((0, 0, 0))
     };
 
     // --- Build the unified Battle + Claim feed, ranked by render-time
@@ -5918,25 +6184,6 @@ pub async fn index(
     // can't carry `claim_structure`, so batch-fetch it for the page's
     // claims and load vendor-logo patterns once. Lets home claim cards
     // render verdict + mini-leaderboard + favicons like battle-page cards.
-    let feed_claim_ids: Vec<uuid::Uuid> = claim_rows.iter().map(|r| r.0).collect();
-    let claim_structures: std::collections::HashMap<uuid::Uuid, serde_json::Value> =
-        if feed_claim_ids.is_empty() {
-            std::collections::HashMap::new()
-        } else {
-            sqlx::query_as::<_, (uuid::Uuid, serde_json::Value)>(
-                "SELECT id, claim_structure FROM claims \
-                 WHERE id = ANY($1) AND claim_structure IS NOT NULL",
-            )
-            .bind(&feed_claim_ids)
-            .fetch_all(&state.pool)
-            .await
-            .unwrap_or_default()
-            .into_iter()
-            .collect()
-        };
-    let feed_vendor_patterns = crate::services::solution_names::load_vendor_patterns(&state.pool)
-        .await
-        .unwrap_or_default();
 
     let mut feed: Vec<FeedItem> = Vec::with_capacity(battles.len() + claim_rows.len());
     let mut claim_cards: Vec<FeedClaimCard> = Vec::with_capacity(claim_rows.len());
@@ -6161,168 +6408,6 @@ pub async fn index(
         (cards, has_more)
     };
 
-    let theme_q = query.theme.as_deref().map(|t| format!("theme={t}"));
-    let theme = crate::web::meta::theme_from_request(&headers, theme_q.as_deref());
-
-    // --- Arena-only data fetches. The classic theme doesn't render
-    // these sections, so we skip the queries entirely when theme is
-    // not "arena" to avoid burning roundtrips on data the page won't
-    // show. Each query is best-effort — failure logs and falls back
-    // to an empty list rather than blocking the home page render. ---
-    /// Tuple shape returned by the home page top-claims SQL — pulled
-    /// out so clippy doesn't flag the inline declaration as
-    /// `type_complexity`.
-    type TopClaimRow = (
-        uuid::Uuid,
-        String,
-        Option<String>,
-        i32,
-        i32,
-        Option<String>,
-        Option<String>,
-        String,
-        Option<String>,
-        chrono::DateTime<chrono::Utc>,
-    );
-
-    // The arena/right-rail block (top claims, live activity, top agents)
-    // renders in the sidebar — not a swapped panel — so skip it in
-    // fragment mode.
-    let (top_claims, activity, top_agents) = if theme == "arena" && !partial_only {
-        let now = chrono::Utc::now();
-
-        // Three independent queries — fire them concurrently via
-        // tokio::join! so the page pays one RTT, not three. Each
-        // query hits a different table set and has no data
-        // dependency on the others; the pool has 20 connections
-        // so concurrency is cheap.
-        // SQL hoisted to a `let` so the format!-built String outlives
-        // the future that borrows it across the `tokio::join!` below.
-        let top_claims_sql = format!(
-            r#"
-            SELECT c.id, c.claim, c.slug, c.verify_count, c.refute_count,
-                   c.agent_backend, c.agent_model, h.title, h.slug, c.created_at
-            FROM claims c
-            JOIN battles h ON h.id = c.battle_id
-            WHERE (c.visibility IS NULL OR c.visibility = 'public')
-              AND c.deleted_at IS NULL AND h.deleted_at IS NULL
-              {superseded}
-            ORDER BY (c.verify_count + c.refute_count) DESC, c.created_at DESC
-            LIMIT 6
-            "#,
-            superseded = crate::models::claim::not_superseded("c")
-        );
-        let top_claims_fut =
-            sqlx::query_as::<_, TopClaimRow>(&top_claims_sql).fetch_all(&state.pool);
-
-        // SQL hoisted to a `let` (same lifetime reason as top_claims).
-        let activity_sql = format!(
-            r#"
-            SELECT kind, actor, headline, link, created_at FROM (
-              SELECT 'claim' AS kind,
-                     COALESCE(u.display_name, '') AS actor,
-                     CASE WHEN c.claim ~ '^# ' THEN regexp_replace(split_part(c.claim, E'\n', 1), '^# ', '')
-                          ELSE split_part(c.claim, E'\n', 1) END AS headline,
-                     '/claims/' || COALESCE(c.slug, c.id::text) AS link,
-                     c.created_at
-              FROM claims c
-              LEFT JOIN users u ON u.id = c.author_id
-              WHERE (c.visibility IS NULL OR c.visibility = 'public')
-                AND c.deleted_at IS NULL
-                {superseded}
-              UNION ALL
-              -- Verify / refute events: surface the claim title instead of
-              -- a generic "Claim verified" string. The activity-row
-              -- template wraps the whole row in an <a href="link">, so
-              -- clicking takes the reader straight to the claim.
-              SELECT CASE WHEN v.verdict = 'confirmed' THEN 'verify' ELSE 'refute' END,
-                     COALESCE(u.display_name, ''),
-                     CASE WHEN c.claim ~ '^# '
-                          THEN regexp_replace(split_part(c.claim, E'\n', 1), '^# ', '')
-                          ELSE split_part(c.claim, E'\n', 1) END,
-                     '/claims/' || COALESCE(c.slug, c.id::text),
-                     v.created_at
-              FROM verifications v
-              JOIN claims c ON c.id = v.claim_id
-              LEFT JOIN users u ON u.id = v.author_id
-              WHERE c.deleted_at IS NULL
-            ) feed
-            ORDER BY created_at DESC
-            LIMIT 10
-            "#,
-            superseded = crate::models::claim::not_superseded("c")
-        );
-        let activity_fut = sqlx::query_as::<
-            _,
-            (
-                String,
-                String,
-                String,
-                String,
-                chrono::DateTime<chrono::Utc>,
-            ),
-        >(&activity_sql)
-        .fetch_all(&state.pool);
-
-        // Same query as `/agents` but capped at 10. Sort = total `$ effort`
-        // (author + KrabReview), so the home block surfaces who is
-        // putting the most observable work in — same row shape as the
-        // full leaderboard so the templates share columns.
-        let top_agents_fut = cached_top_agents(&state, 10);
-
-        let (top_claims_rows, activity_rows, top_agents) =
-            tokio::join!(top_claims_fut, activity_fut, top_agents_fut);
-
-        let top_claims_rows: Vec<TopClaimRow> = top_claims_rows.unwrap_or_default();
-        let top_claims: Vec<HomeClaimCard> = top_claims_rows
-            .into_iter()
-            .map(
-                |(id, claim, slug, verify, refute, backend, model, btitle, bslug, created_at)| {
-                    let (title, _) = ClaimCardView::extract_title_body(&claim);
-                    HomeClaimCard {
-                        id: slug.unwrap_or_else(|| id.to_string()),
-                        claim_title: title,
-                        battle_title: btitle,
-                        battle_slug: bslug.unwrap_or_default(),
-                        agent_backend: backend.unwrap_or_default(),
-                        agent_model: model.unwrap_or_default(),
-                        verify_count: verify,
-                        refute_count: refute,
-                        age_label: relative_age(now, created_at),
-                    }
-                },
-            )
-            .collect();
-
-        let activity_rows: Vec<(
-            String,
-            String,
-            String,
-            String,
-            chrono::DateTime<chrono::Utc>,
-        )> = activity_rows.unwrap_or_default();
-        let activity: Vec<HomeActivityEntry> = activity_rows
-            .into_iter()
-            .map(
-                |(kind, actor, headline, link, created_at)| HomeActivityEntry {
-                    kind: match kind.as_str() {
-                        "verify" => "verify",
-                        "refute" => "refute",
-                        _ => "claim",
-                    },
-                    actor,
-                    headline,
-                    link,
-                    age_label: relative_age(now, created_at),
-                },
-            )
-            .collect();
-
-        (top_claims, activity, top_agents)
-    } else {
-        (vec![], vec![], vec![])
-    };
-
     let mut meta = PageMeta::new(&state.public_base_url, "/")
         .with_title("Know which tool wins for your job")
         .with_description(
@@ -6339,36 +6424,6 @@ pub async fn index(
     // color pick via hash so the same tag always gets the same
     // dot color across renders. (since 0.9.0 forum redesign)
     let topic_counts = compute_topic_counts(&battles);
-
-    // Top-3 community-proposed Battle candidates by 7-day upvotes
-    // for the inline home block (added in 0.9.3). Failures degrade
-    // to zero so a regression here can't take down the home page.
-    // Server-side renders with `viewer = None` because the voter
-    // session is in localStorage, not a cookie; client-side JS
-    // refreshes the active vote state after load.
-    // Two independent candidate queries — fire concurrently so the inline
-    // "Proposed battles" block costs one RTT, not two.
-    let (top_candidates, total_candidates) = if active_tab == "battles" && active_page == 1 {
-        let (top_candidates, total_candidates) = tokio::join!(
-            crate::services::battle_candidates_service::list_candidates(
-                &state.pool,
-                None,
-                3,
-                0,
-                Some(HOME_CANDIDATES_WINDOW_DAYS),
-            ),
-            crate::services::battle_candidates_service::count_open(
-                &state.pool,
-                Some(HOME_CANDIDATES_WINDOW_DAYS),
-            ),
-        );
-        (
-            top_candidates.unwrap_or_default(),
-            total_candidates.unwrap_or(0),
-        )
-    } else {
-        (vec![], 0)
-    };
 
     // The markdown digest mirrors the same unified ranking — top 5
     // feed items (Battles + Claims interleaved by effort temperature),
@@ -6487,15 +6542,6 @@ pub async fn index(
     };
     // CMS header only feeds the markdown variant — the fragment swap is
     // always an HTML fetch, so skip the query in fragment mode.
-    let agent_header = if partial_only {
-        String::new()
-    } else {
-        crate::services::cms_service::render_header(
-            &state.pool,
-            &crate::services::cms_service::PageContext::Home,
-        )
-        .await
-    };
     let md = IndexMdTemplate {
         meta,
         agent_header,
@@ -6524,7 +6570,9 @@ pub async fn index(
         );
     }
 
+    let render_started = std::time::Instant::now();
     let mut resp = render_negotiated(&state.public_base_url, "/", &headers, html, md);
+    crate::server_timing::record("render", render_started);
     resp.headers_mut().insert(
         header::VARY,
         HeaderValue::from_static("Accept, User-Agent, HX-Request"),
@@ -6887,11 +6935,30 @@ type TimelineVerdictRow = (
     String,
     Option<String>,
     Option<String>,
-    Option<String>,
-    Option<String>,
     Uuid,
     Option<String>,
 );
+
+type TimelineSummaryRow = (chrono::DateTime<chrono::Utc>, Option<f32>);
+
+struct TimelineClaim {
+    id: Uuid,
+    slug: Option<String>,
+    created_at: chrono::DateTime<chrono::Utc>,
+    author_display_name: Option<String>,
+}
+
+const TIMELINE_VISIBLE_ENTRIES: usize = 5;
+
+const TIMELINE_VERDICTS_SQL: &str = "SELECT v.created_at, v.verdict, v.environment, \
+            u.display_name, c.id, c.slug \
+     FROM verifications v \
+     JOIN claims c ON c.id = v.claim_id \
+     JOIN users u ON u.id = v.author_id \
+     WHERE c.battle_id = $1 AND c.deleted_at IS NULL";
+
+const TIMELINE_SUMMARIES_SQL: &str =
+    "SELECT created_at, temperature FROM battle_summary_history WHERE battle_id = $1";
 
 pub async fn battle_detail(
     State(state): State<AppState>,
@@ -6979,35 +7046,26 @@ pub async fn battle_detail(
     // SQL hoisted to a `let` so the format!-built String outlives the
     // future that borrows it across the `tokio::join!` below.
     let claims_sql = format!(
-        "SELECT c.*, u.display_name AS author_display_name, \
+        "SELECT {claim_cols}, u.display_name AS author_display_name, \
                 u.avatar_url AS author_avatar_url \
          FROM claims c LEFT JOIN users u ON u.id = c.author_id \
          WHERE c.battle_id = $1 AND c.deleted_at IS NULL {superseded} \
            AND c.visibility IS DISTINCT FROM 'private' \
          ORDER BY c.updated_at DESC, c.created_at DESC, c.id DESC",
+        claim_cols = crate::models::claim::claim_columns_for("c"),
         superseded = crate::models::claim::not_superseded("c")
     );
     let claims_fut = sqlx::query_as::<_, ClaimWithAuthor>(&claims_sql)
         .bind(battle_id)
         .fetch_all(&state.pool);
 
-    let verdicts_fut = sqlx::query_as::<_, TimelineVerdictRow>(
-        "SELECT v.created_at, v.verdict, v.environment, v.failure_reason, \
-                v.conditions, u.display_name, c.id, c.slug \
-         FROM verifications v \
-         JOIN claims c ON c.id = v.claim_id \
-         JOIN users u ON u.id = v.author_id \
-         WHERE c.battle_id = $1 AND c.deleted_at IS NULL",
-    )
-    .bind(battle_id)
-    .fetch_all(&state.pool);
+    let verdicts_fut = sqlx::query_as::<_, TimelineVerdictRow>(TIMELINE_VERDICTS_SQL)
+        .bind(battle_id)
+        .fetch_all(&state.pool);
 
-    let summaries_fut = sqlx::query_as::<_, (chrono::DateTime<chrono::Utc>, String, Option<f32>)>(
-        "SELECT created_at, summary, temperature \
-         FROM battle_summary_history WHERE battle_id = $1",
-    )
-    .bind(battle_id)
-    .fetch_all(&state.pool);
+    let summaries_fut = sqlx::query_as::<_, TimelineSummaryRow>(TIMELINE_SUMMARIES_SQL)
+        .bind(battle_id)
+        .fetch_all(&state.pool);
 
     let sponsor_id = battle.sponsored_by;
     let pool_for_sponsor = state.pool.clone();
@@ -7046,8 +7104,14 @@ pub async fn battle_detail(
     let agent_header_ctx = crate::services::cms_service::PageContext::Battle {
         battle_id: battle_id.to_string(),
     };
-    let agent_header_fut =
-        crate::services::cms_service::render_header(&state.pool, &agent_header_ctx);
+    let header_wanted = wants_markdown(&headers);
+    let agent_header_fut = async {
+        if header_wanted {
+            crate::services::cms_service::render_header(&state.pool, &agent_header_ctx).await
+        } else {
+            String::new()
+        }
+    };
 
     let battle_author_id = battle.author_id;
     let pool_for_author = state.pool.clone();
@@ -7077,16 +7141,17 @@ pub async fn battle_detail(
         battle_author_name,
         temp_events,
     ) = tokio::join!(
-        claims_fut,
-        verdicts_fut,
-        summaries_fut,
+        crate::server_timing::timed("claims", claims_fut),
+        crate::server_timing::timed("verdicts", verdicts_fut),
+        crate::server_timing::timed("summaries", summaries_fut),
         sponsor_fut,
-        proxy_fut,
-        cost_agg_fut,
+        crate::server_timing::timed("proxy", proxy_fut),
+        crate::server_timing::timed("cost", cost_agg_fut),
         agent_header_fut,
         battle_author_fut,
-        temp_events_fut,
+        crate::server_timing::timed("temps", temp_events_fut),
     );
+    let compute_started = std::time::Instant::now();
 
     let claims_with_author = claims_with_author.unwrap_or_default();
     let verdict_rows = verdict_rows.unwrap_or_default();
@@ -7164,7 +7229,16 @@ pub async fn battle_detail(
     // Timeline assembled from data already in hand — no extra
     // queries. Order matches the previous `build_timeline` impl
     // (newest first by `created_at`).
-    let timeline = assemble_timeline(&summary_rows, &claims_with_author, &verdict_rows);
+    let timeline_claims: Vec<TimelineClaim> = claims_with_author
+        .iter()
+        .map(|c| TimelineClaim {
+            id: c.row.id,
+            slug: c.row.slug.clone(),
+            created_at: c.row.created_at,
+            author_display_name: c.author_display_name.clone(),
+        })
+        .collect();
+    let timeline = assemble_timeline(&summary_rows, &timeline_claims, &verdict_rows);
 
     let path_seg = battle.slug.clone().unwrap_or_else(|| battle.id.to_string());
     let share_url = format!("{}/battles/{}", state.public_base_url, path_seg);
@@ -7244,7 +7318,6 @@ pub async fn battle_detail(
         .map(|c| {
             ClaimCardView::from_row_with_author(
                 &c.row,
-                &state.blob_store_url,
                 c.author_display_name.as_deref(),
                 c.author_avatar_url.clone(),
             )
@@ -7262,12 +7335,9 @@ pub async fn battle_detail(
     // Split timeline at the 5th entry — see `docs/ui.md` →
     // "Battle history — keep it short". `split_off(5)` returns the
     // tail (entries 6+); everything before stays in `timeline`.
+    let timeline_hidden_count = timeline.len().saturating_sub(TIMELINE_VISIBLE_ENTRIES);
     let mut timeline_visible = timeline;
-    let timeline_hidden = if timeline_visible.len() > 5 {
-        timeline_visible.split_off(5)
-    } else {
-        Vec::new()
-    };
+    timeline_visible.truncate(TIMELINE_VISIBLE_ENTRIES);
 
     // Build the wins matrix — solutions × claims (since 0.13.4
     // rewrite; effort-sorted + column-capped since 0.26.1). One row
@@ -7354,7 +7424,7 @@ pub async fn battle_detail(
         battle: card.clone(),
         claims: claims_first,
         timeline_visible,
-        timeline_hidden,
+        timeline_hidden_count,
         sparkline,
         spark_max,
         wins_leaderboard,
@@ -7370,6 +7440,8 @@ pub async fn battle_detail(
         battle: card,
         claims,
     };
+    crate::server_timing::record("compute", compute_started);
+    let render_started = std::time::Instant::now();
     let resp = render_negotiated(
         &state.public_base_url,
         &format!("/battles/{id_or_slug}"),
@@ -7377,6 +7449,7 @@ pub async fn battle_detail(
         html,
         md,
     );
+    crate::server_timing::record("render", render_started);
     with_canonical_link(resp, &canonical_link_url)
 }
 
@@ -7399,13 +7472,14 @@ async fn battle_claim_cards_page(
     let offset = (page - 1) * BATTLE_CLAIMS_PAGE_SIZE;
     let fetch_limit = BATTLE_CLAIMS_PAGE_SIZE + 1;
     let sql = format!(
-        "SELECT c.*, u.display_name AS author_display_name, \
+        "SELECT {claim_cols}, u.display_name AS author_display_name, \
                 u.avatar_url AS author_avatar_url \
          FROM claims c LEFT JOIN users u ON u.id = c.author_id \
          WHERE c.battle_id = $1 AND c.deleted_at IS NULL {superseded} \
            AND c.visibility IS DISTINCT FROM 'private' \
          ORDER BY c.updated_at DESC, c.created_at DESC, c.id DESC \
          LIMIT $2 OFFSET $3",
+        claim_cols = crate::models::claim::claim_columns_for("c"),
         superseded = crate::models::claim::not_superseded("c")
     );
     let mut rows = sqlx::query_as::<_, ClaimWithAuthor>(&sql)
@@ -7423,7 +7497,6 @@ async fn battle_claim_cards_page(
         .map(|c| {
             ClaimCardView::from_row_with_author(
                 &c.row,
-                &state.blob_store_url,
                 c.author_display_name.as_deref(),
                 c.author_avatar_url.clone(),
             )
@@ -7476,24 +7549,73 @@ pub async fn battle_claims_fragment(
     )
 }
 
-/// Escape the five HTML-significant characters. Used for fields
-/// rendered via `|safe` because we precompute their final HTML on
-/// the server side. Avoids a roundtrip through askama's filter API
-/// which wraps the result in a `Safe<…>` newtype that doesn't
-/// implement `Display`.
-fn html_escape(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    for c in s.chars() {
-        match c {
-            '&' => out.push_str("&amp;"),
-            '<' => out.push_str("&lt;"),
-            '>' => out.push_str("&gt;"),
-            '"' => out.push_str("&quot;"),
-            '\'' => out.push_str("&#39;"),
-            other => out.push(other),
-        }
-    }
-    out
+pub async fn battle_timeline_fragment(
+    State(state): State<AppState>,
+    Path(battle_id): Path<Uuid>,
+) -> Response {
+    let path = format!("/fragments/battles/{battle_id}/timeline");
+    let claims_sql = format!(
+        "SELECT c.id, c.slug, c.created_at, u.display_name \
+         FROM claims c LEFT JOIN users u ON u.id = c.author_id \
+         WHERE c.battle_id = $1 AND c.deleted_at IS NULL {superseded} \
+           AND c.visibility IS DISTINCT FROM 'private'",
+        superseded = crate::models::claim::not_superseded("c")
+    );
+    let (live, claims, verdicts, summaries) = tokio::join!(
+        sqlx::query_scalar::<_, bool>(
+            "SELECT EXISTS(SELECT 1 FROM battles WHERE id = $1 AND deleted_at IS NULL)"
+        )
+        .bind(battle_id)
+        .fetch_one(&state.pool),
+        sqlx::query_as::<
+            _,
+            (
+                Uuid,
+                Option<String>,
+                chrono::DateTime<chrono::Utc>,
+                Option<String>,
+            ),
+        >(&claims_sql)
+        .bind(battle_id)
+        .fetch_all(&state.pool),
+        sqlx::query_as::<_, TimelineVerdictRow>(TIMELINE_VERDICTS_SQL)
+            .bind(battle_id)
+            .fetch_all(&state.pool),
+        sqlx::query_as::<_, TimelineSummaryRow>(TIMELINE_SUMMARIES_SQL)
+            .bind(battle_id)
+            .fetch_all(&state.pool),
+    );
+    let claims: Vec<TimelineClaim> = claims
+        .unwrap_or_default()
+        .into_iter()
+        .map(
+            |(id, slug, created_at, author_display_name)| TimelineClaim {
+                id,
+                slug,
+                created_at,
+                author_display_name,
+            },
+        )
+        .collect();
+    let entries = if !live.unwrap_or(false) {
+        Vec::new()
+    } else {
+        assemble_timeline(
+            &summaries.unwrap_or_default(),
+            &claims,
+            &verdicts.unwrap_or_default(),
+        )
+        .into_iter()
+        .skip(TIMELINE_VISIBLE_ENTRIES)
+        .collect()
+    };
+    response_with_vary(
+        BattleTimelineRowsTemplate { entries },
+        &state.public_base_url,
+        &path,
+        "battle_timeline_rows.html",
+        "HX-Request",
+    )
 }
 
 /// Assemble the chronological battle feed from already-fetched rows.
@@ -7502,19 +7624,18 @@ fn html_escape(s: &str) -> String {
 /// parallel with everything else and hands them to this fn, so the
 /// timeline costs zero extra round-trips. Newest first.
 fn assemble_timeline(
-    summaries: &[(chrono::DateTime<chrono::Utc>, String, Option<f32>)],
-    claims: &[ClaimWithAuthor],
+    summaries: &[TimelineSummaryRow],
+    claims: &[TimelineClaim],
     verdicts: &[TimelineVerdictRow],
 ) -> Vec<TimelineEntry> {
     use chrono::SecondsFormat;
     let mut entries: Vec<TimelineEntry> = Vec::new();
 
-    for (at, summary, temperature) in summaries {
+    for (at, temperature) in summaries {
         let bucket = temperature.map(crate::services::temperature::TempBucket::from_score);
         entries.push(TimelineEntry {
             kind: "summary",
             headline: "Summary updated".into(),
-            body_html: crate::markdown::render(summary),
             detail: String::new(),
             timestamp: at.to_rfc3339_opts(SecondsFormat::Secs, true),
             sort_at: *at,
@@ -7527,20 +7648,7 @@ fn assemble_timeline(
     }
 
     for c in claims {
-        let claim_text = &c.row.claim;
-        let title = claim_text
-            .lines()
-            .find_map(|l| l.trim().strip_prefix("# ").map(str::to_string))
-            .unwrap_or_else(|| {
-                claim_text
-                    .lines()
-                    .next()
-                    .unwrap_or("Claim")
-                    .chars()
-                    .take(120)
-                    .collect()
-            });
-        let claim_path = c.row.slug.clone().unwrap_or_else(|| c.row.id.to_string());
+        let claim_path = c.slug.clone().unwrap_or_else(|| c.id.to_string());
         entries.push(TimelineEntry {
             kind: "claim",
             headline: format!(
@@ -7549,10 +7657,9 @@ fn assemble_timeline(
                     .clone()
                     .unwrap_or_else(|| "anonymous".into())
             ),
-            body_html: html_escape(&title),
             detail: String::new(),
-            timestamp: c.row.created_at.to_rfc3339_opts(SecondsFormat::Secs, true),
-            sort_at: c.row.created_at,
+            timestamp: c.created_at.to_rfc3339_opts(SecondsFormat::Secs, true),
+            sort_at: c.created_at,
             temperature: None,
             temp_class: "",
             temp_emoji: "",
@@ -7561,49 +7668,21 @@ fn assemble_timeline(
         });
     }
 
-    for (at, verdict, env, failure, conditions, author, claim_id, slug) in verdicts {
+    for (at, verdict, env, author, claim_id, slug) in verdicts {
         let author = author.clone().unwrap_or_else(|| "anonymous".into());
-        let (kind, headline, body_html, detail) = match verdict.as_str() {
+        let (kind, headline, detail) = match verdict.as_str() {
             "confirmed" | "verified" => (
                 "verify",
                 format!("Verified by {author}"),
-                String::new(),
                 env.clone().unwrap_or_default(),
             ),
-            "disconfirmed" | "refuted" => {
-                let mut body = String::new();
-                if let Some(f) = failure {
-                    body.push_str(
-                        "<div class=\"refute-section\">\
-                         <div class=\"refute-label\">Reason</div>\
-                         <div class=\"markdown-body\">",
-                    );
-                    body.push_str(&crate::markdown::render(f));
-                    body.push_str("</div></div>");
-                }
-                if let Some(c) = conditions {
-                    body.push_str(
-                        "<div class=\"refute-section\">\
-                         <div class=\"refute-label\">Conditions</div>\
-                         <div class=\"markdown-body\">",
-                    );
-                    body.push_str(&crate::markdown::render(c));
-                    body.push_str("</div></div>");
-                }
-                (
-                    "refute",
-                    format!("Refuted by {author}"),
-                    body,
-                    String::new(),
-                )
-            }
+            "disconfirmed" | "refuted" => ("refute", format!("Refuted by {author}"), String::new()),
             _ => continue,
         };
         let claim_path = slug.clone().unwrap_or_else(|| claim_id.to_string());
         entries.push(TimelineEntry {
             kind,
             headline,
-            body_html,
             detail,
             timestamp: at.to_rfc3339_opts(SecondsFormat::Secs, true),
             sort_at: *at,
@@ -7636,15 +7715,19 @@ pub async fn claim_detail(
     let looked_up_by_uuid = id_or_slug.parse::<Uuid>().is_ok();
     // `deleted_at IS NULL` — a soft-deleted claim 404s publicly (migration 053).
     let claim_row = if let Ok(uuid) = id_or_slug.parse::<Uuid>() {
-        sqlx::query_as::<_, ClaimRow>("SELECT * FROM claims WHERE id = $1 AND deleted_at IS NULL")
-            .bind(uuid)
-            .fetch_optional(&state.pool)
-            .await
+        sqlx::query_as::<_, ClaimRow>(&format!(
+            "SELECT {CLAIM_COLUMNS} FROM claims WHERE id = $1 AND deleted_at IS NULL"
+        ))
+        .bind(uuid)
+        .fetch_optional(&state.pool)
+        .await
     } else {
-        sqlx::query_as::<_, ClaimRow>("SELECT * FROM claims WHERE slug = $1 AND deleted_at IS NULL")
-            .bind(&id_or_slug)
-            .fetch_optional(&state.pool)
-            .await
+        sqlx::query_as::<_, ClaimRow>(&format!(
+            "SELECT {CLAIM_COLUMNS} FROM claims WHERE slug = $1 AND deleted_at IS NULL"
+        ))
+        .bind(&id_or_slug)
+        .fetch_optional(&state.pool)
+        .await
     };
 
     // Private claims render exactly like a missing one unless the
@@ -7819,18 +7902,8 @@ pub async fn claim_detail(
     );
 
     let author_avatar = user_avatars.get(&claim_row.author_id.to_string()).cloned();
-    let mut claim_view = ClaimCardView::from_row_with_author(
-        &claim_row,
-        &state.blob_store_url,
-        Some(&author_name),
-        author_avatar,
-    );
-    // `from_row` already produced the bundle-aware HTML render via
-    // `markdown::render_with_bundle` — the only image-resolution
-    // path the renderer needs now that direct image uploads are
-    // markdown-only (no DB indirection). Authors who upload via
-    // `POST /v1/images` paste the returned absolute URL into the
-    // body, so there's nothing left to rewrite at read time.
+    let mut claim_view =
+        ClaimCardView::from_row_with_author(&claim_row, Some(&author_name), author_avatar);
     claim_view.attachments = attachments;
     claim_view.review_tokens_total = review_tokens;
     claim_view.review_cost_usd = review_cost_usd;
@@ -8279,9 +8352,13 @@ fn preview_80(text: &str) -> String {
 
 pub async fn contributor_profile(
     State(state): State<AppState>,
-    Path(user_id): Path<Uuid>,
+    Path(raw_user_id): Path<String>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
+    let (raw_user_id, headers, _) = split_markdown_suffix(raw_user_id, headers);
+    let Ok(user_id) = Uuid::parse_str(&raw_user_id) else {
+        return (StatusCode::NOT_FOUND, Html("Agent not found".to_string())).into_response();
+    };
     // Profile total_claims = lineage HEADs only (edited claims don't
     // double-count). See `models::claim::not_superseded`.
     let superseded = crate::models::claim::not_superseded("c");
@@ -8348,8 +8425,9 @@ pub async fn contributor_profile(
     // Profile "recent claims" list: lineage HEADs only (the old
     // version an edit replaced drops out of the profile feed).
     let claim_rows = sqlx::query_as::<_, ClaimRow>(&format!(
-        "SELECT c.* FROM claims c WHERE c.author_id = $1 AND c.deleted_at IS NULL {superseded} \
+        "SELECT {claim_cols} FROM claims c WHERE c.author_id = $1 AND c.deleted_at IS NULL {superseded} \
          ORDER BY c.created_at DESC LIMIT 20",
+        claim_cols = crate::models::claim::claim_columns_for("c"),
         superseded = crate::models::claim::not_superseded("c")
     ))
     .bind(user_id)
@@ -8483,6 +8561,7 @@ pub async fn contributor_profile(
             agent.total_refute,
         ))
         .with_og_type("profile")
+        .with_markdown_alternate(format!("{agent_url}.md"))
         .with_json_ld(breadcrumb_json_ld(vec![
             BreadcrumbItem::new(
                 "KrabArena",
@@ -9414,7 +9493,6 @@ mod tests {
             claim: String::new(),
             claim_title: String::new(),
             claim_body: String::new(),
-            claim_body_html: String::new(),
             created_relative: String::new(),
             updated_relative: None,
             effort_usd: 0.0,
@@ -9613,7 +9691,6 @@ mod tests {
             claim: String::new(),
             claim_title: String::new(),
             claim_body: String::new(),
-            claim_body_html: String::new(),
             created_relative: String::new(),
             updated_relative: None,
             effort_usd: 0.0,
@@ -9938,7 +10015,7 @@ mod tests {
     /// the aggregator walks (it reads `view.leaderboard` for the
     /// row-by-row pass).
     fn fake_view(c: &ClaimWithAuthor) -> ClaimCardView {
-        ClaimCardView::from_row_with_author(&c.row, "", None, None)
+        ClaimCardView::from_row_with_author(&c.row, None, None)
     }
 
     /// Rewritten in 0.13.4 (second pass): aggregation is now a true
@@ -11641,7 +11718,7 @@ mod tests {
                 winners: Some(vec!["A".to_string()]),
                 ..base_row()
             };
-            let claim_view = ClaimCardView::from_row_with_author(&row, "", None, None);
+            let claim_view = ClaimCardView::from_row_with_author(&row, None, None);
             let meta = crate::web::meta::PageMeta::new("https://krabarena.com", "/claims/test");
             let share_text_for_intent = pres
                 .as_ref()
