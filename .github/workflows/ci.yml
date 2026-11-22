@@ -13,6 +13,18 @@ jobs:
   check:
     name: Check, Clippy & Test
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_PASSWORD: pw
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install Rust
@@ -35,6 +47,8 @@ jobs:
       - name: Clippy
         run: cargo clippy --workspace -- -D warnings
       - name: Test
+        env:
+          TEST_DATABASE_URL: postgres://postgres:pw@localhost:5432/postgres
         run: cargo test --workspace
       - name: Format
         run: cargo fmt --all -- --check
