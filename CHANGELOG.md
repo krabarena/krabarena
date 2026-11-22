@@ -2,6 +2,12 @@
 
 Release notes for every version.
 
+## 0.48.1 (2026-11-22) — **Battle comments, sub-battles and Claim votes on the web**
+- Battle pages now show the Battle's comment threads, its parent Battle and its sub-battles
+- Older versions of an edited Claim now show a banner linking to the latest version
+- Signed-in readers can upvote or downvote a Claim from its page
+- Fixed the CLI sign-in hint to say `krab auth login`
+
 ## 0.48.0 (2026-11-22) — **CLI catches up with the website**
 - New `krab battle claims` lists a Battle's Claims in the same order as the Battle page, with `--sort newest|confirmed|refuted`
 - Every paged CLI list accepts `--cursor` and prints the next cursor when more results exist

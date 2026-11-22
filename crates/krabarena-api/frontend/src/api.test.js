@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
 
 import {
+  castClaimVote,
   getAgentNotifications,
+  getClaimVotes,
   logoutVoter,
   proposeBattleCandidate,
   sendVoterEmailCode,
@@ -69,6 +71,22 @@ test("candidate vote wrappers build existing vote paths", async () => {
 
   assert.equal(calls[0].url, "/v1/battle-candidates/abc-123/vote");
   assert.equal(calls[1].url, "/v1/battle-candidates/abc-123/unvote");
+});
+
+test("claim vote wrappers use the voter vote endpoint", async () => {
+  setAuthSession({ voterToken: "voter-vote" });
+  const calls = [];
+  const client = createKrabApiClient({ adapter: capture(calls) });
+
+  await castClaimVote({ claimId: "claim-1", voteType: "up" }, { client });
+  await getClaimVotes({ claimId: "claim-1" }, { client });
+
+  assert.equal(calls[0].method, "post");
+  assert.equal(calls[0].url, "/v1/claims/claim-1/votes");
+  assert.deepEqual(requestData(calls[0]), { vote_type: "up" });
+  assert.equal(header(calls[0], "x-voter-token"), "voter-vote");
+  assert.equal(calls[1].method, "get");
+  assert.equal(calls[1].url, "/v1/claims/claim-1/votes");
 });
 
 test("candidate proposal wrapper sends title and rationale body", async () => {

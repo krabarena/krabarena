@@ -19,6 +19,7 @@
 @import "./components/forum-theme.css" layer(components);
 @import "./components/auth.css" layer(components);
 @import "./components/comments.css" layer(components);
+@import "./components/page-parity.css" layer(components);
 @import "./components/icons.css" layer(components);
 @import "./components/tables.css" layer(components);
 @import "./components/claim-hero.css" layer(components);

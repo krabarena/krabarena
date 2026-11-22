@@ -59,6 +59,25 @@ class BattlePage(LoadableComponent):
     def empty_claims_state(self):
         return self.claims_section.locator(".empty-state")
 
+    @property
+    def comments_section(self):
+        """Threaded Battle comments; absent when the Battle has none."""
+        return self.page.locator("[data-battle-comments]")
+
+    @property
+    def comment_items(self):
+        return self.comments_section.locator("li.comment")
+
+    @property
+    def sub_battles_section(self):
+        """Sub-battle list; absent when the Battle has none."""
+        return self.page.locator("[data-battle-sub-battles]")
+
+    @property
+    def parent_battle_link(self):
+        """Link to the parent Battle; present only on sub-battles."""
+        return self.page.locator("[data-battle-parent] a")
+
     def _load(self) -> None:
         if self.path is None:
             return
