@@ -1,5 +1,5 @@
 use chrono::{Duration, Utc};
-use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
+use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -79,22 +79,16 @@ pub fn create_jwt_via(
         via: via.map(str::to_string),
     };
 
-    encode(
-        &Header::default(),
-        &claims,
-        &EncodingKey::from_secret(secret.as_bytes()),
-    )
-    .map_err(|e| ApiError::Internal(e.into()))
+    let key =
+        EncodingKey::from_secret(secret.as_bytes()).map_err(|e| ApiError::Internal(e.into()))?;
+    encode(&Header::default(), &claims, &key).map_err(|e| ApiError::Internal(e.into()))
 }
 
 pub fn validate_jwt(token: &str, secret: &str) -> Result<JwtClaims, ApiError> {
-    decode::<JwtClaims>(
-        token,
-        &DecodingKey::from_secret(secret.as_bytes()),
-        &Validation::default(),
-    )
-    .map(|data| data.claims)
-    .map_err(|_| ApiError::Unauthorized)
+    let key = DecodingKey::from_secret(secret.as_bytes()).map_err(|_| ApiError::Unauthorized)?;
+    decode::<JwtClaims>(token, &key, &Validation::new(Algorithm::HS256))
+        .map(|data| data.claims)
+        .map_err(|_| ApiError::Unauthorized)
 }
 
 pub async fn initiate_email_auth(
@@ -533,7 +527,7 @@ mod tests {
         let token = encode(
             &Header::default(),
             &legacy,
-            &EncodingKey::from_secret(SECRET.as_bytes()),
+            &EncodingKey::from_secret(SECRET.as_bytes()).unwrap(),
         )
         .unwrap();
 
@@ -565,6 +559,112 @@ mod tests {
         assert!(matches!(
             verify_email(&pool, "12345678", SECRET).await,
             Err(ApiError::InvalidVerificationToken)
+        ));
+    }
+
+    fn sign_hs256<T: serde::Serialize>(claims: &T, alg: Algorithm, secret: &str) -> String {
+        encode(
+            &Header::new(alg),
+            claims,
+            &EncodingKey::from_secret(secret.as_bytes()).unwrap(),
+        )
+        .unwrap()
+    }
+
+    fn claims_expiring_at(exp: chrono::DateTime<Utc>) -> JwtClaims {
+        JwtClaims {
+            sub: Uuid::new_v4(),
+            entity_id: Uuid::new_v4(),
+            role: "user".to_string(),
+            iat: (exp - Duration::days(30)).timestamp(),
+            exp: exp.timestamp(),
+            via: None,
+        }
+    }
+
+    #[test]
+    fn validate_jwt_rejects_expired_token() {
+        let token = sign_hs256(
+            &claims_expiring_at(Utc::now() - Duration::hours(1)),
+            Algorithm::HS256,
+            SECRET,
+        );
+        assert!(matches!(
+            validate_jwt(&token, SECRET),
+            Err(ApiError::Unauthorized)
+        ));
+    }
+
+    #[test]
+    fn validate_jwt_rejects_other_hmac_algorithm() {
+        let token = sign_hs256(
+            &claims_expiring_at(Utc::now() + Duration::hours(1)),
+            Algorithm::HS512,
+            SECRET,
+        );
+        assert!(matches!(
+            validate_jwt(&token, SECRET),
+            Err(ApiError::Unauthorized)
+        ));
+    }
+
+    #[test]
+    fn validate_jwt_rejects_unsigned_alg_none_token() {
+        use base64::Engine;
+        let b64 = base64::engine::general_purpose::URL_SAFE_NO_PAD;
+        let header = b64.encode(br#"{"alg":"none","typ":"JWT"}"#);
+        let payload = b64.encode(
+            serde_json::to_vec(&claims_expiring_at(Utc::now() + Duration::hours(1))).unwrap(),
+        );
+        let token = format!("{header}.{payload}.");
+        assert!(matches!(
+            validate_jwt(&token, SECRET),
+            Err(ApiError::Unauthorized)
+        ));
+    }
+
+    #[test]
+    fn empty_secret_neither_signs_nor_verifies() {
+        assert!(matches!(
+            create_jwt(Uuid::new_v4(), Uuid::new_v4(), "user", ""),
+            Err(ApiError::Internal(_))
+        ));
+        let token = create_jwt(Uuid::new_v4(), Uuid::new_v4(), "user", SECRET).unwrap();
+        assert!(matches!(
+            validate_jwt(&token, ""),
+            Err(ApiError::Unauthorized)
+        ));
+    }
+
+    #[test]
+    fn es256_round_trips_with_the_configured_crypto_backend() {
+        use p256::pkcs8::{EncodePrivateKey, EncodePublicKey, LineEnding};
+
+        let signing_key = p256::SecretKey::from_slice(&[7u8; 32]).unwrap();
+        let private_pem = signing_key.to_pkcs8_pem(LineEnding::LF).unwrap();
+        let public_pem = signing_key
+            .public_key()
+            .to_public_key_pem(LineEnding::LF)
+            .unwrap();
+        let claims = claims_expiring_at(Utc::now() + Duration::hours(1));
+
+        let token = encode(
+            &Header::new(Algorithm::ES256),
+            &claims,
+            &EncodingKey::from_ec_pem(private_pem.as_bytes()).unwrap(),
+        )
+        .unwrap();
+        let decoded = decode::<JwtClaims>(
+            &token,
+            &DecodingKey::from_ec_pem(public_pem.as_bytes()).unwrap(),
+            &Validation::new(Algorithm::ES256),
+        )
+        .unwrap();
+        assert_eq!(decoded.claims.sub, claims.sub);
+
+        assert!(matches!(
+            validate_jwt(&token, SECRET),
+            Err(ApiError::Unauthorized)
         ));
     }
 

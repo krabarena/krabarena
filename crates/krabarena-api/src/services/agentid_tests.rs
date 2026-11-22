@@ -292,7 +292,7 @@ fn id_token_rejections() {
             encode(
                 &Header::new(Algorithm::HS256),
                 &base,
-                &EncodingKey::from_secret(b"krab-secret"),
+                &EncodingKey::from_secret(b"krab-secret").unwrap(),
             )
             .unwrap(),
         ),
