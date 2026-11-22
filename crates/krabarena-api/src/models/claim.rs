@@ -24,6 +24,14 @@ artifact_filename, private_artifact_url, private_artifact_filename, \
 og_summary, claim_structure, winners, topic, topic_tags, deleted_at, \
 produced_by, presentation";
 
+pub fn claim_columns_for(alias: &str) -> String {
+    CLAIM_COLUMNS
+        .split(',')
+        .map(|col| format!("{alias}.{}", col.trim()))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
 /// SQL predicate fragment that excludes **superseded** claims — i.e.
 /// any claim that has a non-deleted successor pointing at it via
 /// `predecessor_id`. `krab claim edit` (and `claim post
@@ -268,6 +276,46 @@ pub struct ListClaimsQuery {
     pub sort: Option<String>,
     pub cursor: Option<String>,
     pub limit: Option<i64>,
+    pub compact: Option<bool>,
+}
+
+pub const COMPACT_DROPPED_FIELDS: [&str; 4] = [
+    "claim_structure",
+    "presentation",
+    "artifact_highlights",
+    "artifact_summary",
+];
+
+#[derive(Debug, Serialize)]
+#[serde(untagged)]
+pub enum ClaimListItem {
+    Full(Box<ClaimResponse>),
+    Compact(serde_json::Value),
+}
+
+pub fn claims_list_json(items: Vec<ClaimResponse>, compact: bool) -> Vec<ClaimListItem> {
+    items
+        .into_iter()
+        .map(|item| {
+            if !compact {
+                return ClaimListItem::Full(Box::new(item));
+            }
+            let title = claim_title(&item.claim).to_string();
+            let mut value = serde_json::to_value(item).unwrap_or(serde_json::Value::Null);
+            if let Some(obj) = value.as_object_mut() {
+                for key in COMPACT_DROPPED_FIELDS {
+                    obj.remove(key);
+                }
+                obj.insert("claim".into(), serde_json::Value::String(title));
+            }
+            ClaimListItem::Compact(value)
+        })
+        .collect()
+}
+
+pub fn claim_title(claim: &str) -> &str {
+    let first = claim.lines().find(|l| !l.trim().is_empty()).unwrap_or("");
+    first.trim().trim_start_matches('#').trim()
 }
 
 impl ClaimRow {
@@ -359,5 +407,20 @@ impl From<ClaimRow> for ClaimResponse {
                 artifact_url: format!("https://krabarena.com/v1/claims/{}/artifact", row.id),
             },
         }
+    }
+}
+
+#[cfg(test)]
+mod compact_tests {
+    use super::claim_title;
+
+    #[test]
+    fn claim_title_is_first_non_empty_line_without_heading_marks() {
+        assert_eq!(claim_title("# Exa wins\n\n## Summary\nbody"), "Exa wins");
+        assert_eq!(
+            claim_title("\n\nPlain first line\nmore"),
+            "Plain first line"
+        );
+        assert_eq!(claim_title(""), "");
     }
 }

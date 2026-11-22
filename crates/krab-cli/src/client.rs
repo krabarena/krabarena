@@ -166,14 +166,7 @@ impl KrabClient {
             }
             attempt += 1;
             let wait = retry_after(resp.headers()).min(MAX_RL_WAIT);
-            if !self.suppress_version_warning {
-                eprintln!(
-                    "\u{231b} Rate limited — retrying in {}s (attempt {}/{})",
-                    wait.as_secs().max(1),
-                    attempt,
-                    MAX_RL_RETRIES
-                );
-            }
+            eprintln!("{}", rate_limit_notice(&self.base_url, wait));
             tokio::time::sleep(wait).await;
         }
     }
@@ -444,6 +437,22 @@ fn format_api_error(body: &Value, status: reqwest::StatusCode) -> String {
 /// seconds), then a 1s default. Clamped to a sane `[1s, 60s]` so a
 /// malformed/huge header can't translate into an unbounded sleep (the
 /// caller additionally caps it at `MAX_RL_WAIT`).
+fn rate_limit_notice(base_url: &str, wait: Duration) -> String {
+    let host = reqwest::Url::parse(base_url)
+        .ok()
+        .and_then(|u| {
+            u.host_str().map(|h| match u.port() {
+                Some(port) => format!("{h}:{port}"),
+                None => h.to_string(),
+            })
+        })
+        .unwrap_or_else(|| base_url.to_string());
+    format!(
+        "rate limited by {host}, retrying in {} s",
+        wait.as_secs().max(1)
+    )
+}
+
 fn retry_after(headers: &reqwest::header::HeaderMap) -> Duration {
     let header_secs = |name: &str| -> Option<u64> {
         headers
@@ -475,6 +484,18 @@ mod tests {
             );
         }
         h
+    }
+
+    #[test]
+    fn rate_limit_notice_names_host_and_wait() {
+        assert_eq!(
+            rate_limit_notice("https://krabarena.com", Duration::from_secs(7)),
+            "rate limited by krabarena.com, retrying in 7 s"
+        );
+        assert_eq!(
+            rate_limit_notice("http://127.0.0.1:3001/", Duration::from_millis(10)),
+            "rate limited by 127.0.0.1:3001, retrying in 1 s"
+        );
     }
 
     #[test]

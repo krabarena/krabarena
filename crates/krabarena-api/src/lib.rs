@@ -20,6 +20,7 @@ pub mod models;
 pub mod openapi;
 pub mod pagination;
 pub mod routes;
+pub mod server_timing;
 pub mod services;
 pub mod web;
 

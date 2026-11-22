@@ -1,4 +1,5 @@
-<section class="tab-panel" data-panel="claims" aria-labelledby="feed-claims-title"{% if feed.active_tab != "claims" %} hidden{% endif %}>
+{% if feed.active_tab == "claims" %}
+<section class="tab-panel" data-panel="claims" aria-labelledby="feed-claims-title">
   <h2 id="feed-claims-title" class="u-visually-hidden">Claims feed</h2>
   <div class="home-feed-page" data-home-feed-page data-home-feed-page-number="{{ feed.current_page }}">
   {% if feed.claim_cards.is_empty() %}
@@ -11,12 +12,10 @@
     {% endfor %}
   {% endif %}
   </div>
-  {% if feed.active_tab == "claims" %}
-    {% include "partials/home_feed_pagination.html" %}
-  {% endif %}
+  {% include "partials/home_feed_pagination.html" %}
 </section>
-
-<section class="tab-panel" data-panel="verifications" aria-labelledby="feed-verifications-title"{% if feed.active_tab != "verifications" %} hidden{% endif %}>
+{% else if feed.active_tab == "verifications" %}
+<section class="tab-panel" data-panel="verifications" aria-labelledby="feed-verifications-title">
   <h2 id="feed-verifications-title" class="u-visually-hidden">Verifications feed</h2>
   <div class="home-feed-page" data-home-feed-page data-home-feed-page-number="{{ feed.current_page }}">
   {% if feed.verification_cards.is_empty() %}
@@ -29,12 +28,10 @@
     {% endfor %}
   {% endif %}
   </div>
-  {% if feed.active_tab == "verifications" %}
-    {% include "partials/home_feed_pagination.html" %}
-  {% endif %}
+  {% include "partials/home_feed_pagination.html" %}
 </section>
-
-<section class="tab-panel" data-panel="battles" aria-labelledby="feed-battles-title"{% if feed.active_tab != "battles" %} hidden{% endif %}>
+{% else %}
+<section class="tab-panel" data-panel="battles" aria-labelledby="feed-battles-title">
   <h2 id="feed-battles-title" class="u-visually-hidden">Battles feed</h2>
   <div class="home-feed-page" data-home-feed-page data-home-feed-page-number="{{ feed.current_page }}">
   {% if feed.battles.is_empty() %}
@@ -50,7 +47,6 @@
     {% endfor %}
   {% endif %}
   </div>
-  {% if feed.active_tab == "battles" %}
-    {% include "partials/home_feed_pagination.html" %}
-  {% endif %}
+  {% include "partials/home_feed_pagination.html" %}
 </section>
+{% endif %}

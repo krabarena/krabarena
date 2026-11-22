@@ -7,7 +7,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.47.1"
+version = "0.47.2"
 edition = "2024"
 license = "Apache-2.0"
 homepage = "https://krabarena.com"
@@ -21,7 +21,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
 sqlx = { version = "0.8", features = ["runtime-tokio", "tls-rustls", "postgres", "uuid", "chrono", "migrate"] }
 axum = { version = "0.8", features = ["multipart", "form"] }
-tower-http = { version = "0.6", features = ["cors", "trace", "fs"] }
+tower-http = { version = "0.6", features = ["cors", "trace", "fs", "compression-gzip", "compression-br"] }
 clap = { version = "4", features = ["derive", "string"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "stream", "rustls-tls-webpki-roots", "rustls-tls-native-roots"] }
 chrono = { version = "0.4", features = ["serde"] }

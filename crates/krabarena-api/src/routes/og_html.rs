@@ -156,8 +156,7 @@ pub async fn battle_html(
     // with each solution's brand/self-hosted logo. Previously this card
     // used `cumulative_wins_for_battle` (raw win count + "N runs"), which
     // diverged from the on-page table after the points/brand-logo work.
-    let wins_matrix =
-        crate::web::pages::battle_wins_matrix(&state.pool, &state.blob_store_url, &battle).await;
+    let wins_matrix = crate::web::pages::battle_wins_matrix(&state.pool, &battle).await;
     let rows: Vec<OgRow> = wins_matrix
         .rows
         .iter()
